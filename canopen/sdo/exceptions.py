@@ -1,5 +1,3 @@
-
-
 class SdoError(Exception):
     pass
 
@@ -35,12 +33,18 @@ class SdoAbortedError(SdoError):
         0x060A0023: "Resource not available",
         0x08000000: "General error",
         0x08000020: "Data cannot be transferred or stored to the application",
-        0x08000021: ("Data can not be transferred or stored to the application "
-                     "because of local control"),
-        0x08000022: ("Data can not be transferred or stored to the application "
-                     "because of the present device state"),
-        0x08000023: ("Object dictionary dynamic generation fails or no object "
-                     "dictionary is present"),
+        0x08000021: (
+            "Data can not be transferred or stored to the application "
+            "because of local control"
+        ),
+        0x08000022: (
+            "Data can not be transferred or stored to the application "
+            "because of the present device state"
+        ),
+        0x08000023: (
+            "Object dictionary dynamic generation fails or no object "
+            "dictionary is present"
+        ),
         0x08000024: "No data available",
     }
 
@@ -57,6 +61,13 @@ class SdoAbortedError(SdoError):
     def __eq__(self, other):
         """Compare two exception objects based on SDO abort code."""
         return self.code == other.code
+
+    @staticmethod
+    def from_string(text):
+        code = list(SdoAbortedError.CODES.keys())[
+            list(SdoAbortedError.CODES.values()).index(text)
+        ]
+        return code
 
 
 class SdoCommunicationError(SdoError):

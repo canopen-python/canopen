@@ -69,6 +69,13 @@ class SdoServer(SdoBase):
 
     def process_block(self, request):
         logger.debug('process_block')
+        command, _, _, code = SDO_ABORT_STRUCT.unpack_from(request)
+        if command == 0x80:
+            # Abort received
+            logger.error('Abort: 0x%08X' % code)
+            self.sdo_block = None
+            return
+
         if BLOCK_STATE_UPLOAD < self.sdo_block.state < BLOCK_STATE_DOWNLOAD:
             logger.debug('BLOCK_STATE_UPLOAD')
             command, _, _= SDO_STRUCT.unpack_from(request)
@@ -202,18 +209,8 @@ class SdoServer(SdoBase):
                          self.sdo_block.subindex,
                          self.sdo_block.size)
         logging.debug('response %s', response)
-        #SDO_STRUCT.pack_into(response, 0, res_command, index, subindex)
         self.sdo_block.update_state(BLOCK_STATE_UP_INIT_RESP)
         self.send_response(response)
-
-        # We currently don't support BLOCK UPLOAD
-        # according to CIA301 the server is allowed
-        # to switch to regular upload
-
-        # FIXME: This is not always allowed (depends on pst field)
-
-        #logger.info("Received block upload, switch to regular SDO upload")
-        #self.init_upload(data)
 
     def request_aborted(self, data):
         _, index, subindex, code = struct.unpack_from("<BHBL", data)

@@ -4,9 +4,10 @@ from typing import Final
 
 # Command, index, subindex
 SDO_STRUCT = struct.Struct("<BHB")
-SDO_BLOCK_STRUCT = struct.Struct("<B") # c + seqno
+SDO_BLOCKINIT_STRUCT = "<BHBI"  # Command + seqno, index, subindex, size
 SDO_BLOCKACK_STRUCT = struct.Struct("<BBB") # c + ackseq + new blocksize
 SDO_BLOCKEND_STRUCT = struct.Struct("<BH") # c + CRC
+SDO_ABORT_STRUCT = struct.Struct("<BHBI") # c +i + si + Abort code
 
 # Command[5-7]
 REQUEST_SEGMENT_DOWNLOAD = 0 << 5

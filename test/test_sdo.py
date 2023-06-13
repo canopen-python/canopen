@@ -72,9 +72,12 @@ class TestSDO(unittest.TestCase):
         """
         next_data = self.data.pop(0)
         self.assertEqual(next_data[0], TX, "No transmission was expected")
+        # print("> %s:%s" % (hex(can_id),
+        #       binascii.hexlify(data)))
         self.assertSequenceEqual(data, next_data[1])
         self.assertEqual(can_id, 0x602)
         while self.data and self.data[0][0] == RX:
+            # print(" < 0x%03X:%s" % (0x580 + RX, binascii.hexlify(self.data[0][1])))
             self.network.notify(0x582, self.data.pop(0)[1], 0.0)
 
         self.message_sent = True

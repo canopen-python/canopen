@@ -57,7 +57,7 @@ def enumerate_modules() -> list[str]:
         for f in files:
             if f.endswith(dotpy):
                 modules.append(
-                    f"{root_dir.replace('/', '.')}.{f.rstrip(dotpy)}"
+                    f"{root_dir.replace('/', '.')}.{f.replace(dotpy, '')}"
                 )
     return modules
 

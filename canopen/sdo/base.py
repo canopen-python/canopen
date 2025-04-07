@@ -83,7 +83,19 @@ class SdoBase(Mapping):
     def upload(self, index: int, subindex: int) -> bytes:
         raise NotImplementedError()
 
+    async def aupload(self, index: int, subindex: int) -> bytes:
+        raise NotImplementedError()
+
     def download(
+        self,
+        index: int,
+        subindex: int,
+        data: bytes,
+        force_segment: bool = False,
+    ) -> None:
+        raise NotImplementedError()
+
+    async def adownload(
         self,
         index: int,
         subindex: int,
@@ -109,9 +121,19 @@ class SdoRecord(Mapping):
         # Skip the "highest subindex" entry, which is not part of the data
         return filter(None, iter(self.od))
 
+    async def aiter(self):
+        for i in iter(self.od):
+            yield i
+
+    def __aiter__(self):
+        return self.aiter()
+
     def __len__(self) -> int:
         # Skip the "highest subindex" entry, which is not part of the data
         return len(self.od) - int(0 in self.od)
+
+    async def alen(self) -> int:
+        return len(self.od)
 
     def __contains__(self, subindex: Union[int, str]) -> bool:
         return subindex in self.od
@@ -133,8 +155,19 @@ class SdoArray(Mapping):
         # Skip the "highest subindex" entry, which is not part of the data
         return iter(range(1, len(self) + 1))
 
+    async def aiter(self):
+        for i in range(1, await self.alen() + 1):
+            yield i
+
+    def __aiter__(self):
+        return self.aiter()
+
     def __len__(self) -> int:
+        # NOTE: Blocking - OK. Protected in SdoClient
         return self[0].raw
+
+    async def alen(self) -> int:
+        return await self[0].aget_raw()
 
     def __contains__(self, subindex: int) -> bool:
         return 0 <= subindex <= len(self)
@@ -147,12 +180,22 @@ class SdoVariable(variable.Variable):
         self.sdo_node = sdo_node
         variable.Variable.__init__(self, od)
 
+    def __await__(self):
+        return self.aget_raw().__await__()
+
     def get_data(self) -> bytes:
         return self.sdo_node.upload(self.od.index, self.od.subindex)
+
+    async def aget_data(self) -> bytes:
+        return await self.sdo_node.aupload(self.od.index, self.od.subindex)
 
     def set_data(self, data: bytes):
         force_segment = self.od.data_type == objectdictionary.DOMAIN
         self.sdo_node.download(self.od.index, self.od.subindex, data, force_segment)
+
+    async def aset_data(self, data: bytes):
+        force_segment = self.od.data_type == objectdictionary.DOMAIN
+        await self.sdo_node.adownload(self.od.index, self.od.subindex, data, force_segment)
 
     @property
     def writable(self) -> bool:
@@ -195,6 +238,13 @@ class SdoVariable(variable.Variable):
         """
         return self.sdo_node.open(self.od.index, self.od.subindex, mode,
                                   encoding, buffering, size, block_transfer, request_crc_support=request_crc_support)
+
+    async def aopen(self, mode="rb", encoding="ascii", buffering=1024, size=None,
+                    block_transfer=False, request_crc_support=True):
+        """Open the data stream as a file like object. See open()"""
+        return await self.sdo_node.aopen(self.od.index, self.od.subindex, mode,
+                                         encoding, buffering, size, block_transfer,
+                                         request_crc_support=request_crc_support)
 
 
 # For compatibility

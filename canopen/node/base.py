@@ -27,6 +27,8 @@ class BaseNode:
 
         self.id = node_id or self.object_dictionary.node_id
 
+    # FIXME: Should associate_network() and remove_network() be a part of the base API?
+
     def has_network(self) -> bool:
         """Check whether the node has been associated to a network."""
         return not isinstance(self.network, canopen.network._UninitializedNetwork)

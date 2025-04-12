@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TextIO, Union
+from typing import TextIO, Union, List
 
 import canopen.network
 from canopen.emcy import EmcyConsumer
@@ -39,7 +39,7 @@ class RemoteNode(BaseNode):
         #: Enable WORKAROUND for reversed PDO mapping entries
         self.curtis_hack = False
 
-        self.sdo_channels = []
+        self.sdo_channels: List[SdoClient] = []
         self.sdo = self.add_sdo(0x600 + self.id, 0x580 + self.id)
         self.tpdo = TPDO(self)
         self.rpdo = RPDO(self)
@@ -59,15 +59,23 @@ class RemoteNode(BaseNode):
         self.nmt.network = network
         for sdo in self.sdo_channels:
             network.subscribe(sdo.tx_cobid, sdo.on_response)
-        network.subscribe(0x700 + self.id, self.nmt.on_heartbeat)
-        network.subscribe(0x80 + self.id, self.emcy.on_emcy)
+        if network.is_async():
+            network.subscribe(0x700 + self.id, self.nmt.aon_heartbeat)
+            network.subscribe(0x80 + self.id, self.emcy.aon_emcy)
+        else:
+            network.subscribe(0x700 + self.id, self.nmt.on_heartbeat)
+            network.subscribe(0x80 + self.id, self.emcy.on_emcy)
         network.subscribe(0, self.nmt.on_command)
 
     def remove_network(self) -> None:
         for sdo in self.sdo_channels:
             self.network.unsubscribe(sdo.tx_cobid, sdo.on_response)
-        self.network.unsubscribe(0x700 + self.id, self.nmt.on_heartbeat)
-        self.network.unsubscribe(0x80 + self.id, self.emcy.on_emcy)
+        if self.network.is_async():
+            self.network.unsubscribe(0x700 + self.id, self.nmt.aon_heartbeat)
+            self.network.unsubscribe(0x80 + self.id, self.emcy.aon_emcy)
+        else:
+            self.network.unsubscribe(0x700 + self.id, self.nmt.on_heartbeat)
+            self.network.unsubscribe(0x80 + self.id, self.emcy.on_emcy)
         self.network.unsubscribe(0, self.nmt.on_command)
         self.network = canopen.network._UNINITIALIZED_NETWORK
         self.sdo.network = canopen.network._UNINITIALIZED_NETWORK
@@ -128,8 +136,10 @@ class RemoteNode(BaseNode):
             if subindex is not None:
                 logger.info('SDO [0x%04X][0x%02X]: %s: %#06x',
                             index, subindex, name, value)
+                # NOTE: Blocking call - OK. Protected in SdoClient
                 self.sdo[index][subindex].raw = value
             else:
+                # NOTE: Blocking call - OK. Protected in SdoClient
                 self.sdo[index].raw = value
                 logger.info('SDO [0x%04X]: %s: %#06x',
                             index, name, value)

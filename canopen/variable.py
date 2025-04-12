@@ -33,7 +33,13 @@ class Variable:
     def get_data(self) -> bytes:
         raise NotImplementedError("Variable is not readable")
 
+    async def aget_data(self) -> bytes:
+        raise NotImplementedError("Variable is not readable")
+
     def set_data(self, data: bytes):
+        raise NotImplementedError("Variable is not writable")
+
+    async def aset_data(self, data: bytes):
         raise NotImplementedError("Variable is not writable")
 
     @property
@@ -75,7 +81,14 @@ class Variable:
         Data types that this library does not handle yet must be read and
         written as :class:`bytes`.
         """
-        value = self.od.decode_raw(self.data)
+        return self._get_raw(self.get_data())
+
+    async def aget_raw(self) -> Union[int, bool, float, str, bytes]:
+        """Raw representation of the object, async variant"""
+        return self._get_raw(await self.aget_data())
+
+    def _get_raw(self, data: bytes) -> Union[int, bool, float, str, bytes]:
+        value = self.od.decode_raw(data)
         text = f"Value of {self.name!r} ({pretty_index(self.index, self.subindex)}) is {value!r}"
         if value in self.od.value_descriptions:
             text += f" ({self.od.value_descriptions[value]})"
@@ -84,10 +97,17 @@ class Variable:
 
     @raw.setter
     def raw(self, value: Union[int, bool, float, str, bytes]):
+        self.set_data(self._set_raw(value))
+
+    async def aset_raw(self, value: Union[int, bool, float, str, bytes]):
+        """Set the raw value of the object, async variant"""
+        await self.aset_data(self._set_raw(value))
+
+    def _set_raw(self, value: Union[int, bool, float, str, bytes]):
         logger.debug("Writing %r (0x%04X:%02X) = %r",
                      self.name, self.index,
                      self.subindex, value)
-        self.data = self.od.encode_raw(value)
+        return self.od.encode_raw(value)
 
     @property
     def phys(self) -> Union[int, bool, float, str, bytes]:
@@ -97,7 +117,14 @@ class Variable:
         either a :class:`float` or an :class:`int`.
         Non integers will be passed as is.
         """
-        value = self.od.decode_phys(self.raw)
+        return self._get_phys(self.get_raw())
+
+    async def aget_phys(self) -> Union[int, bool, float, str, bytes]:
+        """Physical value scaled with some factor (defaults to 1), async variant."""
+        return self._get_phys(await self.aget_raw())
+
+    def _get_phys(self, raw: Union[int, bool, float, str, bytes]):
+        value = self.od.decode_phys(raw)
         if self.od.unit:
             logger.debug("Physical value is %s %s", value, self.od.unit)
         return value
@@ -106,6 +133,10 @@ class Variable:
     def phys(self, value: Union[int, bool, float, str, bytes]):
         self.raw = self.od.encode_phys(value)
 
+    async def aset_phys(self, value: Union[int, bool, float, str, bytes]):
+        """Set physical value scaled with some factor (defaults to 1). Async variant"""
+        await self.aset_raw(self.od.encode_phys(value))
+
     @property
     def desc(self) -> str:
         """Converts to and from a description of the value as a string."""
@@ -113,9 +144,19 @@ class Variable:
         logger.debug("Description is '%s'", value)
         return value
 
+    async def aget_desc(self) -> str:
+        """Converts to and from a description of the value as a string, async variant."""
+        value = self.od.decode_desc(await self.aget_raw())
+        logger.debug("Description is '%s'", value)
+        return value
+
     @desc.setter
     def desc(self, desc: str):
         self.raw = self.od.encode_desc(desc)
+
+    async def aset_desc(self, desc: str):
+        """Set variable description, async variant."""
+        await self.aset_raw(self.od.encode_desc(desc))
 
     @property
     def bits(self) -> "Bits":
@@ -143,6 +184,15 @@ class Variable:
         elif fmt == "desc":
             return self.desc
 
+    async def aread(self, fmt: str = "raw") -> Union[int, bool, float, str, bytes]:
+        """Alternative way of reading using a function instead of attributes. Async variant."""
+        if fmt == "raw":
+            return await self.aget_raw()
+        elif fmt == "phys":
+            return await self.aget_phys()
+        elif fmt == "desc":
+            return await self.aget_desc()
+
     def write(
         self, value: Union[int, bool, float, str, bytes], fmt: str = "raw"
     ) -> None:
@@ -162,6 +212,17 @@ class Variable:
             self.phys = value
         elif fmt == "desc":
             self.desc = value
+
+    async def awrite(
+        self, value: Union[int, bool, float, str, bytes], fmt: str = "raw"
+    ) -> None:
+        """Alternative way of writing using a function instead of attributes. Async variant"""
+        if fmt == "raw":
+            await self.aset_raw(value)
+        elif fmt == "phys":
+            await self.aset_phys(value)
+        elif fmt == "desc":
+            await self.aset_desc(value)
 
 
 class Bits(Mapping):
@@ -199,3 +260,6 @@ class Bits(Mapping):
 
     def write(self):
         self.variable.raw = self.raw
+
+    # FIXME: Implement aread() and awrite()
+

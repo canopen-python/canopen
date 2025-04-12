@@ -1,3 +1,4 @@
+import asyncio
 import io
 import logging
 import queue
@@ -42,9 +43,11 @@ class SdoClient(SdoBase):
         """
         SdoBase.__init__(self, rx_cobid, tx_cobid, od)
         self.responses = queue.Queue()
+        self.lock = asyncio.Lock()
 
     def on_response(self, can_id, data, timestamp):
-        self.responses.put(bytes(data))
+        # NOTE: Callback. Will be called from another thread
+        self.responses.put_nowait(bytes(data))
 
     def send_request(self, request):
         retries_left = self.MAX_RETRIES
@@ -66,10 +69,11 @@ class SdoClient(SdoBase):
 
     def read_response(self):
         try:
+            # NOTE: Blocking call
             response = self.responses.get(
                 block=True, timeout=self.RESPONSE_TIMEOUT)
         except queue.Empty:
-            raise SdoCommunicationError("No SDO response received")
+            raise SdoCommunicationError("No SDO response received") from None
         res_command, = struct.unpack_from("B", response)
         if res_command == RESPONSE_ABORTED:
             abort_code, = struct.unpack_from("<L", response, 4)
@@ -79,6 +83,8 @@ class SdoClient(SdoBase):
     def request_response(self, sdo_request):
         retries_left = self.MAX_RETRIES
         if not self.responses.empty():
+            # FIXME: Added to check if this occurs
+            raise RuntimeError("Unexpected message in the queue")
             # logger.warning("There were unexpected messages in the queue")
             self.responses = queue.Queue()
         while True:
@@ -136,6 +142,18 @@ class SdoClient(SdoBase):
                     data = data[0:var_size]
         return data
 
+    async def aupload(self, index: int, subindex: int) -> bytes:
+        """May be called to make a read operation without an Object Dictionary.
+           Async version.
+        """
+        async with self.lock:  # Ensure only one active SDO request per channel
+            # Deferring to thread because there are sleeps and queue waits in the call chain
+            # The call stack is typically:
+            #    upload -> open -> ReadableStream -> request_reponse -> send_request -> network.send_message
+            #    recv -> on_reponse -> queue.put
+            #                                        request_reponse -> read_response -> queue.get
+            return await asyncio.to_thread(self.upload, index, subindex)
+
     def download(
         self,
         index: int,
@@ -162,6 +180,20 @@ class SdoClient(SdoBase):
         with self.open(index, subindex, "wb", buffering=7, size=len(data),
                        force_segment=force_segment) as fp:
             fp.write(data)
+
+    async def adownload(
+        self,
+        index: int,
+        subindex: int,
+        data: bytes,
+        force_segment: bool = False,
+    ) -> None:
+        """May be called to make a write operation without an Object Dictionary.
+           Async version.
+        """
+        async with self.lock:  # Ensure only one active SDO request per channel
+            # Deferring to thread because there are sleeps in the call chain
+            return await asyncio.to_thread(self.download, index, subindex, data, force_segment)
 
     def open(self, index, subindex=0, mode="rb", encoding="ascii",
              buffering=1024, size=None, block_transfer=False, force_segment=False, request_crc_support=True):

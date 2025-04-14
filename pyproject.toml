@@ -48,3 +48,11 @@ testpaths = [
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+
+[tool.mypy]
+python_version = "3.8"
+exclude = [
+    "^examples*",
+    "^test*",
+    "^setup.py*",
+]

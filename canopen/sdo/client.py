@@ -160,6 +160,7 @@ class SdoClient(SdoBase):
             When node responds with an error.
         """
         with self.open(index, subindex, "wb", buffering=7, size=len(data),
+                       block_transfer=True,
                        force_segment=force_segment) as fp:
             fp.write(data)
 

@@ -8,6 +8,10 @@ from canopen.sdo.exceptions import *
 logger = logging.getLogger(__name__)
 
 
+class SdoBlockException(SdoAbortedError):
+    def __init__(self, code: int):
+        super.__init__(self, code)
+
 class SdoServer(SdoBase):
     """Creates an SDO server."""
 
@@ -27,8 +31,14 @@ class SdoServer(SdoBase):
         self._index = None
         self._subindex = None
         self.last_received_error = 0x00000000
+        self.sdo_block = None
 
     def on_request(self, can_id, data, timestamp):
+        logger.debug('on_request')
+        if self.sdo_block and self.sdo_block.state != BLOCK_STATE_NONE:
+            self.process_block(data)
+            return
+
         command, = struct.unpack_from("B", data, 0)
         ccs = command & 0xE0
 
@@ -57,6 +67,77 @@ class SdoServer(SdoBase):
             self.abort()
             logger.exception(exc)
 
+    def process_block(self, request):
+        logger.debug('process_block')
+        command, _, _, code = SDO_ABORT_STRUCT.unpack_from(request)
+        if command == 0x80:
+            # Abort received
+            logger.error('Abort: 0x%08X' % code)
+            self.sdo_block = None
+            return
+
+        if BLOCK_STATE_UPLOAD < self.sdo_block.state < BLOCK_STATE_DOWNLOAD:
+            logger.debug('BLOCK_STATE_UPLOAD')
+            command, _, _= SDO_STRUCT.unpack_from(request)
+            # in upload state
+            if self.sdo_block.state == BLOCK_STATE_UP_INIT_RESP:
+                logger.debug('BLOCK_STATE_UP_INIT_RESP')
+                #init response was sent, client required to send new request
+                if (command & REQUEST_BLOCK_UPLOAD) != REQUEST_BLOCK_UPLOAD:
+                    raise SdoBlockException(0x05040001)
+                if (command & START_BLOCK_UPLOAD) != START_BLOCK_UPLOAD:
+                    raise SdoBlockException(0x05040001)
+                # self.sdo_block.update_state(BLOCK_STATE_UP_DATA)
+
+                # now start blasting data to client from server
+                self.sdo_block.update_state(BLOCK_STATE_UP_DATA)
+                #self.data_succesfull_upload = self.data_uploaded
+
+                blocks = self.sdo_block.get_upload_blocks()
+                for block in blocks:
+                    self.send_response(block)
+
+            elif self.sdo_block.state == BLOCK_STATE_UP_DATA:
+                logger.debug('BLOCK_STATE_UP_DATA')
+                command, ackseq, newblk = SDO_BLOCKACK_STRUCT.unpack_from(request)
+                if (command & REQUEST_BLOCK_UPLOAD) != REQUEST_BLOCK_UPLOAD:
+                    raise SdoBlockException(0x05040001)
+                elif (command & BLOCK_TRANSFER_RESPONSE) != BLOCK_TRANSFER_RESPONSE:
+                    raise SdoBlockException(0x05040001)
+                elif (ackseq != self.sdo_block.last_seqno):
+                    self.sdo_block.data_uploaded = self.sdo_block.data_succesfull_upload
+
+
+                if self.sdo_block.size == self.sdo_block.data_uploaded:
+                    logger.debug('BLOCK_STATE_UP_DATA last data')
+                    self.sdo_block.update_state(BLOCK_STATE_UP_END)
+                    response = bytearray(8)
+                    command = RESPONSE_BLOCK_UPLOAD
+                    command |= END_BLOCK_TRANSFER
+                    n = self.sdo_block.last_bytes << 2
+                    command |= n
+                    logger.debug('Last no byte: %d, CRC: x%04X',
+                                 self.sdo_block.last_bytes,
+                                 self.sdo_block.crc_value)
+                    SDO_BLOCKEND_STRUCT.pack_into(response, 0, command,
+                                                  self.sdo_block.crc_value)
+                    self.send_response(response)
+                else:
+                    blocks = self.sdo_block.get_upload_blocks()
+                    for block in blocks:
+                        self.send_response(block)
+
+            elif self.sdo_block.state == BLOCK_STATE_UP_END:
+                self.sdo_block = None
+
+        elif BLOCK_STATE_DOWNLOAD < self.sdo_block.state:
+            logger.debug('BLOCK_STATE_DOWNLOAD')
+            # in download state
+            pass
+        else:
+            # in neither
+            raise SdoBlockException(0x08000022)
+
     def init_upload(self, request):
         _, index, subindex = SDO_STRUCT.unpack_from(request)
         self._index = index
@@ -76,9 +157,9 @@ class SdoServer(SdoBase):
             struct.pack_into("<L", response, 4, size)
             self._buffer = bytearray(data)
             self._toggle = 0
-
         SDO_STRUCT.pack_into(response, 0, res_command, index, subindex)
         self.send_response(response)
+
 
     def segmented_upload(self, command):
         if command & TOGGLE_BIT != self._toggle:
@@ -106,12 +187,26 @@ class SdoServer(SdoBase):
         response[1:1 + size] = data
         self.send_response(response)
 
-    def block_upload(self, data):
-        # We currently don't support BLOCK UPLOAD
-        # according to CIA301 the server is allowed
-        # to switch to regular upload
-        logger.info("Received block upload, switch to regular SDO upload")
-        self.init_upload(data)
+    def block_upload(self, request):
+        logging.debug('Enter server block upload')
+        self.sdo_block = SdoBlock(self._node, request)
+
+        res_command = RESPONSE_BLOCK_UPLOAD
+        res_command |= BLOCK_SIZE_SPECIFIED
+        res_command |= self.sdo_block.crc
+        res_command |= INITIATE_BLOCK_TRANSFER
+        logging.debug('CMD: %02X', res_command)
+        response = bytearray(8)
+
+        struct.pack_into(SDO_STRUCT.format+'I',  # add size
+                         response, 0,
+                         res_command,
+                         self.sdo_block.index,
+                         self.sdo_block.subindex,
+                         self.sdo_block.size)
+        logging.debug('response %s', response)
+        self.sdo_block.update_state(BLOCK_STATE_UP_INIT_RESP)
+        self.send_response(response)
 
     def request_aborted(self, data):
         _, index, subindex, code = struct.unpack_from("<BHBL", data)
@@ -217,3 +312,83 @@ class SdoServer(SdoBase):
             When node responds with an error.
         """
         return self._node.set_data(index, subindex, data)
+
+class SdoBlock():
+    state = BLOCK_STATE_NONE
+    crc = False
+    data_uploaded = 0
+    data_succesfull_upload = 0
+    last_bytes = 0
+    crc_value = 0
+    last_seqno = 0
+
+    def __init__(self, node, request, docrc=False):
+
+        command, index, subindex = SDO_STRUCT.unpack_from(request)
+        # only do crc if crccheck lib is available _and_ if requested
+        _req_crc = (command & CRC_SUPPORTED) == CRC_SUPPORTED
+
+        if (command & SUB_COMMAND_MASK) == INITIATE_BLOCK_TRANSFER:
+            self.state = BLOCK_STATE_INIT
+        else:
+            raise SdoBlockException(SdoAbortedError.from_string("Unknown SDO command specified"))
+
+        self.crc = CRC_SUPPORTED if (docrc & _req_crc)  else 0
+        self._node = node
+        self.index = index
+        self.subindex = subindex
+        self.req_blocksize = request[4]
+        self.seqno = 0
+        if not 1 <= self.req_blocksize <= 127:
+            raise SdoBlockException(SdoAbortedError.from_string("Invalid block size"))
+
+        self.data = self._node.get_data(index,
+                                        subindex,
+                                        check_readable=True)
+        self.size = len(self.data)
+
+        # TODO: add PST if needed
+        # self.pst = data[5]
+
+    def update_state(self, new_state):
+        logging.debug('update_state %X -> %X', self.state, new_state)
+        if new_state >= self.state:
+            self.state = new_state
+        else:
+            raise SdoBlockException(0x08000022)
+
+    def get_upload_blocks(self):
+        msgs = []
+
+        # seq no 1 - 127, not 0 -..
+        for seqno in range(1,self.req_blocksize+1):
+            logger.debug('SEQNO %d', seqno)
+            response = bytearray(8)
+            command = 0
+            if self.size <= (self.data_uploaded + 7):
+                # no more segments after this
+                command |= NO_MORE_BLOCKS
+
+            command |= seqno
+            response[0] = command
+            for i in range(7):
+                databyte = self.get_data_byte()
+                if databyte != None:
+                    response[i+1] = databyte
+                else:
+                    self.last_bytes = 7 - i
+                    break
+            msgs.append(response)
+            self.last_seqno = seqno
+
+            if self.size == self.data_uploaded:
+                break
+        logger.debug(msgs)
+        return msgs
+
+    def get_data_byte(self):
+        if self.data_uploaded < self.size:
+            self.data_uploaded += 1
+            return self.data[self.data_uploaded-1]
+        return None
+

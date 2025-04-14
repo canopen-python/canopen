@@ -2,7 +2,7 @@ import logging
 
 from canopen import node
 from canopen.pdo.base import PdoBase, PdoMap, PdoMaps, PdoVariable
-
+from canopen.sdo import SdoAbortedError
 
 __all__ = [
     "PdoBase",
@@ -73,6 +73,67 @@ class TPDO(PdoBase):
         super(TPDO, self).__init__(node)
         self.map = PdoMaps(0x1800, 0x1A00, self, 0x180)
         logger.debug('TPDO Map as %d', len(self.map))
+
+    def start(self, period: float):
+        """Start transmission of all TPDOs.
+
+        :param float period: Transmission period in seconds.
+        :raises TypeError: Exception is thrown if the node associated with the PDO does not
+        support this function.
+        """
+        if isinstance(self.node, node.LocalNode):
+            for pdo in self.map.values():
+                pdo.start(period)
+        else:
+            raise TypeError("The node type does not support this function.")
+
+    def pack_data(self, data: bytearray, variable: PdoVariable):
+        """Pack new data into data array if new data is available. 
+
+        :param list data: List of data to pack.
+        :param PdoVariable variable: Variable to pack.
+        """
+        length_bytes = variable.length // 8
+        offset_bytes = variable.offset // 8
+        if length_bytes > 8:
+            raise ValueError("Data length is greater than 64 bits.")
+
+        if length_bytes == 0:
+            return data
+
+        if (
+            self.node.data_store.get(variable.index, {}).get(variable.subindex)
+            is not None
+        ):
+            try:
+                variable_data = self.node.get_data(variable.index, variable.subindex)
+                # reverse list to be able to be transmitted properly
+                sanitized_data = variable_data[::-1]
+                # pack new data into data array
+                for i in range(length_bytes):
+                    data[offset_bytes + i] = sanitized_data[i]
+            except SdoAbortedError:
+                logger.warning(
+                    "Failed to get data from index: 0x%X, subindex: 0x%X",
+                    variable.index,
+                    variable.subindex,
+                )
+
+        return data
+
+    def update(self):
+        """Update the data of all TPDOs.
+
+        :raises TypeError: Exception is thrown if the node associated with the PDO does not
+        support this function.
+        """
+        if isinstance(self.node, node.LocalNode):
+            for pdo in self.map.values():
+                for variable in pdo:
+                    self.pack_data(pdo.data, variable)
+                pdo.update()
+        else:
+            raise TypeError("The node type does not support this function.")
 
     def stop(self):
         """Stop transmission of all TPDOs.

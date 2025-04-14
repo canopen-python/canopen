@@ -56,10 +56,14 @@ class PdoBase(Mapping):
     def __len__(self):
         return len(self.map)
 
-    def read(self, from_od=False):
-        """Read PDO configuration from node using SDO."""
+    def read(self, from_od=False, subscribe=True):
+        """Read PDO configuration from node using SDO.
+
+        :param from_od: Read using SDO if False, read from object dictionary if True.
+        :param subscribe: Subscribe to the network for this PDO if True.
+        """
         for pdo_map in self.map.values():
-            pdo_map.read(from_od=from_od)
+            pdo_map.read(from_od=from_od, subscribe=subscribe)
 
     def save(self):
         """Save PDO configuration to node using SDO."""
@@ -76,6 +80,11 @@ class PdoBase(Mapping):
         """
         for pdo_map in self.map.values():
             pdo_map.subscribe()
+
+    def unsubscribe(self) -> None:
+        """Unregister the node's PDOs for reception on the network."""
+        for pdo_map in self.map.values():
+            pdo_map.unsubscribe()
 
     def export(self, filename):
         """Export current configuration to a database file.
@@ -331,13 +340,16 @@ class PdoMap:
         """
         self.callbacks.append(callback)
 
-    def read(self, from_od=False) -> None:
+    def read(self, from_od=False, subscribe=True) -> None:
         """Read PDO configuration for this map.
-        
+
         :param from_od:
             Read using SDO if False, read from object dictionary if True.
             When reading from object dictionary, if DCF populated a value, the
             DCF value will be used, otherwise the EDS default will be used instead.
+        :param subscribe:
+            Subscribe to the network for this PDO if True.
+            Don't subscribe if the PDO is a PDO meant for transmission.
         """
 
         def _raw_from(param):
@@ -360,6 +372,7 @@ class PdoMap:
         if self.trans_type >= 254:
             try:
                 self.inhibit_time = _raw_from(self.com_record[3])
+                self.period = self.inhibit_time if self.inhibit_time else None
             except (KeyError, SdoAbortedError) as e:
                 logger.info("Could not read inhibit time (%s)", e)
             else:
@@ -394,8 +407,8 @@ class PdoMap:
                 size = (value >> 24) & 0x7F
             if index and size:
                 self.add_variable(index, subindex, size)
-
-        self.subscribe()
+        if subscribe:
+            self.subscribe()
 
     def save(self) -> None:
         """Save PDO configuration for this map using SDO."""
@@ -469,6 +482,14 @@ class PdoMap:
             logger.info("Subscribing to enabled PDO 0x%X on the network", self.cob_id)
             self.pdo_node.network.subscribe(self.cob_id, self.on_message)
 
+    def unsubscribe(self) -> None:
+        """Unregister the PDO for reception on the network."""
+        if self.enabled:
+            logger.info(
+                "Unsubscribing from enabled PDO 0x%X on the network", self.cob_id
+            )
+            self.pdo_node.network.unsubscribe(self.cob_id, self.on_message)
+
     def clear(self) -> None:
         """Clear all variables from this map."""
         self.map = []
@@ -533,6 +554,13 @@ class PdoMap:
         if not self.period:
             raise ValueError("A valid transmission period has not been given")
         logger.info("Starting %s with a period of %s seconds", self.name, self.period)
+
+        if self.cob_id is None and self.predefined_cob_id is not None:
+            self.cob_id = self.predefined_cob_id
+            logger.info("Using predefined COB-ID 0x%X", self.cob_id)
+
+        if self.cob_id is None:
+            raise ValueError("COB-ID has not been set")
 
         self._task = self.pdo_node.network.send_periodic(
             self.cob_id, self.data, self.period)

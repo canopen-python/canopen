@@ -75,6 +75,9 @@ class Network(MutableMapping):
             If given, remove only this callback.  Otherwise all callbacks for
             the CAN ID.
         """
+        if can_id not in self.subscribers:
+            return
+
         if callback is None:
             del self.subscribers[can_id]
         else:

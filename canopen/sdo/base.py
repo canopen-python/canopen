@@ -162,8 +162,15 @@ class SdoVariable(variable.Variable):
     def readable(self) -> bool:
         return self.od.readable
 
-    def open(self, mode="rb", encoding="ascii", buffering=1024, size=None,
-             block_transfer=False, request_crc_support=True):
+    def open(
+        self,
+        mode="rb",
+        encoding="ascii",
+        buffering=1024,
+        size=None,
+        block_transfer=False,
+        request_crc_support=True,
+    ):
         """Open the data stream as a file like object.
 
         :param str mode:
@@ -193,8 +200,16 @@ class SdoVariable(variable.Variable):
         :returns:
             A file like object.
         """
-        return self.sdo_node.open(self.od.index, self.od.subindex, mode,
-                                  encoding, buffering, size, block_transfer, request_crc_support=request_crc_support)
+        return self.sdo_node.open(
+            self.od.index,
+            self.od.subindex,
+            mode,
+            encoding,
+            buffering,
+            size,
+            block_transfer,
+            request_crc_support=request_crc_support,
+        )
 
 
 # For compatibility

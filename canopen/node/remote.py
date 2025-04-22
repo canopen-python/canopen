@@ -126,13 +126,13 @@ class RemoteNode(BaseNode):
         """
         try:
             if subindex is not None:
-                logger.info('SDO [0x%04X][0x%02X]: %s: %#06x',
-                            index, subindex, name, value)
+                logger.info(
+                    "SDO [0x%04X][0x%02X]: %s: %#06x", index, subindex, name, value
+                )
                 self.sdo[index][subindex].raw = value
             else:
                 self.sdo[index].raw = value
-                logger.info('SDO [0x%04X]: %s: %#06x',
-                            index, name, value)
+                logger.info("SDO [0x%04X]: %s: %#06x", index, name, value)
         except SdoCommunicationError as e:
             logger.warning(str(e))
         except SdoAbortedError as e:
@@ -141,8 +141,9 @@ class RemoteNode(BaseNode):
             if e.code != 0x06010002:
                 # Abort codes other than "Attempt to write a read-only object"
                 # should still be reported.
-                logger.warning('[ERROR SETTING object 0x%04X:%02X] %s',
-                               index, subindex, e)
+                logger.warning(
+                    "[ERROR SETTING object 0x%04X:%02X] %s", index, subindex, e
+                )
                 raise
 
     def load_configuration(self) -> None:
@@ -161,12 +162,20 @@ class RemoteNode(BaseNode):
 
         # Now apply all other records in object dictionary
         for obj in self.object_dictionary.values():
-            if 0x1400 <= obj.index < 0x1c00:
+            if 0x1400 <= obj.index < 0x1C00:
                 # Ignore PDO related objects
                 continue
             if isinstance(obj, ODRecord) or isinstance(obj, ODArray):
                 for subobj in obj.values():
-                    if isinstance(subobj, ODVariable) and subobj.writable and (subobj.value is not None):
-                        self.__load_configuration_helper(subobj.index, subobj.subindex, subobj.name, subobj.value)
-            elif isinstance(obj, ODVariable) and obj.writable and (obj.value is not None):
+                    if (
+                        isinstance(subobj, ODVariable)
+                        and subobj.writable
+                        and (subobj.value is not None)
+                    ):
+                        self.__load_configuration_helper(
+                            subobj.index, subobj.subindex, subobj.name, subobj.value
+                        )
+            elif (
+                isinstance(obj, ODVariable) and obj.writable and (obj.value is not None)
+            ):
                 self.__load_configuration_helper(obj.index, None, obj.name, obj.value)

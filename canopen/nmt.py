@@ -13,34 +13,26 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 NMT_STATES = {
-    0: 'INITIALISING',
-    4: 'STOPPED',
-    5: 'OPERATIONAL',
-    80: 'SLEEP',
-    96: 'STANDBY',
-    127: 'PRE-OPERATIONAL'
+    0: "INITIALISING",
+    4: "STOPPED",
+    5: "OPERATIONAL",
+    80: "SLEEP",
+    96: "STANDBY",
+    127: "PRE-OPERATIONAL",
 }
 
 NMT_COMMANDS = {
-    'OPERATIONAL': 1,
-    'STOPPED': 2,
-    'SLEEP': 80,
-    'STANDBY': 96,
-    'PRE-OPERATIONAL': 128,
-    'INITIALISING': 129,
-    'RESET': 129,
-    'RESET COMMUNICATION': 130
+    "OPERATIONAL": 1,
+    "STOPPED": 2,
+    "SLEEP": 80,
+    "STANDBY": 96,
+    "PRE-OPERATIONAL": 128,
+    "INITIALISING": 129,
+    "RESET": 129,
+    "RESET COMMUNICATION": 130,
 }
 
-COMMAND_TO_STATE = {
-    1: 5,
-    2: 4,
-    80: 80,
-    96: 96,
-    128: 127,
-    129: 0,
-    130: 0
-}
+COMMAND_TO_STATE = {1: 5, 2: 4, 80: 80, 96: 96, 128: 127, 129: 0, 130: 0}
 
 
 class NmtBase:
@@ -61,8 +53,11 @@ class NmtBase:
             if cmd in COMMAND_TO_STATE:
                 new_state = COMMAND_TO_STATE[cmd]
                 if new_state != self._state:
-                    logger.info("New NMT state %s, old state %s",
-                                NMT_STATES[new_state], NMT_STATES[self._state])
+                    logger.info(
+                        "New NMT state %s, old state %s",
+                        NMT_STATES[new_state],
+                        NMT_STATES[self._state],
+                    )
                 self._state = new_state
 
     def send_command(self, code: int):
@@ -73,8 +68,12 @@ class NmtBase:
         """
         if code in COMMAND_TO_STATE:
             new_state = COMMAND_TO_STATE[code]
-            logger.info("Changing NMT state on node %d from %s to %s",
-                        self.id, NMT_STATES[self._state], NMT_STATES[new_state])
+            logger.info(
+                "Changing NMT state on node %d from %s to %s",
+                self.id,
+                NMT_STATES[self._state],
+                NMT_STATES[new_state],
+            )
             self._state = new_state
 
     @property
@@ -102,8 +101,10 @@ class NmtBase:
         if new_state in NMT_COMMANDS:
             code = NMT_COMMANDS[new_state]
         else:
-            raise ValueError("'%s' is an invalid state. Must be one of %s." %
-                             (new_state, ", ".join(NMT_COMMANDS)))
+            raise ValueError(
+                "'%s' is an invalid state. Must be one of %s."
+                % (new_state, ", ".join(NMT_COMMANDS))
+            )
 
         self.send_command(code)
 
@@ -122,7 +123,7 @@ class NmtMaster(NmtBase):
     def on_heartbeat(self, can_id, data, timestamp):
         with self.state_update:
             self.timestamp = timestamp
-            new_state, = struct.unpack_from("B", data)
+            (new_state,) = struct.unpack_from("B", data)
             # Mask out toggle bit
             new_state &= 0x7F
             logger.debug("Received heartbeat can-id %d, state is %d", can_id, new_state)
@@ -143,8 +144,7 @@ class NmtMaster(NmtBase):
             NMT command code.
         """
         super(NmtMaster, self).send_command(code)
-        logger.info(
-            "Sending NMT command 0x%X to node %d", code, self.id)
+        logger.info("Sending NMT command 0x%X to node %d", code, self.id)
         self.network.send_message(0, [code, self.id])
 
     def wait_for_heartbeat(self, timeout: float = 10):
@@ -186,8 +186,11 @@ class NmtMaster(NmtBase):
         :param period:
             Period (in seconds) at which the node guarding should be advertised to the slave node.
         """
-        if self._node_guarding_producer : self.stop_node_guarding()
-        self._node_guarding_producer = self.network.send_periodic(0x700 + self.id, None, period, True)
+        if self._node_guarding_producer:
+            self.stop_node_guarding()
+        self._node_guarding_producer = self.network.send_periodic(
+            0x700 + self.id, None, period, True
+        )
 
     def stop_node_guarding(self):
         """Stops the node guarding mechanism."""
@@ -234,7 +237,7 @@ class NmtSlave(NmtBase):
 
     def on_write(self, index, data, **kwargs):
         if index == 0x1017:
-            heartbeat_time, = struct.unpack_from("<H", data)
+            (heartbeat_time,) = struct.unpack_from("<H", data)
             if heartbeat_time == 0:
                 self.stop_heartbeat()
             else:
@@ -251,9 +254,12 @@ class NmtSlave(NmtBase):
 
         self.stop_heartbeat()
         if heartbeat_time_ms > 0:
-            logger.info("Start the heartbeat timer, interval is %d ms", self._heartbeat_time_ms)
+            logger.info(
+                "Start the heartbeat timer, interval is %d ms", self._heartbeat_time_ms
+            )
             self._send_task = self.network.send_periodic(
-                0x700 + self.id, [self._state], heartbeat_time_ms / 1000.0)
+                0x700 + self.id, [self._state], heartbeat_time_ms / 1000.0
+            )
 
     def stop_heartbeat(self):
         """Stop the heartbeat service."""

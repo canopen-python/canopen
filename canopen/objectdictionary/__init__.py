@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def export_od(
     od: ObjectDictionary,
     dest: Union[str, TextIO, None] = None,
-    doc_type: Optional[str] = None
+    doc_type: Optional[str] = None,
 ) -> None:
     """Export an object dictionary.
 
@@ -57,14 +57,16 @@ def export_od(
                         break
                 else:
                     doc_type = "eds"
-            dest = open(dest, 'w')
+            dest = open(dest, "w")
             opened_here = True
 
         if doc_type == "eds":
             from canopen.objectdictionary import eds
+
             return eds.export_eds(od, dest)
         elif doc_type == "dcf":
             from canopen.objectdictionary import eds
+
             return eds.export_dcf(od, dest)
     finally:
         # If dest is opened in this fn, it should be closed
@@ -99,12 +101,14 @@ def import_od(
     else:
         # Path to file
         filename = source
-    suffix = filename[filename.rfind("."):].lower()
+    suffix = filename[filename.rfind(".") :].lower()
     if suffix in (".eds", ".dcf"):
         from canopen.objectdictionary import eds
+
         return eds.import_eds(source, node_id)
     elif suffix == ".epf":
         from canopen.objectdictionary import epf
+
         return epf.import_epf(source)
     else:
         doc_type = suffix[1:]
@@ -135,8 +139,8 @@ class ObjectDictionary(MutableMapping):
         """Get object from object dictionary by name or index."""
         item = self.names.get(index) or self.indices.get(index)
         if item is None:
-            if isinstance(index, str) and '.' in index:
-                idx, sub = index.split('.', maxsplit=1)
+            if isinstance(index, str) and "." in index:
+                idx, sub = index.split(".", maxsplit=1)
                 return self[idx][sub]
             raise KeyError(f"{pretty_index(index)} was not found in Object Dictionary")
         return item
@@ -209,7 +213,9 @@ class ODRecord(MutableMapping):
         self.names = {}
 
     def __repr__(self) -> str:
-        return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
+        return (
+            f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
+        )
 
     def __getitem__(self, subindex: Union[int, str]) -> ODVariable:
         item = self.names.get(subindex) or self.subindices.get(subindex)
@@ -268,7 +274,9 @@ class ODArray(Mapping):
         self.names = {}
 
     def __repr__(self) -> str:
-        return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
+        return (
+            f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
+        )
 
     def __getitem__(self, subindex: Union[int, str]) -> ODVariable:
         var = self.names.get(subindex) or self.subindices.get(subindex)
@@ -281,9 +289,19 @@ class ODArray(Mapping):
             name = f"{template.name}_{subindex:x}"
             var = ODVariable(name, self.index, subindex)
             var.parent = self
-            for attr in ("data_type", "unit", "factor", "min", "max", "default",
-                         "access_type", "description", "value_descriptions",
-                         "bit_definitions", "storage_location"):
+            for attr in (
+                "data_type",
+                "unit",
+                "factor",
+                "min",
+                "max",
+                "default",
+                "access_type",
+                "description",
+                "value_descriptions",
+                "bit_definitions",
+                "storage_location",
+            ):
                 if attr in template.__dict__:
                     var.__dict__[attr] = template.__dict__[attr]
         else:
@@ -330,7 +348,7 @@ class ODVariable:
         UNSIGNED56: UnsignedN(56),
         UNSIGNED64: struct.Struct("<Q"),
         REAL32: struct.Struct("<f"),
-        REAL64: struct.Struct("<d")
+        REAL64: struct.Struct("<d"),
     }
 
     def __init__(self, name: str, index: int, subindex: int = 0):
@@ -374,7 +392,9 @@ class ODVariable:
         self.pdo_mappable = False
 
     def __repr__(self) -> str:
-        subindex = self.subindex if isinstance(self.parent, (ODRecord, ODArray)) else None
+        subindex = (
+            self.subindex if isinstance(self.parent, (ODRecord, ODArray)) else None
+        )
         return f"<{type(self).__qualname__} {self.qualname!r} at {pretty_index(self.index, subindex)}>"
 
     @property
@@ -386,8 +406,7 @@ class ODVariable:
         return self.name
 
     def __eq__(self, other: ODVariable) -> bool:
-        return (self.index == other.index and
-                self.subindex == other.subindex)
+        return self.index == other.index and self.subindex == other.subindex
 
     def __len__(self) -> int:
         if self.data_type in self.STRUCT_TYPES:
@@ -430,11 +449,12 @@ class ODVariable:
             return data.decode("utf_16_le", errors="ignore").rstrip("\x00")
         elif self.data_type in self.STRUCT_TYPES:
             try:
-                value, = self.STRUCT_TYPES[self.data_type].unpack(data)
+                (value,) = self.STRUCT_TYPES[self.data_type].unpack(data)
                 return value
             except struct.error:
                 raise ObjectDictionaryError(
-                    "Mismatch between expected and actual data size")
+                    "Mismatch between expected and actual data size"
+                )
         else:
             # Just return the data as is
             return data
@@ -454,11 +474,12 @@ class ODVariable:
             if self.data_type in NUMBER_TYPES:
                 if self.min is not None and value < self.min:
                     logger.warning(
-                        "Value %d is less than min value %d", value, self.min)
+                        "Value %d is less than min value %d", value, self.min
+                    )
                 if self.max is not None and value > self.max:
                     logger.warning(
-                        "Value %d is greater than max value %d",
-                        value, self.max)
+                        "Value %d is greater than max value %d", value, self.max
+                    )
             try:
                 return self.STRUCT_TYPES[self.data_type].pack(value)
             except struct.error:
@@ -467,7 +488,8 @@ class ODVariable:
             raise ObjectDictionaryError("Data type has not been specified")
         else:
             raise TypeError(
-                f"Do not know how to encode {value!r} to data type 0x{self.data_type:X}")
+                f"Do not know how to encode {value!r} to data type 0x{self.data_type:X}"
+            )
 
     def decode_phys(self, value: int) -> Union[int, bool, float, str, bytes]:
         if self.data_type in INTEGER_TYPES:
@@ -484,8 +506,7 @@ class ODVariable:
         if not self.value_descriptions:
             raise ObjectDictionaryError("No value descriptions exist")
         elif value not in self.value_descriptions:
-            raise ObjectDictionaryError(
-                f"No value description exists for {value}")
+            raise ObjectDictionaryError(f"No value description exists for {value}")
         else:
             return self.value_descriptions[value]
 
@@ -498,7 +519,8 @@ class ODVariable:
                     return value
         valid_values = ", ".join(self.value_descriptions.values())
         raise ValueError(
-            f"No value corresponds to '{desc}'. Valid values are: {valid_values}")
+            f"No value corresponds to '{desc}'. Valid values are: {valid_values}"
+        )
 
     def decode_bits(self, value: int, bits: List[int]) -> int:
         try:
@@ -527,20 +549,20 @@ class ODVariable:
 class DeviceInformation:
     def __init__(self):
         self.allowed_baudrates = set()
-        self.vendor_name:Optional[str] = None
-        self.vendor_number:Optional[int] = None
-        self.product_name:Optional[str] = None
-        self.product_number:Optional[int] = None
-        self.revision_number:Optional[int] = None
-        self.order_code:Optional[str] = None
-        self.simple_boot_up_master:Optional[bool] = None
-        self.simple_boot_up_slave:Optional[bool] = None
-        self.granularity:Optional[int] = None
-        self.dynamic_channels_supported:Optional[bool] = None
-        self.group_messaging:Optional[bool] = None
-        self.nr_of_RXPDO:Optional[bool] = None
-        self.nr_of_TXPDO:Optional[bool] = None
-        self.LSS_supported:Optional[bool] = None
+        self.vendor_name: Optional[str] = None
+        self.vendor_number: Optional[int] = None
+        self.product_name: Optional[str] = None
+        self.product_number: Optional[int] = None
+        self.revision_number: Optional[int] = None
+        self.order_code: Optional[str] = None
+        self.simple_boot_up_master: Optional[bool] = None
+        self.simple_boot_up_slave: Optional[bool] = None
+        self.granularity: Optional[int] = None
+        self.dynamic_channels_supported: Optional[bool] = None
+        self.group_messaging: Optional[bool] = None
+        self.nr_of_RXPDO: Optional[bool] = None
+        self.nr_of_TXPDO: Optional[bool] = None
+        self.LSS_supported: Optional[bool] = None
 
 
 class ObjectDictionaryError(Exception):

@@ -53,9 +53,7 @@ class EmcyConsumer:
         self.log = []
         self.active = []
 
-    def wait(
-        self, emcy_code: Optional[int] = None, timeout: float = 10
-    ) -> "EmcyError":
+    def wait(self, emcy_code: Optional[int] = None, timeout: float = 10) -> "EmcyError":
         """Wait for a new EMCY to arrive.
 
         :param emcy_code: EMCY code to wait for
@@ -113,7 +111,7 @@ class EmcyError(Exception):
         (0x8000, 0xF000, "Monitoring"),
         (0x9000, 0xFF00, "External Error"),
         (0xF000, 0xFF00, "Additional Functions"),
-        (0xFF00, 0xFF00, "Device Specific")
+        (0xFF00, 0xFF00, "Device Specific"),
     ]
 
     def __init__(self, code: int, register: int, data: bytes, timestamp: float):

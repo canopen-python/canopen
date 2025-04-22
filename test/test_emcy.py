@@ -32,7 +32,7 @@ class TestEmcy(unittest.TestCase):
         self.emcy.add_callback(lambda err: acc2.append(err))
 
         # Dispatch an EMCY datagram.
-        self.emcy.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
+        self.emcy.on_emcy(0x81, b"\x01\x20\x02\x00\x01\x02\x03\x04", 1000)
 
         self.assertEqual(len(self.emcy.log), 1)
         self.assertEqual(len(self.emcy.active), 1)
@@ -41,12 +41,15 @@ class TestEmcy(unittest.TestCase):
         self.assertEqual(self.emcy.active[0], error)
         for err in error, acc1[0], acc2[0]:
             self.check_error(
-                error, code=0x2001, reg=0x02,
-                data=bytes([0, 1, 2, 3, 4]), ts=1000,
+                error,
+                code=0x2001,
+                reg=0x02,
+                data=bytes([0, 1, 2, 3, 4]),
+                ts=1000,
             )
 
         # Dispatch a new EMCY datagram.
-        self.emcy.on_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
+        self.emcy.on_emcy(0x81, b"\x10\x90\x01\x04\x03\x02\x01\x00", 2000)
         self.assertEqual(len(self.emcy.log), 2)
         self.assertEqual(len(self.emcy.active), 2)
 
@@ -54,18 +57,21 @@ class TestEmcy(unittest.TestCase):
         self.assertEqual(self.emcy.active[1], error)
         for err in error, acc1[1], acc2[1]:
             self.check_error(
-                error, code=0x9010, reg=0x01,
-                data=bytes([4, 3, 2, 1, 0]), ts=2000,
+                error,
+                code=0x9010,
+                reg=0x01,
+                data=bytes([4, 3, 2, 1, 0]),
+                ts=2000,
             )
 
         # Dispatch an EMCY reset.
-        self.emcy.on_emcy(0x81, b'\x00\x00\x00\x00\x00\x00\x00\x00', 2000)
+        self.emcy.on_emcy(0x81, b"\x00\x00\x00\x00\x00\x00\x00\x00", 2000)
         self.assertEqual(len(self.emcy.log), 3)
         self.assertEqual(len(self.emcy.active), 0)
 
     def test_emcy_consumer_reset(self):
-        self.emcy.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
-        self.emcy.on_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
+        self.emcy.on_emcy(0x81, b"\x01\x20\x02\x00\x01\x02\x03\x04", 1000)
+        self.emcy.on_emcy(0x81, b"\x10\x90\x01\x04\x03\x02\x01\x00", 2000)
         self.assertEqual(len(self.emcy.log), 2)
         self.assertEqual(len(self.emcy.active), 2)
 
@@ -77,13 +83,16 @@ class TestEmcy(unittest.TestCase):
         PAUSE = TIMEOUT / 2
 
         def push_err():
-            self.emcy.on_emcy(0x81, b'\x01\x20\x01\x01\x02\x03\x04\x05', 100)
+            self.emcy.on_emcy(0x81, b"\x01\x20\x01\x01\x02\x03\x04\x05", 100)
 
         def check_err(err):
             self.assertIsNotNone(err)
             self.check_error(
-                err, code=0x2001, reg=1,
-                data=bytes([1, 2, 3, 4, 5]), ts=100,
+                err,
+                code=0x2001,
+                reg=1,
+                data=bytes([1, 2, 3, 4, 5]),
+                ts=100,
             )
 
         @contextmanager
@@ -117,7 +126,7 @@ class TestEmcy(unittest.TestCase):
             self.assertIsNone(self.emcy.wait(0x9000, TIMEOUT))
 
         def push_reset():
-            self.emcy.on_emcy(0x81, b'\x00\x00\x00\x00\x00\x00\x00\x00', 100)
+            self.emcy.on_emcy(0x81, b"\x00\x00\x00\x00\x00\x00\x00\x00", 100)
 
         with timer(push_reset) as t:
             t.start()
@@ -126,59 +135,59 @@ class TestEmcy(unittest.TestCase):
 
 class TestEmcyError(unittest.TestCase):
     def test_emcy_error(self):
-        error = EmcyError(0x2001, 0x02, b'\x00\x01\x02\x03\x04', 1000)
+        error = EmcyError(0x2001, 0x02, b"\x00\x01\x02\x03\x04", 1000)
         self.assertEqual(error.code, 0x2001)
-        self.assertEqual(error.data, b'\x00\x01\x02\x03\x04')
+        self.assertEqual(error.data, b"\x00\x01\x02\x03\x04")
         self.assertEqual(error.register, 2)
         self.assertEqual(error.timestamp, 1000)
 
     def test_emcy_str(self):
         def check(code, expected):
-            err = EmcyError(code, 1, b'', 1000)
+            err = EmcyError(code, 1, b"", 1000)
             actual = str(err)
             self.assertEqual(actual, expected)
 
         check(0x2001, "Code 0x2001, Current")
-        check(0x3abc, "Code 0x3ABC, Voltage")
+        check(0x3ABC, "Code 0x3ABC, Voltage")
         check(0x0234, "Code 0x0234")
-        check(0xbeef, "Code 0xBEEF")
+        check(0xBEEF, "Code 0xBEEF")
 
     def test_emcy_get_desc(self):
         def check(code, expected):
-            err = EmcyError(code, 1, b'', 1000)
+            err = EmcyError(code, 1, b"", 1000)
             actual = err.get_desc()
             self.assertEqual(actual, expected)
 
         check(0x0000, "Error Reset / No Error")
-        check(0x00ff, "Error Reset / No Error")
+        check(0x00FF, "Error Reset / No Error")
         check(0x0100, "")
         check(0x1000, "Generic Error")
-        check(0x10ff, "Generic Error")
+        check(0x10FF, "Generic Error")
         check(0x1100, "")
         check(0x2000, "Current")
-        check(0x2fff, "Current")
+        check(0x2FFF, "Current")
         check(0x3000, "Voltage")
-        check(0x3fff, "Voltage")
+        check(0x3FFF, "Voltage")
         check(0x4000, "Temperature")
-        check(0x4fff, "Temperature")
+        check(0x4FFF, "Temperature")
         check(0x5000, "Device Hardware")
-        check(0x50ff, "Device Hardware")
+        check(0x50FF, "Device Hardware")
         check(0x5100, "")
         check(0x6000, "Device Software")
-        check(0x6fff, "Device Software")
+        check(0x6FFF, "Device Software")
         check(0x7000, "Additional Modules")
-        check(0x70ff, "Additional Modules")
+        check(0x70FF, "Additional Modules")
         check(0x7100, "")
         check(0x8000, "Monitoring")
-        check(0x8fff, "Monitoring")
+        check(0x8FFF, "Monitoring")
         check(0x9000, "External Error")
-        check(0x90ff, "External Error")
+        check(0x90FF, "External Error")
         check(0x9100, "")
-        check(0xf000, "Additional Functions")
-        check(0xf0ff, "Additional Functions")
-        check(0xf100, "")
-        check(0xff00, "Device Specific")
-        check(0xffff, "Device Specific")
+        check(0xF000, "Additional Functions")
+        check(0xF0FF, "Additional Functions")
+        check(0xF100, "")
+        check(0xFF00, "Device Specific")
+        check(0xFFFF, "Device Specific")
 
 
 class TestEmcyProducer(unittest.TestCase):
@@ -207,18 +216,18 @@ class TestEmcyProducer(unittest.TestCase):
             self.emcy.send(*args)
             self.check_response(res)
 
-        check(0x2001, res=b'\x01\x20\x00\x00\x00\x00\x00\x00')
-        check(0x2001, 0x2, res=b'\x01\x20\x02\x00\x00\x00\x00\x00')
-        check(0x2001, 0x2, b'\x2a', res=b'\x01\x20\x02\x2a\x00\x00\x00\x00')
+        check(0x2001, res=b"\x01\x20\x00\x00\x00\x00\x00\x00")
+        check(0x2001, 0x2, res=b"\x01\x20\x02\x00\x00\x00\x00\x00")
+        check(0x2001, 0x2, b"\x2a", res=b"\x01\x20\x02\x2a\x00\x00\x00\x00")
 
     def test_emcy_producer_reset(self):
         def check(*args, res):
             self.emcy.reset(*args)
             self.check_response(res)
 
-        check(res=b'\x00\x00\x00\x00\x00\x00\x00\x00')
-        check(3, res=b'\x00\x00\x03\x00\x00\x00\x00\x00')
-        check(3, b"\xaa\xbb", res=b'\x00\x00\x03\xaa\xbb\x00\x00\x00')
+        check(res=b"\x00\x00\x00\x00\x00\x00\x00\x00")
+        check(3, res=b"\x00\x00\x03\x00\x00\x00\x00\x00")
+        check(3, b"\xaa\xbb", res=b"\x00\x00\x03\xaa\xbb\x00\x00\x00")
 
 
 if __name__ == "__main__":

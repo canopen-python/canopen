@@ -80,10 +80,10 @@ class UnsignedN(struct.Struct):
         super().__init__(fmt)
 
     def unpack(self, buffer):
-        return super().unpack(buffer + b'\x00' * (super().size - self.size))
+        return super().unpack(buffer + b"\x00" * (super().size - self.size))
 
     def pack(self, *v):
-        return super().pack(*v)[:self.size]
+        return super().pack(*v)[: self.size]
 
     @property
     def size(self) -> int:
@@ -116,11 +116,11 @@ class IntegerN(struct.Struct):
         mask = 0x80
         neg = (buffer[self.size - 1] & mask) > 0
         return super().unpack(
-            buffer + (b'\xff' if neg else b'\x00') * (super().size - self.size)
+            buffer + (b"\xff" if neg else b"\x00") * (super().size - self.size)
         )
 
     def pack(self, *v):
-        return super().pack(*v)[:self.size]
+        return super().pack(*v)[: self.size]
 
     @property
     def size(self) -> int:

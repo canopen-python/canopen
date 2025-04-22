@@ -40,9 +40,11 @@ class PdoBase(Mapping):
         return iter(self.map)
 
     def __getitem__(self, key):
-        if isinstance(key, int) and (0x1A00 <= key <= 0x1BFF or   # By TPDO ID (512)
-                                     0x1600 <= key <= 0x17FF or   # By RPDO ID (512)
-                                     0 < key <= 512):             # By PDO Index
+        if isinstance(key, int) and (
+            0x1A00 <= key <= 0x1BFF  # By TPDO ID (512)
+            or 0x1600 <= key <= 0x17FF  # By RPDO ID (512)
+            or 0 < key <= 512
+        ):  # By PDO Index
             return self.map[key]
         else:
             for pdo_map in self.map.values():
@@ -97,14 +99,15 @@ class PdoBase(Mapping):
             from canmatrix import canmatrix
             from canmatrix import formats
         except ImportError:
-            raise NotImplementedError("This feature requires the 'canopen[db_export]' feature")
+            raise NotImplementedError(
+                "This feature requires the 'canopen[db_export]' feature"
+            )
 
         db = canmatrix.CanMatrix()
         for pdo_map in self.map.values():
             if pdo_map.cob_id is None:
                 continue
-            frame = canmatrix.Frame(pdo_map.name,
-                                    arbitration_id=pdo_map.cob_id)
+            frame = canmatrix.Frame(pdo_map.name, arbitration_id=pdo_map.cob_id)
             for var in pdo_map.map:
                 is_signed = var.od.data_type in objectdictionary.SIGNED_TYPES
                 is_float = var.od.data_type in objectdictionary.FLOAT_TYPES
@@ -117,15 +120,17 @@ class PdoBase(Mapping):
                 name = var.name
                 name = name.replace(" ", "_")
                 name = name.replace(".", "_")
-                signal = canmatrix.Signal(name,
-                                          start_bit=var.offset,
-                                          size=var.length,
-                                          is_signed=is_signed,
-                                          is_float=is_float,
-                                          factor=var.od.factor,
-                                          min=min_value,
-                                          max=max_value,
-                                          unit=var.od.unit)
+                signal = canmatrix.Signal(
+                    name,
+                    start_bit=var.offset,
+                    size=var.length,
+                    is_signed=is_signed,
+                    is_float=is_float,
+                    factor=var.od.factor,
+                    min=min_value,
+                    max=max_value,
+                    unit=var.od.unit,
+                )
                 for value, desc in var.od.value_descriptions.items():
                     signal.addValues(value, desc)
                 frame.add_signal(signal)
@@ -156,10 +161,13 @@ class PdoMaps(Mapping):
                 new_map = PdoMap(
                     pdo_node,
                     pdo_node.node.sdo[com_offset + map_no],
-                    pdo_node.node.sdo[map_offset + map_no])
+                    pdo_node.node.sdo[map_offset + map_no],
+                )
                 # Generate default COB-IDs for predefined connection set
                 if cob_base is not None and map_no < 4:
-                    new_map.predefined_cob_id = cob_base + map_no * 0x100 + pdo_node.node.id
+                    new_map.predefined_cob_id = (
+                        cob_base + map_no * 0x100 + pdo_node.node.id
+                    )
                 self.maps[map_no + 1] = new_map
 
     def __getitem__(self, key: int) -> PdoMap:
@@ -220,8 +228,10 @@ class PdoMap:
                 valid_values.append(var.index)
                 if var.index == value:
                     return var
-        raise KeyError(f"{value} not found in map. Valid entries are "
-                       f"{', '.join(str(v) for v in valid_values)}")
+        raise KeyError(
+            f"{value} not found in map. Valid entries are "
+            f"{', '.join(str(v) for v in valid_values)}"
+        )
 
     def __getitem_by_name(self, value):
         valid_values = []
@@ -230,8 +240,9 @@ class PdoMap:
                 valid_values.append(var.name)
                 if var.name == value:
                     return var
-        raise KeyError(f"{value} not found in map. Valid entries are "
-                       f"{', '.join(valid_values)}")
+        raise KeyError(
+            f"{value} not found in map. Valid entries are " f"{', '.join(valid_values)}"
+        )
 
     def __getitem__(self, key: Union[int, str]) -> PdoVariable:
         if isinstance(key, int):
@@ -266,7 +277,7 @@ class PdoMap:
         logger.info("Filling up fixed-length mapping array")
         while len(self.map) < needed:
             # Generate a dummy mapping for an invalid object with zero length.
-            obj = objectdictionary.ODVariable('Dummy', 0, 0)
+            obj = objectdictionary.ODVariable("Dummy", 0, 0)
             var = PdoVariable(obj)
             var.length = 0
             self.map.append(var)
@@ -333,7 +344,7 @@ class PdoMap:
 
     def read(self, from_od=False) -> None:
         """Read PDO configuration for this map.
-        
+
         :param from_od:
             Read using SDO if False, read from object dictionary if True.
             When reading from object dictionary, if DCF populated a value, the
@@ -403,7 +414,11 @@ class PdoMap:
             logger.info("Skip saving %s: COB-ID was never set", self.com_record.od.name)
             return
         logger.info("Setting COB-ID 0x%X and temporarily disabling PDO", self.cob_id)
-        self.com_record[1].raw = self.cob_id | PDO_NOT_VALID | (RTR_NOT_ALLOWED if not self.rtr_allowed else 0x0)
+        self.com_record[1].raw = (
+            self.cob_id
+            | PDO_NOT_VALID
+            | (RTR_NOT_ALLOWED if not self.rtr_allowed else 0x0)
+        )
         if self.trans_type is not None:
             logger.info("Setting transmission type to %d", self.trans_type)
             self.com_record[2].raw = self.trans_type
@@ -427,17 +442,22 @@ class PdoMap:
             self._fill_map(self.map_array[0].raw)
         subindex = 1
         for var in self.map:
-            logger.info("Writing %s (0x%04X:%02X, %d bits) to PDO map",
-                        var.name, var.index, var.subindex, var.length)
+            logger.info(
+                "Writing %s (0x%04X:%02X, %d bits) to PDO map",
+                var.name,
+                var.index,
+                var.subindex,
+                var.length,
+            )
             if getattr(self.pdo_node.node, "curtis_hack", False):
                 # Curtis HACK: mixed up field order
-                self.map_array[subindex].raw = (var.index |
-                                                var.subindex << 16 |
-                                                var.length << 24)
+                self.map_array[subindex].raw = (
+                    var.index | var.subindex << 16 | var.length << 24
+                )
             else:
-                self.map_array[subindex].raw = (var.index << 16 |
-                                                var.subindex << 8 |
-                                                var.length)
+                self.map_array[subindex].raw = (
+                    var.index << 16 | var.subindex << 8 | var.length
+                )
             subindex += 1
         try:
             self.map_array[0].raw = len(self.map)
@@ -499,8 +519,14 @@ class PdoMap:
             # We want to see the bit fields within the PDO
             start_bit = var.offset
             end_bit = start_bit + var.length - 1
-            logger.info("Adding %s (0x%04X:%02X) at bits %d - %d to PDO map",
-                        var.name, var.index, var.subindex, start_bit, end_bit)
+            logger.info(
+                "Adding %s (0x%04X:%02X) at bits %d - %d to PDO map",
+                var.name,
+                var.index,
+                var.subindex,
+                start_bit,
+                end_bit,
+            )
             self.map.append(var)
             self.length += var.length
         except KeyError as exc:
@@ -535,7 +561,8 @@ class PdoMap:
         logger.info("Starting %s with a period of %s seconds", self.name, self.period)
 
         self._task = self.pdo_node.network.send_periodic(
-            self.cob_id, self.data, self.period)
+            self.cob_id, self.data, self.period
+        )
 
     def stop(self) -> None:
         """Stop transmission."""
@@ -601,7 +628,7 @@ class PdoVariable(variable.Variable):
                 data = data | (~((1 << self.length) - 1))
             data = od_struct.pack(data)
         else:
-            data = self.pdo_parent.data[byte_offset:byte_offset + len(self.od) // 8]
+            data = self.pdo_parent.data[byte_offset : byte_offset + len(self.od) // 8]
 
         return data
 
@@ -611,11 +638,17 @@ class PdoVariable(variable.Variable):
         :param data: Value for the PDO variable in the PDO message.
         """
         byte_offset, bit_offset = divmod(self.offset, 8)
-        logger.debug("Updating %s to %s in %s",
-                     self.name, binascii.hexlify(data), self.pdo_parent.name)
+        logger.debug(
+            "Updating %s to %s in %s",
+            self.name,
+            binascii.hexlify(data),
+            self.pdo_parent.name,
+        )
 
         if bit_offset or self.length % 8:
-            cur_msg_data = self.pdo_parent.data[byte_offset:byte_offset + len(self.od) // 8]
+            cur_msg_data = self.pdo_parent.data[
+                byte_offset : byte_offset + len(self.od) // 8
+            ]
             # Need information of the current variable type (unsigned vs signed)
             data_type = self.od.data_type
             if data_type == objectdictionary.BOOLEAN:
@@ -627,14 +660,16 @@ class PdoVariable(variable.Variable):
             data = od_struct.unpack(data)[0]
             # Mask out the old data value
             # At the end we need to mask for correct variable length (bitwise operation failure)
-            shifted = (((1 << self.length) - 1) << bit_offset) & ((1 << len(self.od)) - 1)
+            shifted = (((1 << self.length) - 1) << bit_offset) & (
+                (1 << len(self.od)) - 1
+            )
             bitwise_not = (~shifted) & ((1 << len(self.od)) - 1)
             cur_msg_data = cur_msg_data & bitwise_not
             # Set the new data on the correct position
             data = (data << bit_offset) | cur_msg_data
             od_struct.pack_into(self.pdo_parent.data, byte_offset, data)
         else:
-            self.pdo_parent.data[byte_offset:byte_offset + len(data)] = data
+            self.pdo_parent.data[byte_offset : byte_offset + len(data)] = data
 
         self.pdo_parent.update()
 

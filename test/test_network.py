@@ -90,10 +90,10 @@ class TestNetwork(unittest.TestCase):
         with self.assertLogs():
             self.network.add_node(2, SAMPLE_EDS)
         node = self.network[2]
-        self.network.notify(0x82, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1473418396.0)
+        self.network.notify(0x82, b"\x01\x20\x02\x00\x01\x02\x03\x04", 1473418396.0)
         self.assertEqual(len(node.emcy.active), 1)
-        self.network.notify(0x702, b'\x05', 1473418396.0)
-        self.assertEqual(node.nmt.state, 'OPERATIONAL')
+        self.network.notify(0x702, b"\x05", 1473418396.0)
+        self.assertEqual(node.nmt.state, "OPERATIONAL")
         self.assertListEqual(self.network.scanner.nodes, [2])
 
     def test_network_send_message(self):
@@ -127,8 +127,10 @@ class TestNetwork(unittest.TestCase):
 
         for i in range(N_HOOKS):
             accumulators.append([])
+
             def hook(*args, i=i):
                 accumulators[i].append(args)
+
             self.network.subscribe(i, hook)
 
         self.network.notify(0, bytes([1, 2, 3]), 1000)
@@ -137,10 +139,13 @@ class TestNetwork(unittest.TestCase):
         self.network.notify(2, bytes([4, 5, 6]), 1003)
 
         self.assertEqual(accumulators[0], [(0, bytes([1, 2, 3]), 1000)])
-        self.assertEqual(accumulators[1], [
-            (1, bytes([2, 3, 4]), 1001),
-            (1, bytes([3, 4, 5]), 1002),
-        ])
+        self.assertEqual(
+            accumulators[1],
+            [
+                (1, bytes([2, 3, 4]), 1001),
+                (1, bytes([3, 4, 5]), 1002),
+            ],
+        )
         self.assertEqual(accumulators[2], [(2, bytes([4, 5, 6]), 1003)])
 
         self.network.unsubscribe(0)
@@ -157,16 +162,18 @@ class TestNetwork(unittest.TestCase):
         hooks = []
         for i in range(N_HOOKS):
             accumulators.append([])
+
             def hook(*args, i=i):
                 accumulators[i].append(args)
+
             hooks.append(hook)
             self.network.subscribe(0x20, hook)
 
-        self.network.notify(0xaa, bytes([1, 1, 1]), 2000)
+        self.network.notify(0xAA, bytes([1, 1, 1]), 2000)
         self.network.notify(0x20, bytes([2, 3, 4]), 2001)
-        self.network.notify(0xbb, bytes([2, 2, 2]), 2002)
+        self.network.notify(0xBB, bytes([2, 2, 2]), 2002)
         self.network.notify(0x20, bytes([3, 4, 5]), 2003)
-        self.network.notify(0xcc, bytes([3, 3, 3]), 2004)
+        self.network.notify(0xCC, bytes([3, 3, 3]), 2004)
 
         BATCH1 = [
             (0x20, bytes([2, 3, 4]), 2001),
@@ -303,13 +310,13 @@ class TestScanner(unittest.TestCase):
         self.scanner.on_message_received(0x287)
         self.scanner.on_message_received(0x308)
         self.scanner.on_message_received(0x389)
-        self.scanner.on_message_received(0x40a)
-        self.scanner.on_message_received(0x48b)
-        self.scanner.on_message_received(0x50c)
+        self.scanner.on_message_received(0x40A)
+        self.scanner.on_message_received(0x48B)
+        self.scanner.on_message_received(0x50C)
         # SDO responses from .search() should be recognized,
         # but not SDO requests.
-        self.scanner.on_message_received(0x58d)
-        self.scanner.on_message_received(0x50e)
+        self.scanner.on_message_received(0x58D)
+        self.scanner.on_message_received(0x50E)
         self.assertListEqual(self.scanner.nodes, [1, 3, 5, 7, 9, 11, 13])
 
     def test_scanner_reset(self):

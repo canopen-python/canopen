@@ -202,10 +202,12 @@ class Network(MutableMapping):
         """
         if not self.bus:
             raise RuntimeError("Not connected to CAN bus")
-        msg = can.Message(is_extended_id=can_id > 0x7FF,
-                          arbitration_id=can_id,
-                          data=data,
-                          is_remote_frame=remote)
+        msg = can.Message(
+            is_extended_id=can_id > 0x7FF,
+            arbitration_id=can_id,
+            data=data,
+            is_remote_frame=remote,
+        )
         with self.send_lock:
             self.bus.send(msg)
         self.check()
@@ -289,8 +291,10 @@ class _UninitializedNetwork(Network):
         """Do not initialize attributes, by skipping the parent constructor."""
 
     def __getattribute__(self, name):
-        raise RuntimeError("No actual Network object was assigned, "
-                           "try associating to a real network first.")
+        raise RuntimeError(
+            "No actual Network object was assigned, "
+            "try associating to a real network first."
+        )
 
 
 #: Singleton instance
@@ -323,9 +327,12 @@ class PeriodicMessageTask:
         """
         self.bus = bus
         self.period = period
-        self.msg = can.Message(is_extended_id=can_id > 0x7FF,
-                               arbitration_id=can_id,
-                               data=data, is_remote_frame=remote)
+        self.msg = can.Message(
+            is_extended_id=can_id > 0x7FF,
+            arbitration_id=can_id,
+            data=data,
+            is_remote_frame=remote,
+        )
         self._start()
 
     def _start(self):

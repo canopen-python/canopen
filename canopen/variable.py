@@ -15,8 +15,7 @@ class Variable:
         self.od = od
         #: Description of this variable from Object Dictionary, overridable
         self.name = od.name
-        if isinstance(od.parent, (objectdictionary.ODRecord,
-                                  objectdictionary.ODArray)):
+        if isinstance(od.parent, (objectdictionary.ODRecord, objectdictionary.ODArray)):
             # Include the parent object's name for subentries
             self.name = od.parent.name + "." + od.name
         #: Holds a local, overridable copy of the Object Index
@@ -25,9 +24,13 @@ class Variable:
         self.subindex = od.subindex
 
     def __repr__(self) -> str:
-        subindex = self.subindex if isinstance(self.od.parent,
-            (objectdictionary.ODRecord, objectdictionary.ODArray)
-        ) else None
+        subindex = (
+            self.subindex
+            if isinstance(
+                self.od.parent, (objectdictionary.ODRecord, objectdictionary.ODArray)
+            )
+            else None
+        )
         return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index, subindex)}>"
 
     def get_data(self) -> bytes:
@@ -84,9 +87,9 @@ class Variable:
 
     @raw.setter
     def raw(self, value: Union[int, bool, float, str, bytes]):
-        logger.debug("Writing %r (0x%04X:%02X) = %r",
-                     self.name, self.index,
-                     self.subindex, value)
+        logger.debug(
+            "Writing %r (0x%04X:%02X) = %r", self.name, self.index, self.subindex, value
+        )
         self.data = self.od.encode_raw(value)
 
     @property
@@ -184,8 +187,7 @@ class Bits(Mapping):
         return self.variable.od.decode_bits(self.raw, self._get_bits(key))
 
     def __setitem__(self, key, value: int):
-        self.raw = self.variable.od.encode_bits(
-            self.raw, self._get_bits(key), value)
+        self.raw = self.variable.od.encode_bits(self.raw, self._get_bits(key), value)
         self.write()
 
     def __iter__(self):

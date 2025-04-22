@@ -18,7 +18,7 @@ RECORD = 9
 
 
 def import_eds(source, node_id):
-    eds = RawConfigParser(inline_comment_prefixes=(';',))
+    eds = RawConfigParser(inline_comment_prefixes=(";",))
     eds.optionxform = str
     opened_here = False
     try:
@@ -37,25 +37,26 @@ def import_eds(source, node_id):
 
     if eds.has_section("FileInfo"):
         od.__edsFileInfo = {
-            opt: eds.get("FileInfo", opt)
-            for opt in eds.options("FileInfo")
+            opt: eds.get("FileInfo", opt) for opt in eds.options("FileInfo")
         }
 
     if eds.has_section("Comments"):
         linecount = int(eds.get("Comments", "Lines"), 0)
-        od.comments = '\n'.join([
-            eds.get("Comments", f"Line{line}")
-            for line in range(1, linecount+1)
-        ])
+        od.comments = "\n".join(
+            [eds.get("Comments", f"Line{line}") for line in range(1, linecount + 1)]
+        )
 
     if not eds.has_section("DeviceInfo"):
-        logger.warn("eds file does not have a DeviceInfo section. This section is mandatory")
+        logger.warn(
+            "eds file does not have a DeviceInfo section. This section is mandatory"
+        )
     else:
         for rate in [10, 20, 50, 125, 250, 500, 800, 1000]:
             baudPossible = int(
-                eds.get("DeviceInfo", f"BaudRate_{rate}", fallback='0'), 0)
+                eds.get("DeviceInfo", f"BaudRate_{rate}", fallback="0"), 0
+            )
             if baudPossible != 0:
-                od.device_information.allowed_baudrates.add(rate*1000)
+                od.device_information.allowed_baudrates.add(rate * 1000)
 
         for t, eprop, odprop in [
             (str, "VendorName", "vendor_name"),
@@ -75,13 +76,13 @@ def import_eds(source, node_id):
         ]:
             try:
                 if t in (int, bool):
-                    setattr(od.device_information, odprop,
-                            t(int(eds.get("DeviceInfo", eprop), 0))
-                            )
+                    setattr(
+                        od.device_information,
+                        odprop,
+                        t(int(eds.get("DeviceInfo", eprop), 0)),
+                    )
                 elif t is str:
-                    setattr(od.device_information, odprop,
-                            eds.get("DeviceInfo", eprop)
-                            )
+                    setattr(od.device_information, odprop, eds.get("DeviceInfo", eprop))
             except NoOptionError:
                 pass
 
@@ -129,7 +130,8 @@ def import_eds(source, node_id):
             elif object_type == ARR and eds.has_option(section, "CompactSubObj"):
                 arr = objectdictionary.ODArray(name, index)
                 last_subindex = objectdictionary.ODVariable(
-                    "Number of entries", index, 0)
+                    "Number of entries", index, 0
+                )
                 last_subindex.data_type = datatypes.UNSIGNED8
                 arr.add_member(last_subindex)
                 arr.add_member(build_variable(eds, section, node_id, index, 1))
@@ -152,8 +154,7 @@ def import_eds(source, node_id):
             index = int(match.group(1), 16)
             subindex = int(match.group(2), 16)
             entry = od[index]
-            if isinstance(entry, (objectdictionary.ODRecord,
-                                  objectdictionary.ODArray)):
+            if isinstance(entry, (objectdictionary.ODRecord, objectdictionary.ODArray)):
                 var = build_variable(eds, section, node_id, index, subindex)
                 entry.add_member(var)
 
@@ -174,7 +175,7 @@ def import_eds(source, node_id):
 
 
 def import_from_node(node_id, network):
-    """ Download the configuration from the remote node
+    """Download the configuration from the remote node
     :param int node_id: Identifier of the node
     :param network: network object
     """
@@ -188,8 +189,7 @@ def import_from_node(node_id, network):
         with sdo_client.open(0x1021, 0, "rt") as eds_fp:
             od = import_eds(eds_fp, node_id)
     except Exception as e:
-        logger.error("No object dictionary could be loaded for node %d: %s",
-                     node_id, e)
+        logger.error("No object dictionary could be loaded for node %d: %s", node_id, e)
         od = None
     finally:
         network.unsubscribe(0x580 + node_id)
@@ -206,7 +206,9 @@ def _calc_bit_length(data_type):
     elif data_type == datatypes.INTEGER64:
         return 64
     else:
-        raise ValueError(f"Invalid data_type '{data_type}', expecting a signed integer data_type.")
+        raise ValueError(
+            f"Invalid data_type '{data_type}', expecting a signed integer data_type."
+        )
 
 
 def _signed_int_from_hex(hex_str, bit_length):
@@ -229,8 +231,8 @@ def _convert_variable(node_id, var_type, value):
     else:
         # COB-ID can contain '$NODEID+' so replace this with node_id before converting
         value = value.replace(" ", "").upper()
-        if '$NODEID' in value and node_id is not None:
-            return int(re.sub(r'\+?\$NODEID\+?', '', value), 0) + node_id
+        if "$NODEID" in value and node_id is not None:
+            return int(re.sub(r"\+?\$NODEID\+?", "", value), 0) + node_id
         else:
             return int(value, 0)
 
@@ -272,7 +274,9 @@ def build_variable(eds, section, node_id, index, subindex=0):
         try:
             var.data_type = int(eds.get(f"{var.data_type:X}sub1", "DefaultValue"), 0)
         except NoSectionError:
-            logger.warning("%s has an unknown or unsupported data type (0x%X)", name, var.data_type)
+            logger.warning(
+                "%s has an unknown or unsupported data type (0x%X)", name, var.data_type
+            )
             # Assume DOMAIN to force application to interpret the byte data
             var.data_type = datatypes.DOMAIN
 
@@ -282,7 +286,9 @@ def build_variable(eds, section, node_id, index, subindex=0):
         try:
             min_string = eds.get(section, "LowLimit")
             if var.data_type in datatypes.SIGNED_TYPES:
-                var.min = _signed_int_from_hex(min_string, _calc_bit_length(var.data_type))
+                var.min = _signed_int_from_hex(
+                    min_string, _calc_bit_length(var.data_type)
+                )
             else:
                 var.min = int(min_string, 0)
         except ValueError:
@@ -291,7 +297,9 @@ def build_variable(eds, section, node_id, index, subindex=0):
         try:
             max_string = eds.get(section, "HighLimit")
             if var.data_type in datatypes.SIGNED_TYPES:
-                var.max = _signed_int_from_hex(max_string, _calc_bit_length(var.data_type))
+                var.max = _signed_int_from_hex(
+                    max_string, _calc_bit_length(var.data_type)
+                )
             else:
                 var.max = int(max_string, 0)
         except ValueError:
@@ -299,15 +307,19 @@ def build_variable(eds, section, node_id, index, subindex=0):
     if eds.has_option(section, "DefaultValue"):
         try:
             var.default_raw = eds.get(section, "DefaultValue")
-            if '$NODEID' in var.default_raw:
+            if "$NODEID" in var.default_raw:
                 var.relative = True
-            var.default = _convert_variable(node_id, var.data_type, eds.get(section, "DefaultValue"))
+            var.default = _convert_variable(
+                node_id, var.data_type, eds.get(section, "DefaultValue")
+            )
         except ValueError:
             pass
     if eds.has_option(section, "ParameterValue"):
         try:
             var.value_raw = eds.get(section, "ParameterValue")
-            var.value = _convert_variable(node_id, var.data_type, eds.get(section, "ParameterValue"))
+            var.value = _convert_variable(
+                node_id, var.data_type, eds.get(section, "ParameterValue")
+            )
         except ValueError:
             pass
     # Factor, Description and Unit are not standard according to the CANopen specifications, but they are implemented in the python canopen package, so we can at least try to use them
@@ -372,32 +384,36 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
         if var.access_type:
             eds.set(section, "AccessType", var.access_type)
 
-        if getattr(var, 'default_raw', None) is not None:
+        if getattr(var, "default_raw", None) is not None:
             eds.set(section, "DefaultValue", var.default_raw)
-        elif getattr(var, 'default', None) is not None:
-            eds.set(section, "DefaultValue", _revert_variable(
-                var.data_type, var.default))
+        elif getattr(var, "default", None) is not None:
+            eds.set(
+                section, "DefaultValue", _revert_variable(var.data_type, var.default)
+            )
 
         if device_commisioning:
-            if getattr(var, 'value_raw', None) is not None:
+            if getattr(var, "value_raw", None) is not None:
                 eds.set(section, "ParameterValue", var.value_raw)
-            elif getattr(var, 'value', None) is not None:
-                eds.set(section, "ParameterValue",
-                        _revert_variable(var.data_type, var.value))
+            elif getattr(var, "value", None) is not None:
+                eds.set(
+                    section,
+                    "ParameterValue",
+                    _revert_variable(var.data_type, var.value),
+                )
 
         eds.set(section, "DataType", f"0x{var.data_type:04X}")
         eds.set(section, "PDOMapping", hex(var.pdo_mappable))
 
-        if getattr(var, 'min', None) is not None:
+        if getattr(var, "min", None) is not None:
             eds.set(section, "LowLimit", var.min)
-        if getattr(var, 'max', None) is not None:
+        if getattr(var, "max", None) is not None:
             eds.set(section, "HighLimit", var.max)
 
-        if getattr(var, 'description', '') != '':
+        if getattr(var, "description", "") != "":
             eds.set(section, "Description", var.description)
-        if getattr(var, 'factor', 1) != 1:
+        if getattr(var, "factor", 1) != 1:
             eds.set(section, "Factor", var.factor)
-        if getattr(var, 'unit', '') != '':
+        if getattr(var, "unit", "") != "":
             eds.set(section, "Unit", var.unit)
 
     def export_record(var, eds):
@@ -416,6 +432,7 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
     eds.optionxform = str
 
     from datetime import datetime as dt
+
     defmtime = dt.utcnow()
 
     try:
@@ -465,10 +482,13 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
 
     # we are also adding out of spec baudrates here.
     for rate in od.device_information.allowed_baudrates.union(
-            {10e3, 20e3, 50e3, 125e3, 250e3, 500e3, 800e3, 1000e3}):
+        {10e3, 20e3, 50e3, 125e3, 250e3, 500e3, 800e3, 1000e3}
+    ):
         eds.set(
-            "DeviceInfo", f"BaudRate_{rate//1000}",
-            int(rate in od.device_information.allowed_baudrates))
+            "DeviceInfo",
+            f"BaudRate_{rate//1000}",
+            int(rate in od.device_information.allowed_baudrates),
+        )
 
     if device_commisioning and (od.bitrate or od.node_id):
         eds.add_section("DeviceComissioning")
@@ -496,11 +516,13 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
         return x in range(0x2000, 0x6000)
 
     def optional_indices(x):
-        return all((
-            x > 0x1001,
-            not mandatory_indices(x),
-            not manufacturer_idices(x),
-        ))
+        return all(
+            (
+                x > 0x1001,
+                not mandatory_indices(x),
+                not manufacturer_idices(x),
+            )
+        )
 
     supported_mantatory_indices = list(filter(mandatory_indices, od))
     supported_optional_indices = list(filter(optional_indices, od))
@@ -520,6 +542,7 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
 
     if not dest:
         import sys
+
         dest = sys.stdout
 
     eds.write(dest, False)

@@ -99,7 +99,7 @@ class TestNmtMaster(unittest.TestCase):
         self.assertEqual(state, "PRE-OPERATIONAL")
 
     def test_nmt_master_on_heartbeat_unknown_state(self):
-        t = threading.Timer(0.01, self.dispatch_heartbeat, args=(0xcb,))
+        t = threading.Timer(0.01, self.dispatch_heartbeat, args=(0xCB,))
         t.start()
         self.addCleanup(t.join)
         state = self.node.nmt.wait_for_heartbeat(self.TIMEOUT)
@@ -110,13 +110,15 @@ class TestNmtMaster(unittest.TestCase):
     def test_nmt_master_add_heartbeat_callback(self):
         event = threading.Event()
         state = None
+
         def hook(st):
             nonlocal state
             state = st
             event.set()
+
         self.node.nmt.add_heartbeat_callback(hook)
 
-        self.dispatch_heartbeat(0x7f)
+        self.dispatch_heartbeat(0x7F)
         self.assertTrue(event.wait(self.TIMEOUT))
         self.assertEqual(state, 127)
 

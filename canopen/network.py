@@ -16,7 +16,6 @@ from canopen.objectdictionary.eds import import_from_node
 from canopen.sync import SyncProducer
 from canopen.timestamp import TimeProducer
 
-
 logger = logging.getLogger(__name__)
 
 Callback = Callable[[int, bytearray, float], None]

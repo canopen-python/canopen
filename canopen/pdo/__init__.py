@@ -3,7 +3,6 @@ import logging
 from canopen import node
 from canopen.pdo.base import PdoBase, PdoMap, PdoMaps, PdoVariable
 
-
 __all__ = [
     "PdoBase",
     "PdoMap",

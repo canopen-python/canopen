@@ -5,11 +5,10 @@ import logging
 import math
 import threading
 from collections.abc import Mapping
-from typing import Callable, Dict, Iterator, List, Optional, TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Callable, Dict, Iterator, List, Optional, Union
 
 import canopen.network
-from canopen import objectdictionary
-from canopen import variable
+from canopen import objectdictionary, variable
 from canopen.sdo import SdoAbortedError
 
 if TYPE_CHECKING:
@@ -96,8 +95,7 @@ class PdoBase(Mapping):
         :rtype: canmatrix.canmatrix.CanMatrix
         """
         try:
-            from canmatrix import canmatrix
-            from canmatrix import formats
+            from canmatrix import canmatrix, formats
         except ImportError:
             raise NotImplementedError(
                 "This feature requires the 'canopen[db_export]' feature"

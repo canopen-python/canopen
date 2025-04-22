@@ -5,7 +5,6 @@ import time
 
 import canopen.network
 
-
 logger = logging.getLogger(__name__)
 
 # Command Specifier (CS)

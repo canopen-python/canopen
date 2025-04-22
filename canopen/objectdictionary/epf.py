@@ -4,7 +4,6 @@ import xml.etree.ElementTree as etree
 from canopen import objectdictionary
 from canopen.objectdictionary import ObjectDictionary
 
-
 logger = logging.getLogger(__name__)
 
 DATA_TYPES = {

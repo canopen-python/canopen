@@ -5,8 +5,7 @@ from collections.abc import Mapping
 from typing import Iterator, Optional, Union
 
 import canopen.network
-from canopen import objectdictionary
-from canopen import variable
+from canopen import objectdictionary, variable
 from canopen.utils import pretty_index
 
 

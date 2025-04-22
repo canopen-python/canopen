@@ -12,7 +12,6 @@ from canopen.objectdictionary import ObjectDictionary
 from canopen.pdo import PDO, RPDO, TPDO
 from canopen.sdo import SdoAbortedError, SdoServer
 
-
 logger = logging.getLogger(__name__)
 
 

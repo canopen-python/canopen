@@ -8,7 +8,6 @@ import can
 import canopen
 from canopen.emcy import EmcyError
 
-
 TIMEOUT = 0.1
 
 

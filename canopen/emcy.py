@@ -6,7 +6,6 @@ from typing import Callable, List, Optional
 
 import canopen.network
 
-
 # Error code, error register, vendor specific data
 EMCY_STRUCT = struct.Struct("<HB5s")
 

@@ -5,7 +5,6 @@ import traceback
 
 import canopen
 
-
 try:
 
     # Start with creating a network representing one CAN bus

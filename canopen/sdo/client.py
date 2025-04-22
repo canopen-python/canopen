@@ -12,7 +12,6 @@ from canopen.sdo.constants import *
 from canopen.sdo.exceptions import *
 from canopen.utils import pretty_index
 
-
 logger = logging.getLogger(__name__)
 
 

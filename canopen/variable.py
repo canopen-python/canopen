@@ -5,7 +5,6 @@ from typing import Union
 from canopen import objectdictionary
 from canopen.utils import pretty_index
 
-
 logger = logging.getLogger(__name__)
 
 

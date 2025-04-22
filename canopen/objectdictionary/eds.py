@@ -7,7 +7,6 @@ from canopen import objectdictionary
 from canopen.objectdictionary import ObjectDictionary, datatypes
 from canopen.sdo import SdoClient
 
-
 logger = logging.getLogger(__name__)
 
 # Object type. Don't confuse with Data type

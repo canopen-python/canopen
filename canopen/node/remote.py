@@ -7,10 +7,9 @@ import canopen.network
 from canopen.emcy import EmcyConsumer
 from canopen.nmt import NmtMaster
 from canopen.node.base import BaseNode
-from canopen.objectdictionary import ODArray, ODRecord, ODVariable, ObjectDictionary
+from canopen.objectdictionary import ObjectDictionary, ODArray, ODRecord, ODVariable
 from canopen.pdo import PDO, RPDO, TPDO
 from canopen.sdo import SdoAbortedError, SdoClient, SdoCommunicationError
-
 
 logger = logging.getLogger(__name__)
 

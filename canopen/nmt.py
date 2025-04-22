@@ -2,7 +2,7 @@ import logging
 import struct
 import threading
 import time
-from typing import Callable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Optional
 
 import canopen.network
 

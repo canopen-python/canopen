@@ -13,7 +13,6 @@ from canopen.objectdictionary.datatypes import *
 from canopen.objectdictionary.datatypes import IntegerN, UnsignedN
 from canopen.utils import pretty_index
 
-
 logger = logging.getLogger(__name__)
 
 

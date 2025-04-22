@@ -6,7 +6,6 @@ from canopen.objectdictionary import ODVariable
 
 from .util import DATATYPES_EDS, SAMPLE_EDS
 
-
 TX = 1
 RX = 2
 

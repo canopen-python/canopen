@@ -48,3 +48,32 @@ testpaths = [
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+
+[tool.ruff.lint]
+# E = pycodestyle errors
+# F = Pyflakes errors (undefined names, unused imports/variables)
+# W = pycodestyle warnings
+# B = flake8-bugbear (potential logic errors/style issues)
+# C4 = flake8-comprehensions (unnecessary list/set/dict comprehensions)
+# SIM = flake8-simplify (opportunities to simplify code)
+# UP = pyupgrade (syntax upgrades for newer Python versions)
+select = ["E", "F", "W", "B", "C4", "SIM", "UP"]
+ignore = ["I"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

@@ -62,15 +62,19 @@ line-length = 88
 target-version = "py38"
 
 [tool.ruff.lint]
-# E = pycodestyle errors
-# F = Pyflakes errors (undefined names, unused imports/variables)
-# W = pycodestyle warnings
-# B = flake8-bugbear (potential logic errors/style issues)
-# C4 = flake8-comprehensions (unnecessary list/set/dict comprehensions)
-# SIM = flake8-simplify (opportunities to simplify code)
-# UP = pyupgrade (syntax upgrades for newer Python versions)
-select = ["E", "F", "W", "B", "C4", "SIM", "UP"]
-ignore = ["I"]
+select = [
+    "E",  # pycodestyle errors
+    "F",  # Pyflakes errors (undefined names, unused imports/variables)
+    "W",  # pycodestyle warnings
+    "B",  # flake8-bugbear (potential logic errors/style issues)
+    "C4",  # flake8-comprehensions (unnecessary list/set/dict comprehensions)
+    "SIM",  # flake8-simplify (opportunities to simplify code)
+    "UP",  # pyupgrade (syntax upgrades for newer Python versions)
+]
+ignore = [
+    "I",  # isort
+    "E501",  # Line too long, handled by black
+]
 
 [tool.ruff.format]
 quote-style = "double"

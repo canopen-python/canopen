@@ -66,9 +66,9 @@ class TestPDO(unittest.TestCase):
 
     def test_pdo_export(self):
         try:
-            import canmatrix
-        except ImportError:
-            raise unittest.SkipTest("The PDO export API requires canmatrix")
+            import canmatrix  # noqa: F401
+        except ImportError as err:
+            raise unittest.SkipTest("The PDO export API requires canmatrix") from err
 
         for pdo in "tpdo", "rpdo":
             with tmp_file(suffix=".csv") as tmp:

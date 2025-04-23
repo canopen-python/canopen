@@ -95,6 +95,12 @@ ignore = [
     "F403",  # unable to detect undefined names
     "F405",  # variable defined from star imports
 ]
+"test/test_eds.py" = [
+    "SIM117",  # nested with statements
+]
+"test/test_local.py" = [
+    "SIM117",  # nested with statements
+]
 
 [tool.ruff.format]
 quote-style = "double"

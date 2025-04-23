@@ -39,7 +39,7 @@ class TestSDO(unittest.TestCase):
 
     def test_block_upload_switch_to_expedite_upload(self):
         with self.assertRaises(canopen.SdoCommunicationError) as context:
-            with self.remote_node.sdo[0x1008].open("r", block_transfer=True) as fp:
+            with self.remote_node.sdo[0x1008].open("r", block_transfer=True):
                 pass
         # We get this since the sdo client don't support the switch
         # from block upload to expedite upload
@@ -50,7 +50,7 @@ class TestSDO(unittest.TestCase):
         with self.assertRaises(canopen.SdoAbortedError) as context:
             with self.remote_node.sdo[0x1008].open(
                 "wb", size=len(data), block_transfer=True
-            ) as fp:
+            ):
                 pass
         self.assertEqual(context.exception.code, 0x05040001)
 

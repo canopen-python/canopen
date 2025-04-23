@@ -79,12 +79,14 @@ class TestNetwork(unittest.TestCase):
             pass
 
         self.network.notifier.exception = Custom("fake")
-        with self.assertRaisesRegex(Custom, "fake"):
-            with self.assertLogs(level=logging.ERROR):
-                self.network.check()
-        with self.assertRaisesRegex(Custom, "fake"):
-            with self.assertLogs(level=logging.ERROR):
-                self.network.disconnect()
+        with self.assertRaisesRegex(Custom, "fake"), self.assertLogs(
+            level=logging.ERROR
+        ):
+            self.network.check()
+        with self.assertRaisesRegex(Custom, "fake"), self.assertLogs(
+            level=logging.ERROR
+        ):
+            self.network.disconnect()
 
     def test_network_notify(self):
         with self.assertLogs():
@@ -218,11 +220,11 @@ class TestNetwork(unittest.TestCase):
         with self.assertLogs():
             self.network.add_node(2, SAMPLE_EDS)
             self.network.add_node(3, SAMPLE_EDS)
-        self.assertEqual([2, 3], [node for node in self.network])
+        self.assertEqual([2, 3], list(self.network))
 
         # Check __delitem__.
         del self.network[2]
-        self.assertEqual([3], [node for node in self.network])
+        self.assertEqual([3], list(self.network))
         with self.assertRaises(KeyError):
             del self.network[2]
 
@@ -234,7 +236,7 @@ class TestNetwork(unittest.TestCase):
 
         # Check __getitem__.
         self.assertNotEqual(self.network[3], old)
-        self.assertEqual([3], [node for node in self.network])
+        self.assertEqual([3], list(self.network))
 
     def test_network_send_periodic(self):
         DATA1 = bytes([1, 2, 3])
@@ -269,7 +271,7 @@ class TestNetwork(unittest.TestCase):
 
         # Wait for frames to arrive; then check the result.
         wait_for_periodicity()
-        self.assertTrue(all([v.data == DATA1 for v in acc]))
+        self.assertTrue(all(v.data == DATA1 for v in acc))
 
         # Update task data, which may implicitly restart the timer.
         # Wait for frames to arrive; then check the result.
@@ -281,7 +283,7 @@ class TestNetwork(unittest.TestCase):
         data = [v.data for v in acc]
         self.assertIn(DATA2, data)
         idx = data.index(DATA2)
-        self.assertTrue(all([v.data == DATA2 for v in acc[idx:]]))
+        self.assertTrue(all(v.data == DATA2 for v in acc[idx:]))
 
         # Stop the task.
         task.stop()

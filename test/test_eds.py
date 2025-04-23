@@ -211,7 +211,7 @@ class TestEDS(unittest.TestCase):
 
     def test_dummy_variable_undefined(self):
         with self.assertRaises(KeyError):
-            var_undef = self.od["Dummy0001"]
+            self.od["Dummy0001"]
 
     def test_reading_factor(self):
         var = self.od["EDS file extensions"]["FactorAndDescription"]
@@ -259,7 +259,7 @@ class TestEDS(unittest.TestCase):
                     # is not possible, since we're using an unknown extension,
                     # so we have to do a couple of tricks in order to make this
                     # work.
-                    with open(dest, "r") as source:
+                    with open(dest) as source:
                         data = source.read()
                     with io.StringIO() as buf:
                         buf.write(data)

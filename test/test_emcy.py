@@ -38,7 +38,7 @@ class TestEmcy(unittest.TestCase):
 
         error = self.emcy.log[0]
         self.assertEqual(self.emcy.active[0], error)
-        for err in error, acc1[0], acc2[0]:
+        for _err in error, acc1[0], acc2[0]:
             self.check_error(
                 error,
                 code=0x2001,
@@ -54,7 +54,7 @@ class TestEmcy(unittest.TestCase):
 
         error = self.emcy.log[1]
         self.assertEqual(self.emcy.active[1], error)
-        for err in error, acc1[1], acc2[1]:
+        for _err in error, acc1[1], acc2[1]:
             self.check_error(
                 error,
                 code=0x9010,
@@ -106,17 +106,15 @@ class TestEmcy(unittest.TestCase):
         self.assertIsNone(self.emcy.wait(timeout=TIMEOUT))
 
         # Check unfiltered wait, on success.
-        with timer(push_err) as t:
-            with self.assertLogs(level=logging.INFO):
-                t.start()
-                err = self.emcy.wait(timeout=TIMEOUT)
+        with timer(push_err) as t, self.assertLogs(level=logging.INFO):
+            t.start()
+            err = self.emcy.wait(timeout=TIMEOUT)
         check_err(err)
 
         # Check filtered wait, on success.
-        with timer(push_err) as t:
-            with self.assertLogs(level=logging.INFO):
-                t.start()
-                err = self.emcy.wait(0x2001, TIMEOUT)
+        with timer(push_err) as t, self.assertLogs(level=logging.INFO):
+            t.start()
+            err = self.emcy.wait(0x2001, TIMEOUT)
         check_err(err)
 
         # Check filtered wait, on timeout.

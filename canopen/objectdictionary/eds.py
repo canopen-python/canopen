@@ -2,6 +2,7 @@ import copy
 import logging
 import re
 from configparser import NoOptionError, NoSectionError, RawConfigParser
+from contextlib import suppress
 
 from canopen import objectdictionary
 from canopen.objectdictionary import ObjectDictionary, datatypes
@@ -73,7 +74,7 @@ def import_eds(source, node_id):
             (int, "NrOfTXPDO", "nr_of_TXPDO"),
             (bool, "LSS_Supported", "LSS_supported"),
         ]:
-            try:
+            with suppress(NoOptionError):
                 if t in (int, bool):
                     setattr(
                         od.device_information,
@@ -82,16 +83,17 @@ def import_eds(source, node_id):
                     )
                 elif t is str:
                     setattr(od.device_information, odprop, eds.get("DeviceInfo", eprop))
-            except NoOptionError:
-                pass
 
     if eds.has_section("DeviceComissioning"):
-        if val := eds.getint("DeviceComissioning", "Baudrate", fallback=None):
-            od.bitrate = val * 1000
+        baudrate = eds.getint("DeviceComissioning", "Baudrate", fallback=None)
+        if baudrate is not None:
+            od.bitrate = baudrate * 1000
 
         if node_id is None:
-            if val := eds.get("DeviceComissioning", "NodeID", fallback=None):
-                node_id = int(val, base=0)
+            node_id_str = eds.get("DeviceComissioning", "NodeID", fallback=None)
+            if node_id_str is not None:
+                node_id = int(node_id_str, base=0)
+
         od.node_id = node_id
 
     for section in eds.sections():
@@ -241,9 +243,10 @@ def _revert_variable(var_type, value):
         return None
     if var_type in (datatypes.OCTET_STRING, datatypes.DOMAIN):
         return bytes.hex(value)
-    elif var_type in (datatypes.VISIBLE_STRING, datatypes.UNICODE_STRING):
-        return value
-    elif var_type in datatypes.FLOAT_TYPES:
+    elif (
+        var_type in (datatypes.VISIBLE_STRING, datatypes.UNICODE_STRING)
+        or var_type in datatypes.FLOAT_TYPES
+    ):
         return value
     else:
         return f"0x{value:02X}"
@@ -282,7 +285,7 @@ def build_variable(eds, section, node_id, index, subindex=0):
     var.pdo_mappable = bool(int(eds.get(section, "PDOMapping", fallback="0"), 0))
 
     if eds.has_option(section, "LowLimit"):
-        try:
+        with suppress(ValueError):
             min_string = eds.get(section, "LowLimit")
             if var.data_type in datatypes.SIGNED_TYPES:
                 var.min = _signed_int_from_hex(
@@ -290,10 +293,8 @@ def build_variable(eds, section, node_id, index, subindex=0):
                 )
             else:
                 var.min = int(min_string, 0)
-        except ValueError:
-            pass
     if eds.has_option(section, "HighLimit"):
-        try:
+        with suppress(ValueError):
             max_string = eds.get(section, "HighLimit")
             if var.data_type in datatypes.SIGNED_TYPES:
                 var.max = _signed_int_from_hex(
@@ -301,42 +302,32 @@ def build_variable(eds, section, node_id, index, subindex=0):
                 )
             else:
                 var.max = int(max_string, 0)
-        except ValueError:
-            pass
     if eds.has_option(section, "DefaultValue"):
-        try:
+        with suppress(ValueError):
             var.default_raw = eds.get(section, "DefaultValue")
             if "$NODEID" in var.default_raw:
                 var.relative = True
             var.default = _convert_variable(
                 node_id, var.data_type, eds.get(section, "DefaultValue")
             )
-        except ValueError:
-            pass
     if eds.has_option(section, "ParameterValue"):
-        try:
+        with suppress(ValueError):
             var.value_raw = eds.get(section, "ParameterValue")
             var.value = _convert_variable(
                 node_id, var.data_type, eds.get(section, "ParameterValue")
             )
-        except ValueError:
-            pass
-    # Factor, Description and Unit are not standard according to the CANopen specifications, but they are implemented in the python canopen package, so we can at least try to use them
+    # Factor, Description and Unit are not standard according to the CANopen
+    # specifications, but they are implemented in the python canopen package, so we can
+    # at least try to use them
     if eds.has_option(section, "Factor"):
-        try:
+        with suppress(ValueError):
             var.factor = float(eds.get(section, "Factor"))
-        except ValueError:
-            pass
     if eds.has_option(section, "Description"):
-        try:
+        with suppress(ValueError):
             var.description = eds.get(section, "Description")
-        except ValueError:
-            pass
     if eds.has_option(section, "Unit"):
-        try:
+        with suppress(ValueError):
             var.unit = eds.get(section, "Unit")
-        except ValueError:
-            pass
     return var
 
 
@@ -349,11 +340,16 @@ def copy_variable(eds, section, subindex, src_var):
     return var
 
 
-def export_dcf(od, dest=None, fileInfo={}):
+def export_dcf(od, dest=None, fileInfo=None):
+    if fileInfo is None:
+        fileInfo = {}
     return export_eds(od, dest, fileInfo, True)
 
 
-def export_eds(od, dest=None, file_info={}, device_commisioning=False):
+def export_eds(od, dest=None, file_info=None, device_commisioning=False):
+    if file_info is None:
+        file_info = {}
+
     def export_object(obj, eds):
         if isinstance(obj, objectdictionary.ODVariable):
             return export_variable(obj, eds)

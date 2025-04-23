@@ -24,7 +24,7 @@ class PDO(PdoBase):
     """
 
     def __init__(self, node, rpdo, tpdo):
-        super(PDO, self).__init__(node)
+        super().__init__(node)
         self.rx = rpdo.map
         self.tx = tpdo.map
 
@@ -44,7 +44,7 @@ class RPDO(PdoBase):
     """
 
     def __init__(self, node):
-        super(RPDO, self).__init__(node)
+        super().__init__(node)
         self.map = PdoMaps(0x1400, 0x1600, self, 0x200)
         logger.debug("RPDO Map as %d", len(self.map))
 
@@ -69,7 +69,7 @@ class TPDO(PdoBase):
     """
 
     def __init__(self, node):
-        super(TPDO, self).__init__(node)
+        super().__init__(node)
         self.map = PdoMaps(0x1800, 0x1A00, self, 0x180)
         logger.debug("TPDO Map as %d", len(self.map))
 

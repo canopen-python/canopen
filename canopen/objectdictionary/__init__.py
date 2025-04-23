@@ -7,7 +7,8 @@ from __future__ import annotations
 import logging
 import struct
 from collections.abc import Mapping, MutableMapping
-from typing import Dict, Iterator, List, Optional, TextIO, Union
+from contextlib import suppress
+from typing import Iterator, TextIO
 
 from canopen.objectdictionary.datatypes import *
 from canopen.objectdictionary.datatypes import IntegerN, UnsignedN
@@ -18,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 def export_od(
     od: ObjectDictionary,
-    dest: Union[str, TextIO, None] = None,
-    doc_type: Optional[str] = None,
+    dest: str | TextIO | None = None,
+    doc_type: str | None = None,
 ) -> None:
     """Export an object dictionary.
 
@@ -74,8 +75,8 @@ def export_od(
 
 
 def import_od(
-    source: Union[str, TextIO, None],
-    node_id: Optional[int] = None,
+    source: str | TextIO | None,
+    node_id: int | None = None,
 ) -> ObjectDictionary:
     """Parse an EDS, DCF, or EPF file.
 
@@ -126,15 +127,13 @@ class ObjectDictionary(MutableMapping):
         self.names = {}
         self.comments = ""
         #: Default bitrate if specified by file
-        self.bitrate: Optional[int] = None
+        self.bitrate: int | None = None
         #: Node ID if specified by file
-        self.node_id: Optional[int] = None
+        self.node_id: int | None = None
         #: Some information about the device
         self.device_information = DeviceInformation()
 
-    def __getitem__(
-        self, index: Union[int, str]
-    ) -> Union[ODArray, ODRecord, ODVariable]:
+    def __getitem__(self, index: int | str) -> ODArray | ODRecord | ODVariable:
         """Get object from object dictionary by name or index."""
         item = self.names.get(index) or self.indices.get(index)
         if item is None:
@@ -144,13 +143,11 @@ class ObjectDictionary(MutableMapping):
             raise KeyError(f"{pretty_index(index)} was not found in Object Dictionary")
         return item
 
-    def __setitem__(
-        self, index: Union[int, str], obj: Union[ODArray, ODRecord, ODVariable]
-    ):
+    def __setitem__(self, index: int | str, obj: ODArray | ODRecord | ODVariable):
         assert index == obj.index or index == obj.name
         self.add_object(obj)
 
-    def __delitem__(self, index: Union[int, str]):
+    def __delitem__(self, index: int | str):
         obj = self[index]
         del self.indices[obj.index]
         del self.names[obj.name]
@@ -161,10 +158,10 @@ class ObjectDictionary(MutableMapping):
     def __len__(self) -> int:
         return len(self.indices)
 
-    def __contains__(self, index: Union[int, str]):
+    def __contains__(self, index: int | str):
         return index in self.names or index in self.indices
 
-    def add_object(self, obj: Union[ODArray, ODRecord, ODVariable]) -> None:
+    def add_object(self, obj: ODArray | ODRecord | ODVariable) -> None:
         """Add object to the object dictionary.
 
         :param obj:
@@ -177,9 +174,7 @@ class ObjectDictionary(MutableMapping):
         self.indices[obj.index] = obj
         self.names[obj.name] = obj
 
-    def get_variable(
-        self, index: Union[int, str], subindex: int = 0
-    ) -> Optional[ODVariable]:
+    def get_variable(self, index: int | str, subindex: int = 0) -> ODVariable | None:
         """Get the variable object at specified index (and subindex if applicable).
 
         :return: ODVariable if found, else `None`
@@ -201,7 +196,7 @@ class ODRecord(MutableMapping):
 
     def __init__(self, name: str, index: int):
         #: The :class:`~canopen.ObjectDictionary` owning the record.
-        self.parent: Optional[ObjectDictionary] = None
+        self.parent: ObjectDictionary | None = None
         #: 16-bit address of the record
         self.index = index
         #: Name of record
@@ -216,17 +211,17 @@ class ODRecord(MutableMapping):
             f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
         )
 
-    def __getitem__(self, subindex: Union[int, str]) -> ODVariable:
+    def __getitem__(self, subindex: int | str) -> ODVariable:
         item = self.names.get(subindex) or self.subindices.get(subindex)
         if item is None:
             raise KeyError(f"Subindex {pretty_index(None, subindex)} was not found")
         return item
 
-    def __setitem__(self, subindex: Union[int, str], var: ODVariable):
+    def __setitem__(self, subindex: int | str, var: ODVariable):
         assert subindex == var.subindex
         self.add_member(var)
 
-    def __delitem__(self, subindex: Union[int, str]):
+    def __delitem__(self, subindex: int | str):
         var = self[subindex]
         del self.subindices[var.subindex]
         del self.names[var.name]
@@ -237,7 +232,7 @@ class ODRecord(MutableMapping):
     def __iter__(self) -> Iterator[int]:
         return iter(sorted(self.subindices))
 
-    def __contains__(self, subindex: Union[int, str]) -> bool:
+    def __contains__(self, subindex: int | str) -> bool:
         return subindex in self.names or subindex in self.subindices
 
     def __eq__(self, other: ODRecord) -> bool:
@@ -277,7 +272,7 @@ class ODArray(Mapping):
             f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
         )
 
-    def __getitem__(self, subindex: Union[int, str]) -> ODVariable:
+    def __getitem__(self, subindex: int | str) -> ODVariable:
         var = self.names.get(subindex) or self.subindices.get(subindex)
         if var is not None:
             # This subindex is defined
@@ -366,25 +361,25 @@ class ODVariable:
         #: Factor between physical unit and integer value
         self.factor: float = 1
         #: Minimum allowed value
-        self.min: Optional[int] = None
+        self.min: int | None = None
         #: Maximum allowed value
-        self.max: Optional[int] = None
+        self.max: int | None = None
         #: Default value at start-up
-        self.default: Optional[int] = None
+        self.default: int | None = None
         #: Is the default value relative to the node-ID (only applies to COB-IDs)
         self.relative = False
         #: The value of this variable stored in the object dictionary
-        self.value: Optional[int] = None
+        self.value: int | None = None
         #: Data type according to the standard as an :class:`int`
-        self.data_type: Optional[int] = None
+        self.data_type: int | None = None
         #: Access type, should be "rw", "ro", "wo", or "const"
         self.access_type: str = "rw"
         #: Description of variable
         self.description: str = ""
         #: Dictionary of value descriptions
-        self.value_descriptions: Dict[int, str] = {}
+        self.value_descriptions: dict[int, str] = {}
         #: Dictionary of bitfield definitions
-        self.bit_definitions: Dict[str, List[int]] = {}
+        self.bit_definitions: dict[str, list[int]] = {}
         #: Storage location of index
         self.storage_location = None
         #: Can this variable be mapped to a PDO
@@ -429,7 +424,7 @@ class ODVariable:
         """
         self.value_descriptions[value] = descr
 
-    def add_bit_definition(self, name: str, bits: List[int]) -> None:
+    def add_bit_definition(self, name: str, bits: list[int]) -> None:
         """Associate bit(s) with a string description.
 
         :param name: Name of bit(s)
@@ -437,7 +432,7 @@ class ODVariable:
         """
         self.bit_definitions[name] = bits
 
-    def decode_raw(self, data: bytes) -> Union[int, float, str, bytes, bytearray]:
+    def decode_raw(self, data: bytes) -> int | float | str | bytes | bytearray:
         if self.data_type == VISIBLE_STRING:
             # Strip any trailing NUL characters from C-based systems
             return data.decode("ascii", errors="ignore").rstrip("\x00")
@@ -450,15 +445,15 @@ class ODVariable:
             try:
                 (value,) = self.STRUCT_TYPES[self.data_type].unpack(data)
                 return value
-            except struct.error:
+            except struct.error as err:
                 raise ObjectDictionaryError(
                     "Mismatch between expected and actual data size"
-                )
+                ) from err
         else:
             # Just return the data as is
             return data
 
-    def encode_raw(self, value: Union[int, float, str, bytes, bytearray]) -> bytes:
+    def encode_raw(self, value: int | float | str | bytes | bytearray) -> bytes:
         if isinstance(value, (bytes, bytearray)):
             return value
         elif self.data_type == VISIBLE_STRING:
@@ -481,8 +476,8 @@ class ODVariable:
                     )
             try:
                 return self.STRUCT_TYPES[self.data_type].pack(value)
-            except struct.error:
-                raise ValueError("Value does not fit in specified type")
+            except struct.error as err:
+                raise ValueError("Value does not fit in specified type") from err
         elif self.data_type is None:
             raise ObjectDictionaryError("Data type has not been specified")
         else:
@@ -490,12 +485,12 @@ class ODVariable:
                 f"Do not know how to encode {value!r} to data type 0x{self.data_type:X}"
             )
 
-    def decode_phys(self, value: int) -> Union[int, bool, float, str, bytes]:
+    def decode_phys(self, value: int) -> int | bool | float | str | bytes:
         if self.data_type in INTEGER_TYPES:
             value *= self.factor
         return value
 
-    def encode_phys(self, value: Union[int, bool, float, str, bytes]) -> int:
+    def encode_phys(self, value: int | bool | float | str | bytes) -> int:
         if self.data_type in INTEGER_TYPES:
             value /= self.factor
             value = int(round(value))
@@ -521,21 +516,17 @@ class ODVariable:
             f"No value corresponds to '{desc}'. Valid values are: {valid_values}"
         )
 
-    def decode_bits(self, value: int, bits: List[int]) -> int:
-        try:
+    def decode_bits(self, value: int, bits: list[int]) -> int:
+        with suppress(TypeError, KeyError):
             bits = self.bit_definitions[bits]
-        except (TypeError, KeyError):
-            pass
         mask = 0
         for bit in bits:
             mask |= 1 << bit
         return (value & mask) >> min(bits)
 
-    def encode_bits(self, original_value: int, bits: List[int], bit_value: int):
-        try:
+    def encode_bits(self, original_value: int, bits: list[int], bit_value: int):
+        with suppress(TypeError, KeyError):
             bits = self.bit_definitions[bits]
-        except (TypeError, KeyError):
-            pass
         temp = original_value
         mask = 0
         for bit in bits:
@@ -548,20 +539,20 @@ class ODVariable:
 class DeviceInformation:
     def __init__(self):
         self.allowed_baudrates = set()
-        self.vendor_name: Optional[str] = None
-        self.vendor_number: Optional[int] = None
-        self.product_name: Optional[str] = None
-        self.product_number: Optional[int] = None
-        self.revision_number: Optional[int] = None
-        self.order_code: Optional[str] = None
-        self.simple_boot_up_master: Optional[bool] = None
-        self.simple_boot_up_slave: Optional[bool] = None
-        self.granularity: Optional[int] = None
-        self.dynamic_channels_supported: Optional[bool] = None
-        self.group_messaging: Optional[bool] = None
-        self.nr_of_RXPDO: Optional[bool] = None
-        self.nr_of_TXPDO: Optional[bool] = None
-        self.LSS_supported: Optional[bool] = None
+        self.vendor_name: str | None = None
+        self.vendor_number: int | None = None
+        self.product_name: str | None = None
+        self.product_number: int | None = None
+        self.revision_number: int | None = None
+        self.order_code: str | None = None
+        self.simple_boot_up_master: bool | None = None
+        self.simple_boot_up_slave: bool | None = None
+        self.granularity: int | None = None
+        self.dynamic_channels_supported: bool | None = None
+        self.group_messaging: bool | None = None
+        self.nr_of_RXPDO: bool | None = None
+        self.nr_of_TXPDO: bool | None = None
+        self.LSS_supported: bool | None = None
 
 
 class ObjectDictionaryError(Exception):

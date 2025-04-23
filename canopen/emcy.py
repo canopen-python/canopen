@@ -16,9 +16,9 @@ class EmcyConsumer:
 
     def __init__(self):
         #: Log of all received EMCYs for this node
-        self.log: List["EmcyError"] = []
+        self.log: List[EmcyError] = []
         #: Only active EMCYs. Will be cleared on Error Reset
-        self.active: List["EmcyError"] = []
+        self.active: List[EmcyError] = []
         self.callbacks = []
         self.emcy_received = threading.Condition()
 

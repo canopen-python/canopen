@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TextIO, Union
+from typing import TextIO
 
 import canopen.network
 from canopen.emcy import EmcyConsumer
@@ -30,10 +30,10 @@ class RemoteNode(BaseNode):
     def __init__(
         self,
         node_id: int,
-        object_dictionary: Union[ObjectDictionary, str, TextIO],
+        object_dictionary: ObjectDictionary | str | TextIO,
         load_od: bool = False,
     ):
-        super(RemoteNode, self).__init__(node_id, object_dictionary)
+        super().__init__(node_id, object_dictionary)
 
         #: Enable WORKAROUND for reversed PDO mapping entries
         self.curtis_hack = False
@@ -164,7 +164,7 @@ class RemoteNode(BaseNode):
             if 0x1400 <= obj.index < 0x1C00:
                 # Ignore PDO related objects
                 continue
-            if isinstance(obj, ODRecord) or isinstance(obj, ODArray):
+            if isinstance(obj, (ODRecord, ODArray)):
                 for subobj in obj.values():
                     if (
                         isinstance(subobj, ODVariable)

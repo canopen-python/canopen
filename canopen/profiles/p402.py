@@ -221,7 +221,7 @@ class BaseNode402(RemoteNode):
     TIMEOUT_HOMING_DEFAULT = 30  # seconds
 
     def __init__(self, node_id, object_dictionary):
-        super(BaseNode402, self).__init__(node_id, object_dictionary)
+        super().__init__(node_id, object_dictionary)
         self.tpdo_values = {}  # { index: value from last received TPDO }
         self.tpdo_pointers: Dict[int, PdoMap] = {}
         self.rpdo_pointers: Dict[int, PdoMap] = {}
@@ -458,7 +458,7 @@ class BaseNode402(RemoteNode):
     def _clear_target_values(self):
         # [target velocity, target position, target torque]
         for target_index in [0x60FF, 0x607A, 0x6071]:
-            if target_index in self.sdo.keys():
+            if target_index in self.sdo:
                 self.sdo[target_index].raw = 0
 
     def is_op_mode_supported(self, mode):
@@ -598,10 +598,10 @@ class BaseNode402(RemoteNode):
     def _change_state(self, target_state):
         try:
             self.controlword = State402.TRANSITIONTABLE[(self.state, target_state)]
-        except KeyError:
+        except KeyError as err:
             raise ValueError(
                 f"Illegal state transition from {self.state} to {target_state}"
-            )
+            ) from err
         timeout = time.monotonic() + self.TIMEOUT_SWITCH_STATE_SINGLE
         while self.state != target_state:
             if time.monotonic() > timeout:

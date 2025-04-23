@@ -5,7 +5,7 @@ import logging
 import math
 import threading
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Callable, Dict, Iterator, List, Optional, Union
+from typing import TYPE_CHECKING, Callable, Iterator
 
 import canopen.network
 from canopen import objectdictionary, variable
@@ -30,10 +30,10 @@ class PdoBase(Mapping):
         Parent object associated with this PDO instance
     """
 
-    def __init__(self, node: Union[LocalNode, RemoteNode]):
+    def __init__(self, node: LocalNode | RemoteNode):
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
-        self.map: Optional[PdoMaps] = None
-        self.node: Union[LocalNode, RemoteNode] = node
+        self.map: PdoMaps | None = None
+        self.node: LocalNode | RemoteNode = node
 
     def __iter__(self):
         return iter(self.map)
@@ -96,10 +96,10 @@ class PdoBase(Mapping):
         """
         try:
             from canmatrix import canmatrix, formats
-        except ImportError:
+        except ImportError as err:
             raise NotImplementedError(
                 "This feature requires the 'canopen[db_export]' feature"
-            )
+            ) from err
 
         db = canmatrix.CanMatrix()
         for pdo_map in self.map.values():
@@ -153,7 +153,7 @@ class PdoMaps(Mapping):
         :param pdo_node:
         :param cob_base:
         """
-        self.maps: Dict[int, PdoMap] = {}
+        self.maps: dict[int, PdoMap] = {}
         for map_no in range(512):
             if com_offset + map_no in pdo_node.node.object_dictionary:
                 new_map = PdoMap(
@@ -182,35 +182,35 @@ class PdoMap:
     """One message which can have up to 8 bytes of variables mapped."""
 
     def __init__(self, pdo_node, com_record, map_array):
-        self.pdo_node: Union[TPDO, RPDO] = pdo_node
+        self.pdo_node: TPDO | RPDO = pdo_node
         self.com_record: SdoRecord = com_record
         self.map_array: SdoRecord = map_array
         #: If this map is valid
         self.enabled: bool = False
         #: COB-ID for this PDO
-        self.cob_id: Optional[int] = None
+        self.cob_id: int | None = None
         #: Default COB-ID if this PDO is part of the pre-defined connection set
-        self.predefined_cob_id: Optional[int] = None
+        self.predefined_cob_id: int | None = None
         #: Is the remote transmit request (RTR) allowed for this PDO
         self.rtr_allowed: bool = True
         #: Transmission type (0-255)
-        self.trans_type: Optional[int] = None
+        self.trans_type: int | None = None
         #: Inhibit Time (optional) (in 100us)
-        self.inhibit_time: Optional[int] = None
+        self.inhibit_time: int | None = None
         #: Event timer (optional) (in ms)
-        self.event_timer: Optional[int] = None
+        self.event_timer: int | None = None
         #: Ignores SYNC objects up to this SYNC counter value (optional)
-        self.sync_start_value: Optional[int] = None
+        self.sync_start_value: int | None = None
         #: List of variables mapped to this PDO
-        self.map: List[PdoVariable] = []
+        self.map: list[PdoVariable] = []
         self.length: int = 0
         #: Current message data
         self.data = bytearray()
         #: Timestamp of last received message
-        self.timestamp: Optional[float] = None
+        self.timestamp: float | None = None
         #: Period of receive message transmission in seconds.
         #: Set explicitly or using the :meth:`start()` method.
-        self.period: Optional[float] = None
+        self.period: float | None = None
         self.callbacks = []
         self.receive_condition = threading.Condition()
         self.is_received: bool = False
@@ -242,13 +242,10 @@ class PdoMap:
             f"{value} not found in map. Valid entries are " f"{', '.join(valid_values)}"
         )
 
-    def __getitem__(self, key: Union[int, str]) -> PdoVariable:
+    def __getitem__(self, key: int | str) -> PdoVariable:
         if isinstance(key, int):
             # there is a maximum available of 8 slots per PDO map
-            if key in range(0, 8):
-                var = self.map[key]
-            else:
-                var = self.__getitem_by_index(key)
+            var = self.map[key] if key in range(0, 8) else self.__getitem_by_index(key)
         else:
             try:
                 var = self.__getitem_by_index(int(key, 16))
@@ -494,9 +491,9 @@ class PdoMap:
 
     def add_variable(
         self,
-        index: Union[str, int],
-        subindex: Union[str, int] = 0,
-        length: Optional[int] = None,
+        index: str | int,
+        subindex: str | int = 0,
+        length: int | None = None,
     ) -> PdoVariable:
         """Add a variable from object dictionary as the next entry.
 
@@ -539,7 +536,7 @@ class PdoMap:
         """Transmit the message once."""
         self.pdo_node.network.send_message(self.cob_id, self.data)
 
-    def start(self, period: Optional[float] = None) -> None:
+    def start(self, period: float | None = None) -> None:
         """Start periodic transmission of message in a background thread.
 
         :param period:
@@ -578,7 +575,7 @@ class PdoMap:
         Silently ignore if not allowed.
         """
         if self.enabled and self.rtr_allowed:
-            self.pdo_node.network.send_message(self.cob_id, bytes(), remote=True)
+            self.pdo_node.network.send_message(self.cob_id, b"", remote=True)
 
     def wait_for_reception(self, timeout: float = 10) -> float:
         """Wait for the next transmit PDO.
@@ -597,7 +594,7 @@ class PdoVariable(variable.Variable):
 
     def __init__(self, od: objectdictionary.ODVariable):
         #: PDO object that is associated with this ODVariable Object
-        self.pdo_parent: Optional[PdoMap] = None
+        self.pdo_parent: PdoMap | None = None
         #: Location of variable in the message in bits
         self.offset = None
         self.length = len(od)

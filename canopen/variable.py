@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class Variable:
+    ALLOWED_VALUE_FORMATS = {"raw", "phys", "desc"}
 
     def __init__(self, od: objectdictionary.ODVariable):
         self.od = od
@@ -138,12 +139,11 @@ class Variable:
         :returns:
             The value of the variable.
         """
-        if fmt == "raw":
-            return self.raw
-        elif fmt == "phys":
-            return self.phys
-        elif fmt == "desc":
-            return self.desc
+        if fmt not in Variable.ALLOWED_VALUE_FORMATS:
+            raise ValueError(
+                f"'{fmt}' is an invalid format. Must be one of {', '.join(Variable.ALLOWED_VALUE_FORMATS)}"
+            )
+        return getattr(self, fmt)
 
     def write(
         self, value: Union[int, bool, float, str, bytes], fmt: str = "raw"
@@ -158,12 +158,11 @@ class Variable:
              - 'phys'
              - 'desc'
         """
-        if fmt == "raw":
-            self.raw = value
-        elif fmt == "phys":
-            self.phys = value
-        elif fmt == "desc":
-            self.desc = value
+        if fmt not in Variable.ALLOWED_VALUE_FORMATS:
+            raise ValueError(
+                f"'{fmt}' is an invalid format. Must be one of {', '.join(Variable.ALLOWED_VALUE_FORMATS)}"
+            )
+        setattr(self, fmt, value)
 
 
 class Bits(Mapping):

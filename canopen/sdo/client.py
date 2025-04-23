@@ -66,8 +66,8 @@ class SdoClient(SdoBase):
     def read_response(self):
         try:
             response = self.responses.get(block=True, timeout=self.RESPONSE_TIMEOUT)
-        except queue.Empty:
-            raise SdoCommunicationError("No SDO response received")
+        except queue.Empty as err:
+            raise SdoCommunicationError("No SDO response received") from err
         (res_command,) = struct.unpack_from("B", response)
         if res_command == RESPONSE_ABORTED:
             (abort_code,) = struct.unpack_from("<L", response, 4)
@@ -451,7 +451,7 @@ class WritableStream(io.RawIOBase):
 
         An empty segmented SDO message may be sent saying there is no more data.
         """
-        super(WritableStream, self).close()
+        super().close()
         if not self._done and not self._exp_header:
             # Segmented download not finished
             command = REQUEST_SEGMENT_DOWNLOAD | NO_MORE_DATA
@@ -627,7 +627,7 @@ class BlockUploadStream(io.RawIOBase):
     def close(self):
         if self.closed:
             return
-        super(BlockUploadStream, self).close()
+        super().close()
         if self._done and not self._error:
             request = bytearray(8)
             request[0] = REQUEST_BLOCK_UPLOAD | END_BLOCK_TRANSFER
@@ -821,7 +821,7 @@ class BlockDownloadStream(io.RawIOBase):
         """Closes the stream."""
         if self.closed:
             return
-        super(BlockDownloadStream, self).close()
+        super().close()
         if not self._done:
             logger.error("Block transfer was not finished")
         command = REQUEST_BLOCK_DOWNLOAD | END_BLOCK_TRANSFER

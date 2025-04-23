@@ -50,7 +50,7 @@ class SdoServer(SdoBase):
                 self.abort(0x05040001)
         except SdoAbortedError as exc:
             self.abort(exc.code)
-        except KeyError as exc:
+        except KeyError:
             self.abort(0x06020000)
         except Exception as exc:
             self.abort()
@@ -137,10 +137,7 @@ class SdoServer(SdoBase):
 
         if command & EXPEDITED:
             logger.info("Expedited download for 0x%04X:%02X", index, subindex)
-            if command & SIZE_SPECIFIED:
-                size = 4 - ((command >> 2) & 0x3)
-            else:
-                size = 4
+            size = 4 - (command >> 2 & 3) if command & SIZE_SPECIFIED else 4
             self._node.set_data(
                 index, subindex, request[4 : 4 + size], check_writable=True
             )

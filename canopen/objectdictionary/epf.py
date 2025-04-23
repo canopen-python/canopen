@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import xml.etree.ElementTree as etree
 
@@ -32,10 +33,7 @@ def import_epf(epf):
     :rtype: canopen.ObjectDictionary
     """
     od = ObjectDictionary()
-    if etree.iselement(epf):
-        tree = epf
-    else:
-        tree = etree.parse(epf).getroot()
+    tree = epf if etree.iselement(epf) else etree.parse(epf).getroot()
 
     # Find and set default bitrate
     can_config = tree.find("Configuration/CANopen")
@@ -100,18 +98,12 @@ def build_variable(par_tree):
     else:
         logger.warning("Don't know how to handle data type %s", data_type)
     par.access_type = par_tree.get("AccessType", "rw")
-    try:
+    with contextlib.suppress(ValueError, TypeError):
         par.min = int(par_tree.get("MinimumValue"))
-    except (ValueError, TypeError):
-        pass
-    try:
+    with contextlib.suppress(ValueError, TypeError):
         par.max = int(par_tree.get("MaximumValue"))
-    except (ValueError, TypeError):
-        pass
-    try:
+    with contextlib.suppress(ValueError, TypeError):
         par.default = int(par_tree.get("DefaultValue"))
-    except (ValueError, TypeError):
-        pass
 
     # Find value descriptions
     for value_field_def in par_tree.iterfind("ValueFieldDefs/ValueFieldDef"):

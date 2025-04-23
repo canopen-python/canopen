@@ -102,8 +102,7 @@ class NmtBase:
             code = NMT_COMMANDS[new_state]
         else:
             raise ValueError(
-                "'%s' is an invalid state. Must be one of %s."
-                % (new_state, ", ".join(NMT_COMMANDS))
+                f"'{new_state}' is an invalid state. Must be one of {', '.join(NMT_COMMANDS)}."
             )
 
         self.send_command(code)
@@ -112,7 +111,7 @@ class NmtBase:
 class NmtMaster(NmtBase):
 
     def __init__(self, node_id: int):
-        super(NmtMaster, self).__init__(node_id)
+        super().__init__(node_id)
         self._state_received = None
         self._node_guarding_producer: Optional[PeriodicMessageTask] = None
         #: Timestamp of last heartbeat message
@@ -143,7 +142,7 @@ class NmtMaster(NmtBase):
         :param code:
             NMT command code.
         """
-        super(NmtMaster, self).send_command(code)
+        super().send_command(code)
         logger.info("Sending NMT command 0x%X to node %d", code, self.id)
         self.network.send_message(0, [code, self.id])
 
@@ -205,13 +204,13 @@ class NmtSlave(NmtBase):
     """
 
     def __init__(self, node_id: int, local_node):
-        super(NmtSlave, self).__init__(node_id)
+        super().__init__(node_id)
         self._send_task: Optional[PeriodicMessageTask] = None
         self._heartbeat_time_ms = 0
         self._local_node = local_node
 
     def on_command(self, can_id, data, timestamp):
-        super(NmtSlave, self).on_command(can_id, data, timestamp)
+        super().on_command(can_id, data, timestamp)
         self.update_heartbeat()
 
     def send_command(self, code: int) -> None:
@@ -221,7 +220,7 @@ class NmtSlave(NmtBase):
             NMT command code.
         """
         old_state = self._state
-        super(NmtSlave, self).send_command(code)
+        super().send_command(code)
 
         if self._state == 0:
             logger.info("Sending boot-up message")

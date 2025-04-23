@@ -76,6 +76,26 @@ ignore = [
     "E501",  # Line too long, handled by black
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# temporal ignores, to be removed once we figure out how to refactor code
+"canopen/objectdictionary/__init__.py" = [
+    "F403",  # unable to detect undefined names
+    "F405",  # variable defined from star imports
+    "SIM115",  # context manager for opening files
+]
+"canopen/objectdictionary/eds.py" = [
+    "SIM115",  # context manager for opening files
+]
+"canopen/sdo/client.py" = [
+    "F403",  # unable to detect undefined names
+    "F405",  # variable defined from star imports
+    "SIM102",  # nested `if` statements
+]
+"canopen/sdo/server.py" = [
+    "F403",  # unable to detect undefined names
+    "F405",  # variable defined from star imports
+]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"

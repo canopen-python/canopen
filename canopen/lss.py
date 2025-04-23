@@ -140,10 +140,7 @@ class LssMaster:
         )
 
         cs = struct.unpack_from("<B", response)[0]
-        if cs == CS_SWITCH_STATE_SELECTIVE_RESPONSE:
-            return True
-
-        return False
+        return cs == CS_SWITCH_STATE_SELECTIVE_RESPONSE
 
     def inquire_node_id(self):
         """Read the node id.
@@ -312,10 +309,7 @@ class LssMaster:
             return False
 
         cs = struct.unpack_from("<B", recv_msg)[0]
-        if cs == CS_IDENTIFY_SLAVE:
-            return True
-
-        return False
+        return cs == CS_IDENTIFY_SLAVE
 
     def __send_lss_address(self, req_cs, number):
         message = bytearray(8)
@@ -408,8 +402,8 @@ class LssMaster:
         # TODO check if the response is LSS response message
         try:
             response = self.responses.get(block=True, timeout=self.RESPONSE_TIMEOUT)
-        except queue.Empty:
-            raise LssError("No LSS response received")
+        except queue.Empty as err:
+            raise LssError("No LSS response received") from err
 
         return response
 

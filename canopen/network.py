@@ -372,9 +372,6 @@ class NodeScanner:
         The network to use when doing active searching.
     """
 
-    #: Activate or deactivate scanning
-    active = True
-
     SERVICES = (0x700, 0x580, 0x180, 0x280, 0x380, 0x480, 0x80)
 
     def __init__(self, network: Optional[Network] = None):

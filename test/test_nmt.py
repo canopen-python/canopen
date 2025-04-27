@@ -117,7 +117,11 @@ class TestNmtMaster(unittest.TestCase):
         self.assertEqual(msg.dlc, 0)
 
         self.node.nmt.stop_node_guarding()
-        self.assertIsNone(self.bus.recv(self.TIMEOUT))
+        # A message may have been in flight when we stopped the timer,
+        # so allow a single failure.
+        msg = self.bus.recv(self.TIMEOUT)
+        if msg is not None:
+            self.assertIsNone(self.bus.recv(self.TIMEOUT))
 
 
 class TestNmtSlave(unittest.TestCase):

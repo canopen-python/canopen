@@ -2,11 +2,17 @@ import threading
 import logging
 import struct
 import time
-from typing import Callable, Optional
+from collections.abc import Callable
+from typing import Dict, Final, List, Optional, TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from canopen import Network
+
 
 logger = logging.getLogger(__name__)
 
-NMT_STATES = {
+NMT_STATES: Final[Dict[int, str]] = {
     0: 'INITIALISING',
     4: 'STOPPED',
     5: 'OPERATIONAL',
@@ -15,7 +21,7 @@ NMT_STATES = {
     127: 'PRE-OPERATIONAL'
 }
 
-NMT_COMMANDS = {
+NMT_COMMANDS: Final[Dict[str, int]] = {
     'OPERATIONAL': 1,
     'STOPPED': 2,
     'SLEEP': 80,
@@ -26,7 +32,7 @@ NMT_COMMANDS = {
     'RESET COMMUNICATION': 130
 }
 
-COMMAND_TO_STATE = {
+COMMAND_TO_STATE: Final[Dict[int, int]] = {
     1: 5,
     2: 4,
     80: 80,
@@ -45,7 +51,7 @@ class NmtBase:
 
     def __init__(self, node_id: int):
         self.id = node_id
-        self.network = None
+        self.network: Optional[Network] = None
         self._state = 0
 
     def on_command(self, can_id, data, timestamp):
@@ -111,7 +117,7 @@ class NmtMaster(NmtBase):
         #: Timestamp of last heartbeat message
         self.timestamp: Optional[float] = None
         self.state_update = threading.Condition()
-        self._callbacks = []
+        self._callbacks: List[Callable[[int], None]] = []
 
     def on_heartbeat(self, can_id, data, timestamp):
         with self.state_update:
@@ -139,6 +145,7 @@ class NmtMaster(NmtBase):
         super(NmtMaster, self).send_command(code)
         logger.info(
             "Sending NMT command 0x%X to node %d", code, self.id)
+        assert self.network is not None
         self.network.send_message(0, [code, self.id])
 
     def wait_for_heartbeat(self, timeout: float = 10):
@@ -180,7 +187,9 @@ class NmtMaster(NmtBase):
         :param period:
             Period (in seconds) at which the node guarding should be advertised to the slave node.
         """
-        if self._node_guarding_producer : self.stop_node_guarding()
+        if self._node_guarding_producer:
+            self.stop_node_guarding()
+        assert self.network is not None
         self._node_guarding_producer = self.network.send_periodic(0x700 + self.id, None, period, True)
 
     def stop_node_guarding(self):
@@ -216,6 +225,7 @@ class NmtSlave(NmtBase):
 
         if self._state == 0:
             logger.info("Sending boot-up message")
+            assert self.network is not None
             self.network.send_message(0x700 + self.id, [0])
 
         # The heartbeat service should start on the transition
@@ -246,6 +256,7 @@ class NmtSlave(NmtBase):
         self.stop_heartbeat()
         if heartbeat_time_ms > 0:
             logger.info("Start the heartbeat timer, interval is %d ms", self._heartbeat_time_ms)
+            assert self.network is not None
             self._send_task = self.network.send_periodic(
                 0x700 + self.id, [self._state], heartbeat_time_ms / 1000.0)
 

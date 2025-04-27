@@ -56,3 +56,4 @@ exclude = [
     "^test*",
     "^setup.py*",
 ]
+disable_error_code = "annotation-unchecked"

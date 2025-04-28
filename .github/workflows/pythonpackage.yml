@@ -63,8 +63,9 @@ jobs:
       run: make -C doc html
 
   mypy:
-    continue-on-error: true
+    name: Run mypy static type checker (optional)
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5

@@ -1,20 +1,14 @@
-"""Unit tests for the RemoteNode and LocalNode classes."""
 import unittest
 
 import canopen
-import canopen.network
-import canopen.objectdictionary
 
 
 def count_subscribers(network: canopen.Network) -> int:
     """Count the number of subscribers in the network."""
-    return sum(
-        len(n) for n in network.subscribers.values()
-    )
+    return sum(len(n) for n in network.subscribers.values())
 
 
 class TestLocalNode(unittest.TestCase):
-    """Unit tests for the LocalNode class."""
 
     @classmethod
     def setUpClass(cls):
@@ -29,7 +23,6 @@ class TestLocalNode(unittest.TestCase):
         cls.network.disconnect()
 
     def test_associate_network(self):
-
         # Need to store the number of subscribers before associating because the
         # network implementation automatically adds subscribers to the list
         n_subscribers = count_subscribers(self.network)
@@ -65,7 +58,6 @@ class TestLocalNode(unittest.TestCase):
 
 
 class TestRemoteNode(unittest.TestCase):
-    """Unittests for the RemoteNode class."""
 
     @classmethod
     def setUpClass(cls):
@@ -80,7 +72,6 @@ class TestRemoteNode(unittest.TestCase):
         cls.network.disconnect()
 
     def test_associate_network(self):
-
         # Need to store the number of subscribers before associating because the
         # network implementation automatically adds subscribers to the list
         n_subscribers = count_subscribers(self.network)

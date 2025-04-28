@@ -64,6 +64,11 @@ ListMessageNeedResponse = [
     CS_INQUIRE_NODE_ID,
 ]
 
+ListMessageOptionalResponse = [
+    CS_IDENTIFY_REMOTE_SLAVE_SERIAL_NUMBER_HIGH,
+]
+
+
 
 class LssMaster:
     """The Master of Layer Setting Services"""
@@ -79,7 +84,7 @@ class LssMaster:
     CONFIGURATION_MODE = 0x01
 
     #: Max time in seconds to wait for response from server
-    RESPONSE_TIMEOUT = 0.5
+    RESPONSE_TIMEOUT = 0.25
 
     def __init__(self) -> None:
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
@@ -233,7 +238,8 @@ class LssMaster:
         self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_REVISION_NUMBER_LOW, revisionNumberLow)
         self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_REVISION_NUMBER_HIGH, revisionNumberHigh)
         self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_SERIAL_NUMBER_LOW, serialNumberLow)
-        self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_SERIAL_NUMBER_HIGH, serialNumberHigh)
+        r = self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_SERIAL_NUMBER_HIGH, serialNumberHigh)
+        return r is not None
 
     def send_identify_non_configured_remote_slave(self):
         # TODO it should handle the multiple respones from slaves
@@ -304,7 +310,7 @@ class LssMaster:
         response = self.__send_command(message)
         # some device needs these delays between messages
         # because it can't handle messages arriving with no delay
-        time.sleep(0.2)
+        #time.sleep(0.2)
 
         return response
 
@@ -380,16 +386,26 @@ class LssMaster:
 
         self.network.send_message(self.LSS_TX_COBID, message)
 
-        if not bool(message[0] in ListMessageNeedResponse):
-            return response
+        if bool(message[0] in ListMessageNeedResponse):
+            # Wait for the slave to respond
+            # TODO check if the response is LSS response message
+            try:
+                response = self.responses.get(
+                    block=True, timeout=self.RESPONSE_TIMEOUT)
+            except queue.Empty:
+                raise LssError("No LSS response received")
 
-        # Wait for the slave to respond
-        # TODO check if the response is LSS response message
-        try:
-            response = self.responses.get(
-                block=True, timeout=self.RESPONSE_TIMEOUT)
-        except queue.Empty:
-            raise LssError("No LSS response received")
+        elif bool(message[0] in ListMessageOptionalResponse):
+            # Wait for the slave to respond
+            # TODO check if the response is LSS response message
+            try:
+                response = self.responses.get(
+                    block=True, timeout=self.RESPONSE_TIMEOUT)
+            except queue.Empty:
+                pass
+
+        else:
+            pass
 
         return response
 

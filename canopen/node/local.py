@@ -51,7 +51,6 @@ class LocalNode(BaseNode):
         network.subscribe(0, self.nmt.on_command)
 
     def remove_network(self) -> None:
-        # Make it safe to call this method multiple times
         if not self.has_network():
             return
         self.network.unsubscribe(self.sdo.rx_cobid, self.sdo.on_request)

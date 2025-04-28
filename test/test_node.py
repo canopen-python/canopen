@@ -3,8 +3,7 @@ import unittest
 
 import canopen
 import canopen.network
-
-from .util import SAMPLE_EDS
+import canopen.objectdictionary
 
 
 def count_subscribers(network: canopen.Network) -> int:
@@ -23,7 +22,7 @@ class TestLocalNode(unittest.TestCase):
         cls.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         cls.network.connect(interface="virtual")
 
-        cls.node = canopen.LocalNode(2, SAMPLE_EDS)
+        cls.node = canopen.LocalNode(2, canopen.objectdictionary.ObjectDictionary())
 
     @classmethod
     def tearDownClass(cls):
@@ -31,9 +30,8 @@ class TestLocalNode(unittest.TestCase):
 
     def test_associate_network(self):
 
-        # Need to store the number of subscribers before associating because
-        # the current network implementation automatically adds subscribers
-        # to the list
+        # Need to store the number of subscribers before associating because the
+        # network implementation automatically adds subscribers to the list
         n_subscribers = count_subscribers(self.network)
 
         # Associating the network with the local node
@@ -75,7 +73,7 @@ class TestRemoteNode(unittest.TestCase):
         cls.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         cls.network.connect(interface="virtual")
 
-        cls.node = canopen.RemoteNode(2, SAMPLE_EDS)
+        cls.node = canopen.RemoteNode(2, canopen.objectdictionary.ObjectDictionary())
 
     @classmethod
     def tearDownClass(cls):
@@ -83,9 +81,8 @@ class TestRemoteNode(unittest.TestCase):
 
     def test_associate_network(self):
 
-        # Need to store the number of subscribers before associating because
-        # the current network implementation automatically adds subscribers
-        # to the list
+        # Need to store the number of subscribers before associating because the
+        # network implementation automatically adds subscribers to the list
         n_subscribers = count_subscribers(self.network)
 
         # Associating the network with the local node

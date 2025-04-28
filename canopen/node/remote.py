@@ -51,9 +51,8 @@ class RemoteNode(BaseNode):
             self.load_configuration()
 
     def associate_network(self, network: canopen.network.Network):
-        if self.network is not canopen.network._UNINITIALIZED_NETWORK:
-            # Unsubscribe from old network (to prevent double subscriptions)
-            self.remove_network()
+        if self.has_network():
+            raise RuntimeError("Node is already associated with a network")
         self.network = network
         self.sdo.network = network
         self.pdo.network = network
@@ -68,7 +67,7 @@ class RemoteNode(BaseNode):
 
     def remove_network(self) -> None:
         # Make it safe to call this method multiple times
-        if self.network is canopen.network._UNINITIALIZED_NETWORK:
+        if not self.has_network():
             return
         for sdo in self.sdo_channels:
             self.network.unsubscribe(sdo.tx_cobid, sdo.on_response)

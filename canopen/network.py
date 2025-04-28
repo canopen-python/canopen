@@ -79,6 +79,9 @@ class Network(MutableMapping):
             del self.subscribers[can_id]
         else:
             self.subscribers[can_id].remove(callback)
+            # Remove empty list entry
+            if not self.subscribers[can_id]:
+                del self.subscribers[can_id]
 
     def connect(self, *args, **kwargs) -> Network:
         """Connect to CAN bus using python-can.

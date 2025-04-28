@@ -39,9 +39,8 @@ class LocalNode(BaseNode):
         self.emcy = EmcyProducer(0x80 + self.id)
 
     def associate_network(self, network: canopen.network.Network):
-        if self.network is not canopen.network._UNINITIALIZED_NETWORK:
-            # Unsubscribe from old network (to prevent double subscription)
-            self.remove_network()
+        if self.has_network():
+            raise RuntimeError("Node is already associated with a network")
         self.network = network
         self.sdo.network = network
         self.tpdo.network = network
@@ -53,7 +52,7 @@ class LocalNode(BaseNode):
 
     def remove_network(self) -> None:
         # Make it safe to call this method multiple times
-        if self.network is canopen.network._UNINITIALIZED_NETWORK:
+        if not self.has_network():
             return
         self.network.unsubscribe(self.sdo.rx_cobid, self.sdo.on_request)
         self.network.unsubscribe(0, self.nmt.on_command)

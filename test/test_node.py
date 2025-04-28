@@ -2,6 +2,7 @@
 import unittest
 
 import canopen
+import canopen.network
 
 from .util import SAMPLE_EDS
 
@@ -14,15 +15,13 @@ def count_subscribers(network: canopen.Network) -> int:
 
 
 class TestLocalNode(unittest.TestCase):
-    """
-    Test local node.
-    """
+    """Unit tests for the LocalNode class."""
 
     @classmethod
     def setUpClass(cls):
         cls.network = canopen.Network()
         cls.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
-        cls.network.connect("test", interface="virtual")
+        cls.network.connect(interface="virtual")
 
         cls.node = canopen.LocalNode(2, SAMPLE_EDS)
 
@@ -46,11 +45,10 @@ class TestLocalNode(unittest.TestCase):
         self.assertIs(self.node.nmt.network, self.network)
         self.assertIs(self.node.emcy.network, self.network)
 
-        # Test that its possible to associate the network multiple times
-        # by checking that the number of subscribers remains the same
-        count = count_subscribers(self.network)
-        self.node.associate_network(self.network)
-        self.assertEqual(count_subscribers(self.network), count)
+        # Test that its not possible to associate the network multiple times
+        with self.assertRaises(RuntimeError) as cm:
+            self.node.associate_network(self.network)
+        self.assertIn("already associated with a network", str(cm.exception))
 
         # Test removal of the network. The count of subscribers should
         # be the same as before the association
@@ -69,15 +67,13 @@ class TestLocalNode(unittest.TestCase):
 
 
 class TestRemoteNode(unittest.TestCase):
-    """
-    Test remote node.
-    """
+    """Unittests for the RemoteNode class."""
 
     @classmethod
     def setUpClass(cls):
         cls.network = canopen.Network()
         cls.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
-        cls.network.connect("test", interface="virtual")
+        cls.network.connect(interface="virtual")
 
         cls.node = canopen.RemoteNode(2, SAMPLE_EDS)
 
@@ -100,11 +96,10 @@ class TestRemoteNode(unittest.TestCase):
         self.assertIs(self.node.rpdo.network, self.network)
         self.assertIs(self.node.nmt.network, self.network)
 
-        # Test that its possible to associate the network multiple times
-        # by checking that the number of subscribers remains the same
-        count = count_subscribers(self.network)
-        self.node.associate_network(self.network)
-        self.assertEqual(count_subscribers(self.network), count)
+        # Test that its not possible to associate the network multiple times
+        with self.assertRaises(RuntimeError) as cm:
+            self.node.associate_network(self.network)
+        self.assertIn("already associated with a network", str(cm.exception))
 
         # Test removal of the network. The count of subscribers should
         # be the same as before the association

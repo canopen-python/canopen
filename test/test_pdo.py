@@ -80,6 +80,16 @@ class TestPDO(unittest.TestCase):
                         self.assertIn("ID", header)
                         self.assertIn("Frame Name", header)
 
+    def test_tpdo_start_stop(self):
+        network = canopen.Network()
+        network.connect("test", interface="virtual")
+        self.node.associate_network(network)
+        self.node.tpdo[1].start(period=0.01)
+        self.node.tpdo[1].stop()
+
+    def test_rpdo_subscribe_unsubscribe(self):
+        self.node.rpdo.subscribe()
+        self.node.rpdo.unsubscribe()
 
 if __name__ == "__main__":
     unittest.main()

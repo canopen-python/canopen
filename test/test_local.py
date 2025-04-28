@@ -196,6 +196,19 @@ class TestPDO(unittest.TestCase):
     def test_read(self):
         # TODO: Do some more checks here. Currently it only tests that they
         # can be called without raising an error.
+        local_node_original_subscribers = list(self.local_node.network.subscribers)
+        remote_node_original_subscribers = list(self.remote_node.network.subscribers)
+        self.remote_node.pdo.read(from_od=True, subscribe=False)
+        self.local_node.pdo.read(from_od=True, subscribe=False)
+        assert len(self.local_node.network.subscribers) == len(local_node_original_subscribers)
+        assert len(self.remote_node.network.subscribers) == len(remote_node_original_subscribers)
+
+        self.remote_node.pdo.read(from_od=False, subscribe=True)
+        self.local_node.pdo.read(from_od=False, subscribe=True)
+        assert len(self.local_node.network.subscribers) != len(local_node_original_subscribers)
+        assert len(self.remote_node.network.subscribers) != len(remote_node_original_subscribers)
+
+        # just check to make sure calling without args can work without raising an error
         self.remote_node.pdo.read()
         self.local_node.pdo.read()
 
@@ -204,6 +217,19 @@ class TestPDO(unittest.TestCase):
         # can be called without raising an error.
         self.remote_node.pdo.save()
         self.local_node.pdo.save()
+
+    def test_set_data(self):
+        data = [0xDE, 0xAD, 0xBE, 0xEF]
+        self.local_node.set_data(0x3010,0, bytearray(data))
+        assert self.local_node.get_data(0x3010, 0, False) == bytearray(data)
+
+    def test_update_tpdo(self):
+        data = [0xDE, 0xAD, 0xBE, 0xEF]
+
+        self.local_node.tpdo[1].add_variable(index=0x3010, subindex=0, length=32)
+        self.local_node.set_data(0x3010, 0, bytearray(data))
+
+        assert self.local_node.tpdo[1].data == bytearray(data[::-1])
 
 
 if __name__ == "__main__":

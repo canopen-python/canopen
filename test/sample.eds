@@ -664,7 +664,7 @@ ObjectType=7
 DataType=7
 AccessType=RW
 PDOMapping=0
-DefaultValue=1614872592
+DefaultValue=0x30100020
 
 [1a00sub2]
 ParameterName=TPDO 1 mapping information 2
@@ -945,7 +945,7 @@ SubNumber=1
 ParameterName=Temperature
 ObjectType=0x7
 DataType=0x0008
-AccessType=ro
+AccessType=rw
 DefaultValue=0
 PDOMapping=1
 

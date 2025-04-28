@@ -144,6 +144,8 @@ class TestNetwork(unittest.TestCase):
         self.assertEqual(accumulators[2], [(2, bytes([4, 5, 6]), 1003)])
 
         self.network.unsubscribe(0)
+        # Should not raise an error.
+        self.network.unsubscribe(10)
         self.network.notify(0, bytes([7, 7, 7]), 1004)
         # Verify that no new data was added to the accumulator.
         self.assertEqual(accumulators[0], [(0, bytes([1, 2, 3]), 1000)])

@@ -62,6 +62,7 @@ ListMessageNeedResponse = [
     CS_INQUIRE_REVISION_NUMBER,
     CS_INQUIRE_SERIAL_NUMBER,
     CS_INQUIRE_NODE_ID,
+    CS_IDENTIFY_REMOTE_SLAVE_SERIAL_NUMBER_HIGH,
 ]
 
 
@@ -228,12 +229,21 @@ class LssMaster:
 
         # TODO it should handle the multiple respones from slaves
 
-        self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_VENDOR_ID, vendorId)
-        self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_PRODUCT_CODE, productCode)
-        self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_REVISION_NUMBER_LOW, revisionNumberLow)
-        self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_REVISION_NUMBER_HIGH, revisionNumberHigh)
-        self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_SERIAL_NUMBER_LOW, serialNumberLow)
-        self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_SERIAL_NUMBER_HIGH, serialNumberHigh)
+        self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_VENDOR_ID, vendorId, nodelay=True)
+        self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_PRODUCT_CODE, productCode, nodelay=True)
+        self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_REVISION_NUMBER_LOW, revisionNumberLow, nodelay=True)
+        self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_REVISION_NUMBER_HIGH, revisionNumberHigh, nodelay=True)
+        self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_SERIAL_NUMBER_LOW, serialNumberLow, nodelay=True)
+        try:
+            response = self.__send_lss_address(CS_IDENTIFY_REMOTE_SLAVE_SERIAL_NUMBER_HIGH,
+                                               serialNumberHigh,
+                                               nodelay=True)
+        except LssError:
+            return False
+        cs = struct.unpack_from("<B", response)[0]
+        if cs == CS_IDENTIFY_SLAVE:
+            return True
+        return False
 
     def send_identify_non_configured_remote_slave(self):
         # TODO it should handle the multiple respones from slaves
@@ -296,15 +306,16 @@ class LssMaster:
 
         return False
 
-    def __send_lss_address(self, req_cs, number):
+    def __send_lss_address(self, req_cs, number, nodelay=False):
         message = bytearray(8)
 
         message[0] = req_cs
         message[1:5] = struct.pack('<I', number)
         response = self.__send_command(message)
-        # some device needs these delays between messages
-        # because it can't handle messages arriving with no delay
-        time.sleep(0.2)
+        if not nodelay:
+            # some device needs these delays between messages
+            # because it can't handle messages arriving with no delay
+            time.sleep(0.2)
 
         return response
 

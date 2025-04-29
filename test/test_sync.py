@@ -5,7 +5,6 @@ import can
 
 import canopen
 
-
 PERIOD = 0.01
 TIMEOUT = PERIOD * 10
 

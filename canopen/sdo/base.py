@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import binascii
 from collections.abc import Mapping
-from typing import Iterator, Optional, Union
+from typing import Iterator
 
 import canopen.network
-from canopen import objectdictionary
-from canopen import variable
+from canopen import objectdictionary, variable
 from canopen.utils import pretty_index
 
 
@@ -47,9 +46,7 @@ class SdoBase(Mapping):
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
         self.od = od
 
-    def __getitem__(
-        self, index: Union[str, int]
-    ) -> Union[SdoVariable, SdoArray, SdoRecord]:
+    def __getitem__(self, index: str | int) -> SdoVariable | SdoArray | SdoRecord:
         entry = self.od[index]
         if isinstance(entry, objectdictionary.ODVariable):
             return SdoVariable(self, entry)
@@ -64,12 +61,10 @@ class SdoBase(Mapping):
     def __len__(self) -> int:
         return len(self.od)
 
-    def __contains__(self, key: Union[int, str]) -> bool:
+    def __contains__(self, key: int | str) -> bool:
         return key in self.od
 
-    def get_variable(
-        self, index: Union[int, str], subindex: int = 0
-    ) -> Optional[SdoVariable]:
+    def get_variable(self, index: int | str, subindex: int = 0) -> SdoVariable | None:
         """Get the variable object at specified index (and subindex if applicable).
 
         :return: SdoVariable if found, else `None`
@@ -102,7 +97,7 @@ class SdoRecord(Mapping):
     def __repr__(self) -> str:
         return f"<{type(self).__qualname__} {self.od.name!r} at {pretty_index(self.od.index)}>"
 
-    def __getitem__(self, subindex: Union[int, str]) -> SdoVariable:
+    def __getitem__(self, subindex: int | str) -> SdoVariable:
         return SdoVariable(self.sdo_node, self.od[subindex])
 
     def __iter__(self) -> Iterator[int]:
@@ -113,7 +108,7 @@ class SdoRecord(Mapping):
         # Skip the "highest subindex" entry, which is not part of the data
         return len(self.od) - int(0 in self.od)
 
-    def __contains__(self, subindex: Union[int, str]) -> bool:
+    def __contains__(self, subindex: int | str) -> bool:
         return subindex in self.od
 
 
@@ -126,7 +121,7 @@ class SdoArray(Mapping):
     def __repr__(self) -> str:
         return f"<{type(self).__qualname__} {self.od.name!r} at {pretty_index(self.od.index)}>"
 
-    def __getitem__(self, subindex: Union[int, str]) -> SdoVariable:
+    def __getitem__(self, subindex: int | str) -> SdoVariable:
         return SdoVariable(self.sdo_node, self.od[subindex])
 
     def __iter__(self) -> Iterator[int]:
@@ -162,8 +157,15 @@ class SdoVariable(variable.Variable):
     def readable(self) -> bool:
         return self.od.readable
 
-    def open(self, mode="rb", encoding="ascii", buffering=1024, size=None,
-             block_transfer=False, request_crc_support=True):
+    def open(
+        self,
+        mode="rb",
+        encoding="ascii",
+        buffering=1024,
+        size=None,
+        block_transfer=False,
+        request_crc_support=True,
+    ):
         """Open the data stream as a file like object.
 
         :param str mode:
@@ -193,8 +195,16 @@ class SdoVariable(variable.Variable):
         :returns:
             A file like object.
         """
-        return self.sdo_node.open(self.od.index, self.od.subindex, mode,
-                                  encoding, buffering, size, block_transfer, request_crc_support=request_crc_support)
+        return self.sdo_node.open(
+            self.od.index,
+            self.od.subindex,
+            mode,
+            encoding,
+            buffering,
+            size,
+            block_transfer,
+            request_crc_support=request_crc_support,
+        )
 
 
 # For compatibility

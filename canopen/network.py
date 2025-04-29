@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import MutableMapping
-from typing import Callable, Dict, Final, Iterator, List, Optional, Union
+from typing import Callable, Final, Iterator
 
 import can
 from can import Listener
@@ -16,7 +16,6 @@ from canopen.objectdictionary.eds import import_from_node
 from canopen.sync import SyncProducer
 from canopen.timestamp import TimeProducer
 
-
 logger = logging.getLogger(__name__)
 
 Callback = Callable[[int, bytearray, float], None]
@@ -28,7 +27,7 @@ class Network(MutableMapping):
     NOTIFIER_CYCLE: float = 1.0  #: Maximum waiting time for one notifier iteration.
     NOTIFIER_SHUTDOWN_TIMEOUT: float = 5.0  #: Maximum waiting time to stop notifiers.
 
-    def __init__(self, bus: Optional[can.BusABC] = None):
+    def __init__(self, bus: can.BusABC | None = None):
         """
         :param can.BusABC bus:
             A python-can bus instance to re-use.
@@ -41,9 +40,9 @@ class Network(MutableMapping):
         #: List of :class:`can.Listener` objects.
         #: Includes at least MessageListener.
         self.listeners = [MessageListener(self)]
-        self.notifier: Optional[can.Notifier] = None
-        self.nodes: Dict[int, Union[RemoteNode, LocalNode]] = {}
-        self.subscribers: Dict[int, List[Callback]] = {}
+        self.notifier: can.Notifier | None = None
+        self.nodes: dict[int, RemoteNode | LocalNode] = {}
+        self.subscribers: dict[int, list[Callback]] = {}
         self.send_lock = threading.Lock()
         self.sync = SyncProducer(self)
         self.time = TimeProducer(self)
@@ -62,7 +61,7 @@ class Network(MutableMapping):
         :param callback:
             Function to call when message is received.
         """
-        self.subscribers.setdefault(can_id, list())
+        self.subscribers.setdefault(can_id, [])
         if callback not in self.subscribers[can_id]:
             self.subscribers[can_id].append(callback)
 
@@ -134,8 +133,8 @@ class Network(MutableMapping):
 
     def add_node(
         self,
-        node: Union[int, RemoteNode, LocalNode],
-        object_dictionary: Union[str, ObjectDictionary, None] = None,
+        node: int | RemoteNode | LocalNode,
+        object_dictionary: str | ObjectDictionary | None = None,
         upload_eds: bool = False,
     ) -> RemoteNode:
         """Add a remote node to the network.
@@ -164,7 +163,7 @@ class Network(MutableMapping):
     def create_node(
         self,
         node: int,
-        object_dictionary: Union[str, ObjectDictionary, None] = None,
+        object_dictionary: str | ObjectDictionary | None = None,
     ) -> LocalNode:
         """Create a local node in the network.
 
@@ -202,10 +201,12 @@ class Network(MutableMapping):
         """
         if not self.bus:
             raise RuntimeError("Not connected to CAN bus")
-        msg = can.Message(is_extended_id=can_id > 0x7FF,
-                          arbitration_id=can_id,
-                          data=data,
-                          is_remote_frame=remote)
+        msg = can.Message(
+            is_extended_id=can_id > 0x7FF,
+            arbitration_id=can_id,
+            data=data,
+            is_remote_frame=remote,
+        )
         with self.send_lock:
             self.bus.send(msg)
         self.check()
@@ -260,10 +261,10 @@ class Network(MutableMapping):
                 logger.error("An error has caused receiving of messages to stop")
                 raise exc
 
-    def __getitem__(self, node_id: int) -> Union[RemoteNode, LocalNode]:
+    def __getitem__(self, node_id: int) -> RemoteNode | LocalNode:
         return self.nodes[node_id]
 
-    def __setitem__(self, node_id: int, node: Union[RemoteNode, LocalNode]):
+    def __setitem__(self, node_id: int, node: RemoteNode | LocalNode):
         assert node_id == node.id
         if node_id in self.nodes:
             # Remove old callbacks
@@ -285,12 +286,14 @@ class Network(MutableMapping):
 class _UninitializedNetwork(Network):
     """Empty network implementation as a placeholder before actual initialization."""
 
-    def __init__(self, bus: Optional[can.BusABC] = None):
+    def __init__(self, bus: can.BusABC | None = None):
         """Do not initialize attributes, by skipping the parent constructor."""
 
     def __getattribute__(self, name):
-        raise RuntimeError("No actual Network object was assigned, "
-                           "try associating to a real network first.")
+        raise RuntimeError(
+            "No actual Network object was assigned, "
+            "try associating to a real network first."
+        )
 
 
 #: Singleton instance
@@ -323,9 +326,12 @@ class PeriodicMessageTask:
         """
         self.bus = bus
         self.period = period
-        self.msg = can.Message(is_extended_id=can_id > 0x7FF,
-                               arbitration_id=can_id,
-                               data=data, is_remote_frame=remote)
+        self.msg = can.Message(
+            is_extended_id=can_id > 0x7FF,
+            arbitration_id=can_id,
+            data=data,
+            is_remote_frame=remote,
+        )
         self._start()
 
     def _start(self):
@@ -391,10 +397,10 @@ class NodeScanner:
 
     SERVICES = (0x700, 0x580, 0x180, 0x280, 0x380, 0x480, 0x80)
 
-    def __init__(self, network: Optional[Network] = None):
+    def __init__(self, network: Network | None = None):
         self.network = network
         #: A :class:`list` of nodes discovered
-        self.nodes: List[int] = []
+        self.nodes: list[int] = []
 
     def on_message_received(self, can_id: int):
         service = can_id & 0x780

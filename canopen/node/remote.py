@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import logging
-from typing import TextIO, Union
+from typing import TextIO
 
 import canopen.network
 from canopen.emcy import EmcyConsumer
 from canopen.nmt import NmtMaster
 from canopen.node.base import BaseNode
-from canopen.objectdictionary import ODArray, ODRecord, ODVariable, ObjectDictionary
+from canopen.objectdictionary import ObjectDictionary, ODArray, ODRecord, ODVariable
 from canopen.pdo import PDO, RPDO, TPDO
 from canopen.sdo import SdoAbortedError, SdoClient, SdoCommunicationError
-
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +30,10 @@ class RemoteNode(BaseNode):
     def __init__(
         self,
         node_id: int,
-        object_dictionary: Union[ObjectDictionary, str, TextIO],
+        object_dictionary: ObjectDictionary | str | TextIO,
         load_od: bool = False,
     ):
-        super(RemoteNode, self).__init__(node_id, object_dictionary)
+        super().__init__(node_id, object_dictionary)
 
         #: Enable WORKAROUND for reversed PDO mapping entries
         self.curtis_hack = False
@@ -130,13 +129,13 @@ class RemoteNode(BaseNode):
         """
         try:
             if subindex is not None:
-                logger.info('SDO [0x%04X][0x%02X]: %s: %#06x',
-                            index, subindex, name, value)
+                logger.info(
+                    "SDO [0x%04X][0x%02X]: %s: %#06x", index, subindex, name, value
+                )
                 self.sdo[index][subindex].raw = value
             else:
                 self.sdo[index].raw = value
-                logger.info('SDO [0x%04X]: %s: %#06x',
-                            index, name, value)
+                logger.info("SDO [0x%04X]: %s: %#06x", index, name, value)
         except SdoCommunicationError as e:
             logger.warning(str(e))
         except SdoAbortedError as e:
@@ -145,8 +144,9 @@ class RemoteNode(BaseNode):
             if e.code != 0x06010002:
                 # Abort codes other than "Attempt to write a read-only object"
                 # should still be reported.
-                logger.warning('[ERROR SETTING object 0x%04X:%02X] %s',
-                               index, subindex, e)
+                logger.warning(
+                    "[ERROR SETTING object 0x%04X:%02X] %s", index, subindex, e
+                )
                 raise
 
     def load_configuration(self) -> None:
@@ -165,12 +165,20 @@ class RemoteNode(BaseNode):
 
         # Now apply all other records in object dictionary
         for obj in self.object_dictionary.values():
-            if 0x1400 <= obj.index < 0x1c00:
+            if 0x1400 <= obj.index < 0x1C00:
                 # Ignore PDO related objects
                 continue
-            if isinstance(obj, ODRecord) or isinstance(obj, ODArray):
+            if isinstance(obj, (ODRecord, ODArray)):
                 for subobj in obj.values():
-                    if isinstance(subobj, ODVariable) and subobj.writable and (subobj.value is not None):
-                        self.__load_configuration_helper(subobj.index, subobj.subindex, subobj.name, subobj.value)
-            elif isinstance(obj, ODVariable) and obj.writable and (obj.value is not None):
+                    if (
+                        isinstance(subobj, ODVariable)
+                        and subobj.writable
+                        and (subobj.value is not None)
+                    ):
+                        self.__load_configuration_helper(
+                            subobj.index, subobj.subindex, subobj.name, subobj.value
+                        )
+            elif (
+                isinstance(obj, ODVariable) and obj.writable and (obj.value is not None)
+            ):
                 self.__load_configuration_helper(obj.index, None, obj.name, obj.value)

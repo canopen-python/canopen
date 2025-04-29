@@ -4,7 +4,6 @@ from canopen.sdo.base import SdoBase
 from canopen.sdo.constants import *
 from canopen.sdo.exceptions import *
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -29,7 +28,7 @@ class SdoServer(SdoBase):
         self.last_received_error = 0x00000000
 
     def on_request(self, can_id, data, timestamp):
-        command, = struct.unpack_from("B", data, 0)
+        (command,) = struct.unpack_from("B", data, 0)
         ccs = command & 0xE0
 
         try:
@@ -51,7 +50,7 @@ class SdoServer(SdoBase):
                 self.abort(0x05040001)
         except SdoAbortedError as exc:
             self.abort(exc.code)
-        except KeyError as exc:
+        except KeyError:
             self.abort(0x06020000)
         except Exception as exc:
             self.abort()
@@ -70,7 +69,7 @@ class SdoServer(SdoBase):
             logger.info("Expedited upload for 0x%04X:%02X", index, subindex)
             res_command |= EXPEDITED
             res_command |= (4 - size) << 2
-            response[4:4 + size] = data
+            response[4 : 4 + size] = data
         else:
             logger.info("Initiating segmented upload for 0x%04X:%02X", index, subindex)
             struct.pack_into("<L", response, 4, size)
@@ -103,7 +102,7 @@ class SdoServer(SdoBase):
 
         response = bytearray(8)
         response[0] = res_command
-        response[1:1 + size] = data
+        response[1 : 1 + size] = data
         self.send_response(response)
 
     def block_upload(self, data):
@@ -116,7 +115,12 @@ class SdoServer(SdoBase):
     def request_aborted(self, data):
         _, index, subindex, code = struct.unpack_from("<BHBL", data)
         self.last_received_error = code
-        logger.info("Received request aborted for 0x%04X:%02X with code 0x%X", index, subindex, code)
+        logger.info(
+            "Received request aborted for 0x%04X:%02X with code 0x%X",
+            index,
+            subindex,
+            code,
+        )
 
     def block_download(self, data):
         # We currently don't support BLOCK DOWNLOAD
@@ -133,15 +137,16 @@ class SdoServer(SdoBase):
 
         if command & EXPEDITED:
             logger.info("Expedited download for 0x%04X:%02X", index, subindex)
-            if command & SIZE_SPECIFIED:
-                size = 4 - ((command >> 2) & 0x3)
-            else:
-                size = 4
-            self._node.set_data(index, subindex, request[4:4 + size], check_writable=True)
+            size = 4 - (command >> 2 & 3) if command & SIZE_SPECIFIED else 4
+            self._node.set_data(
+                index, subindex, request[4 : 4 + size], check_writable=True
+            )
         else:
-            logger.info("Initiating segmented download for 0x%04X:%02X", index, subindex)
+            logger.info(
+                "Initiating segmented download for 0x%04X:%02X", index, subindex
+            )
             if command & SIZE_SPECIFIED:
-                size, = struct.unpack_from("<L", request, 4)
+                (size,) = struct.unpack_from("<L", request, 4)
                 logger.info("Size is %d bytes", size)
             self._buffer = bytearray()
             self._toggle = 0
@@ -157,10 +162,9 @@ class SdoServer(SdoBase):
         self._buffer.extend(request[1:last_byte])
 
         if command & NO_MORE_DATA:
-            self._node.set_data(self._index,
-                                self._subindex,
-                                self._buffer,
-                                check_writable=True)
+            self._node.set_data(
+                self._index, self._subindex, self._buffer, check_writable=True
+            )
 
         res_command = RESPONSE_SEGMENT_DOWNLOAD
         # Add toggle bit
@@ -177,8 +181,9 @@ class SdoServer(SdoBase):
 
     def abort(self, abort_code=0x08000000):
         """Abort current transfer."""
-        data = struct.pack("<BHBL", RESPONSE_ABORTED,
-                           self._index, self._subindex, abort_code)
+        data = struct.pack(
+            "<BHBL", RESPONSE_ABORTED, self._index, self._subindex, abort_code
+        )
         self.send_response(data)
         # logger.error("Transfer aborted with code 0x%08X", abort_code)
 

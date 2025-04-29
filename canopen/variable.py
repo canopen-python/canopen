@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Mapping
+from typing import List, Union, cast
 from typing import Union
 
 from canopen import objectdictionary
@@ -78,7 +79,7 @@ class Variable:
         value = self.od.decode_raw(self.data)
         text = f"Value of {self.name!r} ({pretty_index(self.index, self.subindex)}) is {value!r}"
         if value in self.od.value_descriptions:
-            text += f" ({self.od.value_descriptions[value]})"
+            text += f" ({self.od.value_descriptions[cast(int, value)]})"
         logger.debug(text)
         return value
 
@@ -109,7 +110,10 @@ class Variable:
     @property
     def desc(self) -> str:
         """Converts to and from a description of the value as a string."""
-        value = self.od.decode_desc(self.raw)
+        raw = self.raw
+        if not isinstance(raw, int):
+            raise TypeError("Description can only be used with integer values")
+        value = self.od.decode_desc(raw)
         logger.debug("Description is '%s'", value)
         return value
 
@@ -142,6 +146,7 @@ class Variable:
             return self.phys
         elif fmt == "desc":
             return self.desc
+        raise ValueError(f"Uknown format {fmt!r}")
 
     def write(
         self, value: Union[int, bool, float, str, bytes], fmt: str = "raw"
@@ -161,17 +166,23 @@ class Variable:
         elif fmt == "phys":
             self.phys = value
         elif fmt == "desc":
+            if not isinstance(value, str):
+                raise TypeError("Description must be a string")
             self.desc = value
 
 
 class Bits(Mapping):
+
+    # Attribute type (since not defined in __init__)
+    raw: int
 
     def __init__(self, variable: Variable):
         self.variable = variable
         self.read()
 
     @staticmethod
-    def _get_bits(key):
+    def _get_bits(key: Union[int, str, slice]) -> Union[range, List[int], str]:
+        bits: Union[range, List[int], str]
         if isinstance(key, slice):
             bits = range(key.start, key.stop, key.step)
         elif isinstance(key, int):

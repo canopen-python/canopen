@@ -2,7 +2,7 @@ import logging
 import struct
 import threading
 import time
-from typing import Callable, Optional, TYPE_CHECKING
+from typing import Callable, Optional, TYPE_CHECKING, List
 
 import canopen.network
 
@@ -117,7 +117,7 @@ class NmtMaster(NmtBase):
         #: Timestamp of last heartbeat message
         self.timestamp: Optional[float] = None
         self.state_update = threading.Condition()
-        self._callbacks = []
+        self._callbacks: List[Callable[[int], None]] = []
 
     def on_heartbeat(self, can_id, data, timestamp):
         with self.state_update:
@@ -187,7 +187,7 @@ class NmtMaster(NmtBase):
             Period (in seconds) at which the node guarding should be advertised to the slave node.
         """
         if self._node_guarding_producer : self.stop_node_guarding()
-        self._node_guarding_producer = self.network.send_periodic(0x700 + self.id, None, period, True)
+        self._node_guarding_producer = self.network.send_periodic(0x700 + self.id, [], period, True)
 
     def stop_node_guarding(self):
         """Stops the node guarding mechanism."""

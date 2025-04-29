@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 import struct
 from collections.abc import Mapping, MutableMapping
-from typing import Dict, Iterator, List, Optional, TextIO, Union
+from typing import Dict, Iterator, List, Optional, TextIO, Union, cast
 
 from canopen.objectdictionary.datatypes import *
 from canopen.objectdictionary.datatypes import IntegerN, UnsignedN
@@ -69,7 +69,7 @@ def export_od(
     finally:
         # If dest is opened in this fn, it should be closed
         if opened_here:
-            dest.close()
+            cast(TextIO, dest).close()  # The cast is needed to help the type checker
 
 
 def import_od(
@@ -92,7 +92,7 @@ def import_od(
         return ObjectDictionary()
     if hasattr(source, "read"):
         # File like object
-        filename = source.name
+        filename = cast(TextIO, source).name
     elif hasattr(source, "tag"):
         # XML tree, probably from an EPF file
         filename = "od.epf"
@@ -137,7 +137,9 @@ class ObjectDictionary(MutableMapping):
         if item is None:
             if isinstance(index, str) and '.' in index:
                 idx, sub = index.split('.', maxsplit=1)
-                return self[idx][sub]
+                var = self[idx]
+                if not isinstance(var, ODVariable):
+                    return var[sub]
             raise KeyError(f"{pretty_index(index)} was not found in Object Dictionary")
         return item
 
@@ -158,7 +160,7 @@ class ObjectDictionary(MutableMapping):
     def __len__(self) -> int:
         return len(self.indices)
 
-    def __contains__(self, index: Union[int, str]):
+    def __contains__(self, index: object):
         return index in self.names or index in self.indices
 
     def add_object(self, obj: Union[ODArray, ODRecord, ODVariable]) -> None:
@@ -186,6 +188,7 @@ class ObjectDictionary(MutableMapping):
             return obj
         elif isinstance(obj, (ODRecord, ODArray)):
             return obj.get(subindex)
+        return None
 
 
 class ODRecord(MutableMapping):
@@ -205,14 +208,17 @@ class ODRecord(MutableMapping):
         self.name = name
         #: Storage location of index
         self.storage_location = None
-        self.subindices = {}
-        self.names = {}
+        self.subindices: Dict[int, ODVariable] = {}
+        self.names: Dict[str, ODVariable] = {}
 
     def __repr__(self) -> str:
         return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
 
     def __getitem__(self, subindex: Union[int, str]) -> ODVariable:
-        item = self.names.get(subindex) or self.subindices.get(subindex)
+        if isinstance(subindex, str):
+            item = self.names.get(subindex)
+        else:
+            item = self.subindices.get(subindex)
         if item is None:
             raise KeyError(f"Subindex {pretty_index(None, subindex)} was not found")
         return item
@@ -232,11 +238,11 @@ class ODRecord(MutableMapping):
     def __iter__(self) -> Iterator[int]:
         return iter(sorted(self.subindices))
 
-    def __contains__(self, subindex: Union[int, str]) -> bool:
+    def __contains__(self, subindex: object) -> bool:
         return subindex in self.names or subindex in self.subindices
 
-    def __eq__(self, other: ODRecord) -> bool:
-        return self.index == other.index
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, type(self)) and self.index == other.index
 
     def add_member(self, variable: ODVariable) -> None:
         """Adds a :class:`~canopen.objectdictionary.ODVariable` to the record."""
@@ -264,14 +270,17 @@ class ODArray(Mapping):
         self.name = name
         #: Storage location of index
         self.storage_location = None
-        self.subindices = {}
-        self.names = {}
+        self.subindices: Dict[int, ODVariable] = {}
+        self.names: Dict[str, ODVariable] = {}
 
     def __repr__(self) -> str:
         return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
 
     def __getitem__(self, subindex: Union[int, str]) -> ODVariable:
-        var = self.names.get(subindex) or self.subindices.get(subindex)
+        if isinstance(subindex, str):
+            var = self.names.get(subindex)
+        else:
+            var = self.subindices.get(subindex)
         if var is not None:
             # This subindex is defined
             pass
@@ -296,8 +305,8 @@ class ODArray(Mapping):
     def __iter__(self) -> Iterator[int]:
         return iter(sorted(self.subindices))
 
-    def __eq__(self, other: ODArray) -> bool:
-        return self.index == other.index
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, type(self)) and self.index == other.index
 
     def add_member(self, variable: ODVariable) -> None:
         """Adds a :class:`~canopen.objectdictionary.ODVariable` to the record."""
@@ -337,7 +346,7 @@ class ODVariable:
         #: The :class:`~canopen.ObjectDictionary`,
         #: :class:`~canopen.objectdictionary.ODRecord` or
         #: :class:`~canopen.objectdictionary.ODArray` owning the variable
-        self.parent = None
+        self.parent: Union[ObjectDictionary, ODArray, ODRecord, None] = None
         #: 16-bit address of the object in the dictionary
         self.index = index
         #: 8-bit sub-index of the object in the dictionary
@@ -385,8 +394,9 @@ class ODVariable:
             return f"{self.parent.name}.{self.name}"
         return self.name
 
-    def __eq__(self, other: ODVariable) -> bool:
-        return (self.index == other.index and
+    def __eq__(self, other: object) -> bool:
+        return (isinstance(other, type(self)) and
+                self.index == other.index and
                 self.subindex == other.subindex)
 
     def __len__(self) -> int:
@@ -443,12 +453,21 @@ class ODVariable:
         if isinstance(value, (bytes, bytearray)):
             return value
         elif self.data_type == VISIBLE_STRING:
+            if not isinstance(value, str):
+                raise TypeError(f"Value of type {type(value)!r} doesn't match VISIBLE_STRING")
             return value.encode("ascii")
         elif self.data_type == UNICODE_STRING:
+            if not isinstance(value, str):
+                raise TypeError(f"Value of type {type(value)!r} doesn't match UNICODE_STRING")
             return value.encode("utf_16_le")
         elif self.data_type in (DOMAIN, OCTET_STRING):
+            if not isinstance(value, (bytes, bytearray)):
+                t = "DOMAIN" if self.data_type == DOMAIN else "OCTET_STRING"
+                raise TypeError(f"Value of type {type(value)!r} doesn't match {t}")
             return bytes(value)
         elif self.data_type in self.STRUCT_TYPES:
+            if not isinstance(value, (bool, int, float)):
+                raise TypeError(f"Value of type {type(value)!r} is unexpected for numeric types")
             if self.data_type in INTEGER_TYPES:
                 value = int(value)
             if self.data_type in NUMBER_TYPES:
@@ -469,13 +488,17 @@ class ODVariable:
             raise TypeError(
                 f"Do not know how to encode {value!r} to data type 0x{self.data_type:X}")
 
-    def decode_phys(self, value: int) -> Union[int, bool, float, str, bytes]:
+    def decode_phys(self, value: Union[int, bool, float, str, bytes]) -> Union[int, bool, float, str, bytes]:
         if self.data_type in INTEGER_TYPES:
+            if not isinstance(value, (int, float)):
+                raise TypeError(f"Value of type {type(value)!r} is unexpected for numeric types")
             value *= self.factor
         return value
 
-    def encode_phys(self, value: Union[int, bool, float, str, bytes]) -> int:
+    def encode_phys(self, value: Union[int, bool, float, str, bytes]) -> Union[int, bool, float, str, bytes]:
         if self.data_type in INTEGER_TYPES:
+            if not isinstance(value, (int, float)):
+                raise TypeError(f"Value of type {type(value)!r} is unexpected for numeric types")
             value /= self.factor
             value = int(round(value))
         return value
@@ -500,27 +523,29 @@ class ODVariable:
         raise ValueError(
             f"No value corresponds to '{desc}'. Valid values are: {valid_values}")
 
-    def decode_bits(self, value: int, bits: List[int]) -> int:
+    def decode_bits(self, value: int, bits: Union[range, str, List[int]]) -> int:
         try:
-            bits = self.bit_definitions[bits]
+            bits = self.bit_definitions[cast(str, bits)]
         except (TypeError, KeyError):
             pass
         mask = 0
-        for bit in bits:
+        lbits = cast(List[int], bits)
+        for bit in lbits:
             mask |= 1 << bit
-        return (value & mask) >> min(bits)
+        return (value & mask) >> min(lbits)
 
-    def encode_bits(self, original_value: int, bits: List[int], bit_value: int):
+    def encode_bits(self, original_value: int, bits: Union[range, str, List[int]], bit_value: int):
         try:
-            bits = self.bit_definitions[bits]
+            bits = self.bit_definitions[cast(str, bits)]
         except (TypeError, KeyError):
             pass
         temp = original_value
         mask = 0
-        for bit in bits:
+        lbits = cast(List[int], bits)
+        for bit in lbits:
             mask |= 1 << bit
         temp &= ~mask
-        temp |= bit_value << min(bits)
+        temp |= bit_value << min(lbits)
         return temp
 
 

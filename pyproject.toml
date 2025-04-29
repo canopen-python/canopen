@@ -48,3 +48,11 @@ testpaths = [
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+
+[tool.mypy]
+files = "canopen"
+strict = "False"
+ignore_missing_imports = "True"
+disable_error_code = [
+    "annotation-unchecked",
+]

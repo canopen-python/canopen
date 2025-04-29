@@ -1,3 +1,4 @@
+from __future__ import annotations
 import logging
 import struct
 import threading
@@ -55,7 +56,7 @@ class EmcyConsumer:
 
     def wait(
         self, emcy_code: Optional[int] = None, timeout: float = 10
-    ) -> "EmcyError":
+    ) -> Optional[EmcyError]:
         """Wait for a new EMCY to arrive.
 
         :param emcy_code: EMCY code to wait for

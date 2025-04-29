@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, Union
+from typing import Dict, Union, List, Protocol, TextIO, Optional
 
 import canopen.network
 from canopen import objectdictionary
 from canopen.emcy import EmcyProducer
 from canopen.nmt import NmtSlave
 from canopen.node.base import BaseNode
-from canopen.objectdictionary import ObjectDictionary
+from canopen.objectdictionary import ObjectDictionary, ODVariable
 from canopen.pdo import PDO, RPDO, TPDO
 from canopen.sdo import SdoAbortedError, SdoServer
 
@@ -16,18 +16,34 @@ from canopen.sdo import SdoAbortedError, SdoServer
 logger = logging.getLogger(__name__)
 
 
+class WriteCallback(Protocol):
+    """LocalNode Write Callback Protocol"""
+    def __call__(self, *, index: int, subindex: int,
+                 od: ODVariable,
+                 data: bytes) -> None:
+        ''' Write Callback '''
+
+
+class ReadCallback(Protocol):
+    """LocalNode Read Callback Protocol"""
+    def __call__(self, *, index: int, subindex: int,
+                 od: ODVariable
+                 ) -> Union[bool, int, float, str, bytes, None]:
+        ''' Read Callback '''
+
+
 class LocalNode(BaseNode):
 
     def __init__(
         self,
-        node_id: int,
-        object_dictionary: Union[ObjectDictionary, str],
+        node_id: Optional[int],
+        object_dictionary: Union[ObjectDictionary, str, TextIO, None],
     ):
         super(LocalNode, self).__init__(node_id, object_dictionary)
 
         self.data_store: Dict[int, Dict[int, bytes]] = {}
-        self._read_callbacks = []
-        self._write_callbacks = []
+        self._read_callbacks: List[ReadCallback] = []
+        self._write_callbacks: List[WriteCallback] = []
 
         self.sdo = SdoServer(0x600 + self.id, 0x580 + self.id, self)
         self.tpdo = TPDO(self)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import MutableMapping
-from typing import Callable, Dict, Final, Iterator, List, Optional, Union
+from typing import Callable, Dict, Final, Iterator, List, Optional, Union, TYPE_CHECKING, TextIO
 
 import can
 from can import Listener
@@ -16,6 +16,8 @@ from canopen.objectdictionary.eds import import_from_node
 from canopen.sync import SyncProducer
 from canopen.timestamp import TimeProducer
 
+if TYPE_CHECKING:
+    from can.typechecking import CanData
 
 logger = logging.getLogger(__name__)
 
@@ -134,15 +136,15 @@ class Network(MutableMapping):
 
     def add_node(
         self,
-        node: Union[int, RemoteNode, LocalNode],
-        object_dictionary: Union[str, ObjectDictionary, None] = None,
+        node: Union[int, RemoteNode],
+        object_dictionary: Union[str, ObjectDictionary, TextIO, None] = None,
         upload_eds: bool = False,
     ) -> RemoteNode:
         """Add a remote node to the network.
 
         :param node:
             Can be either an integer representing the node ID, a
-            :class:`canopen.RemoteNode` or :class:`canopen.LocalNode` object.
+            :class:`canopen.RemoteNode` object.
         :param object_dictionary:
             Can be either a string for specifying the path to an
             Object Dictionary file or a
@@ -157,14 +159,16 @@ class Network(MutableMapping):
             if upload_eds:
                 logger.info("Trying to read EDS from node %d", node)
                 object_dictionary = import_from_node(node, self)
-            node = RemoteNode(node, object_dictionary)
-        self[node.id] = node
-        return node
+            nodeobj = RemoteNode(node, object_dictionary)
+        else:
+            nodeobj = node
+        self[nodeobj.id] = nodeobj
+        return nodeobj
 
     def create_node(
         self,
-        node: int,
-        object_dictionary: Union[str, ObjectDictionary, None] = None,
+        node: Union[int, LocalNode],
+        object_dictionary: Union[str, ObjectDictionary, TextIO, None] = None,
     ) -> LocalNode:
         """Create a local node in the network.
 
@@ -179,11 +183,13 @@ class Network(MutableMapping):
             The Node object that was added.
         """
         if isinstance(node, int):
-            node = LocalNode(node, object_dictionary)
-        self[node.id] = node
-        return node
+            nodeobj = LocalNode(node, object_dictionary)
+        else:
+            nodeobj = node
+        self[nodeobj.id] = nodeobj
+        return nodeobj
 
-    def send_message(self, can_id: int, data: bytes, remote: bool = False) -> None:
+    def send_message(self, can_id: int, data: CanData, remote: bool = False) -> None:
         """Send a raw CAN message to the network.
 
         This method may be overridden in a subclass if you need to integrate
@@ -211,7 +217,7 @@ class Network(MutableMapping):
         self.check()
 
     def send_periodic(
-        self, can_id: int, data: bytes, period: float, remote: bool = False
+        self, can_id: int, data: CanData, period: float, remote: bool = False
     ) -> PeriodicMessageTask:
         """Start sending a message periodically.
 
@@ -227,6 +233,8 @@ class Network(MutableMapping):
         :return:
             An task object with a ``.stop()`` method to stop the transmission
         """
+        if not self.bus:
+            raise RuntimeError("Not connected to CAN bus")
         return PeriodicMessageTask(can_id, data, period, self.bus, remote)
 
     def notify(self, can_id: int, data: bytearray, timestamp: float) -> None:
@@ -306,9 +314,9 @@ class PeriodicMessageTask:
     def __init__(
         self,
         can_id: int,
-        data: bytes,
+        data: CanData,
         period: float,
-        bus,
+        bus: can.BusABC,
         remote: bool = False,
     ):
         """

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import binascii
 from collections.abc import Mapping
-from typing import Iterator, Optional, Union
+from typing import Iterator, Optional, Union, cast
 
 import canopen.network
 from canopen import objectdictionary
@@ -64,7 +64,7 @@ class SdoBase(Mapping):
     def __len__(self) -> int:
         return len(self.od)
 
-    def __contains__(self, key: Union[int, str]) -> bool:
+    def __contains__(self, key: object) -> bool:
         return key in self.od
 
     def get_variable(
@@ -79,6 +79,7 @@ class SdoBase(Mapping):
             return obj
         elif isinstance(obj, (SdoRecord, SdoArray)):
             return obj.get(subindex)
+        return None
 
     def upload(self, index: int, subindex: int) -> bytes:
         raise NotImplementedError()
@@ -113,7 +114,7 @@ class SdoRecord(Mapping):
         # Skip the "highest subindex" entry, which is not part of the data
         return len(self.od) - int(0 in self.od)
 
-    def __contains__(self, subindex: Union[int, str]) -> bool:
+    def __contains__(self, subindex: object) -> bool:
         return subindex in self.od
 
 
@@ -134,10 +135,10 @@ class SdoArray(Mapping):
         return iter(range(1, len(self) + 1))
 
     def __len__(self) -> int:
-        return self[0].raw
+        return cast(int, self[0].raw)
 
-    def __contains__(self, subindex: int) -> bool:
-        return 0 <= subindex <= len(self)
+    def __contains__(self, subindex: object) -> bool:
+        return isinstance(subindex, int) and 0 <= subindex <= len(self)
 
 
 class SdoVariable(variable.Variable):

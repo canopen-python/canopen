@@ -340,7 +340,7 @@ class PdoMap:
             DCF value will be used, otherwise the EDS default will be used instead.
         """
 
-        def _raw_from(param):
+        def _raw_from(param) -> int:
             if from_od:
                 if param.od.value is not None:
                     return param.od.value
@@ -466,6 +466,8 @@ class PdoMap:
         known to match what's stored on the node.
         """
         if self.enabled:
+            if self.cob_id is None:
+               raise RuntimeError("A valid COB-ID is required")
             logger.info("Subscribing to enabled PDO 0x%X on the network", self.cob_id)
             self.pdo_node.network.subscribe(self.cob_id, self.on_message)
 
@@ -513,6 +515,8 @@ class PdoMap:
 
     def transmit(self) -> None:
         """Transmit the message once."""
+        if self.cob_id is None:
+            raise RuntimeError("A valid COB-ID is required")
         self.pdo_node.network.send_message(self.cob_id, self.data)
 
     def start(self, period: Optional[float] = None) -> None:
@@ -523,6 +527,9 @@ class PdoMap:
             on the object before.
         :raises ValueError: When neither the argument nor the :attr:`period` is given.
         """
+        if self.cob_id is None:
+            raise RuntimeError("A valid COB-ID is required")
+
         # Stop an already running transmission if we have one, otherwise we
         # overwrite the reference and can lose our handle to shut it down
         self.stop()
@@ -553,9 +560,11 @@ class PdoMap:
         Silently ignore if not allowed.
         """
         if self.enabled and self.rtr_allowed:
+            if self.cob_id is None:
+                raise RuntimeError("A valid COB-ID is required")
             self.pdo_node.network.send_message(self.cob_id, bytes(), remote=True)
 
-    def wait_for_reception(self, timeout: float = 10) -> float:
+    def wait_for_reception(self, timeout: float = 10) -> Optional[float]:
         """Wait for the next transmit PDO.
 
         :param float timeout: Max time to wait in seconds.
@@ -583,6 +592,12 @@ class PdoVariable(variable.Variable):
 
         :return: PdoVariable value as :class:`bytes`.
         """
+        # FIXME TYPING: These asserts are for type checking. More robust errors
+        # should be raised if these are not set.
+        assert self.offset is not None
+        assert self.pdo_parent is not None
+        assert self.od.data_type is not None
+
         byte_offset, bit_offset = divmod(self.offset, 8)
 
         if bit_offset or self.length % 8:
@@ -610,6 +625,12 @@ class PdoVariable(variable.Variable):
 
         :param data: Value for the PDO variable in the PDO message.
         """
+        # FIXME TYPING: These asserts are for type checking. More robust errors
+        # should be raised if these are not set.
+        assert self.offset is not None
+        assert self.pdo_parent is not None
+        assert self.od.data_type is not None
+
         byte_offset, bit_offset = divmod(self.offset, 8)
         logger.debug("Updating %s to %s in %s",
                      self.name, binascii.hexlify(data), self.pdo_parent.name)

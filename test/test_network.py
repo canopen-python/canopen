@@ -318,7 +318,7 @@ class TestScanner(unittest.TestCase):
         self.assertListEqual(self.scanner.nodes, [])
 
     def test_scanner_search_no_network(self):
-        with self.assertRaisesRegex(RuntimeError, "Network is required"):
+        with self.assertRaisesRegex(RuntimeError, "No actual Network object was assigned"):
             self.scanner.search()
 
     def test_scanner_search(self):

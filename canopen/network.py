@@ -392,7 +392,9 @@ class NodeScanner:
     SERVICES = (0x700, 0x580, 0x180, 0x280, 0x380, 0x480, 0x80)
 
     def __init__(self, network: Optional[Network] = None):
-        self.network = network
+        if network is None:
+            network = _UNINITIALIZED_NETWORK
+        self.network: Network = network
         #: A :class:`list` of nodes discovered
         self.nodes: List[int] = []
 
@@ -408,8 +410,6 @@ class NodeScanner:
 
     def search(self, limit: int = 127) -> None:
         """Search for nodes by sending SDO requests to all node IDs."""
-        if self.network is None:
-            raise RuntimeError("A Network is required to do active scanning")
         sdo_req = b"\x40\x00\x10\x00\x00\x00\x00\x00"
         for node_id in range(1, limit + 1):
             self.network.send_message(0x600 + node_id, sdo_req)

@@ -1,11 +1,12 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+
 import struct
 import time
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     import canopen.network
+
 
 # 1 Jan 1984
 OFFSET = 441763200

@@ -1,9 +1,10 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+
 import copy
 import logging
 import re
 from configparser import NoOptionError, NoSectionError, RawConfigParser
+from typing import TYPE_CHECKING
 
 from canopen import objectdictionary
 from canopen.objectdictionary import ObjectDictionary, datatypes
@@ -11,6 +12,7 @@ from canopen.sdo import SdoClient
 
 if TYPE_CHECKING:
     import canopen.network
+
 
 logger = logging.getLogger(__name__)
 

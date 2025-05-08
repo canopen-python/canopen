@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 from collections.abc import MutableMapping
@@ -8,6 +9,7 @@ from typing import Callable, Dict, Final, Iterator, List, Optional, Union
 import can
 from can import Listener
 
+from canopen.async_guard import set_async_sentinel
 from canopen.lss import LssMaster
 from canopen.nmt import NmtMaster
 from canopen.node import LocalNode, RemoteNode
@@ -28,20 +30,22 @@ class Network(MutableMapping):
     NOTIFIER_CYCLE: float = 1.0  #: Maximum waiting time for one notifier iteration.
     NOTIFIER_SHUTDOWN_TIMEOUT: float = 5.0  #: Maximum waiting time to stop notifiers.
 
-    def __init__(self, bus: Optional[can.BusABC] = None):
+    def __init__(self, bus: Optional[can.BusABC] = None, notifier: Optional[can.Notifier] = None,
+                 loop: Optional[asyncio.AbstractEventLoop] = None):
         """
         :param can.BusABC bus:
             A python-can bus instance to re-use.
         """
         #: A python-can :class:`can.BusABC` instance which is set after
         #: :meth:`canopen.Network.connect` is called
-        self.bus = bus
+        self.bus: Optional[BusABC] = bus
+        self.loop: Optional[asyncio.AbstractEventLoop] = loop
         #: A :class:`~canopen.network.NodeScanner` for detecting nodes
         self.scanner = NodeScanner(self)
         #: List of :class:`can.Listener` objects.
         #: Includes at least MessageListener.
         self.listeners = [MessageListener(self)]
-        self.notifier: Optional[can.Notifier] = None
+        self.notifier: Optional[can.Notifier] = notifier
         self.nodes: Dict[int, Union[RemoteNode, LocalNode]] = {}
         self.subscribers: Dict[int, List[Callback]] = {}
         self.send_lock = threading.Lock()
@@ -52,7 +56,16 @@ class Network(MutableMapping):
 
         self.lss = LssMaster()
         self.lss.network = self
-        self.subscribe(self.lss.LSS_RX_COBID, self.lss.on_message_received)
+
+        # Register this function as the means to check if canopen is run in
+        # async mode. This enables the @ensure_not_async() decorator to
+        # work. See async_guard.py
+        set_async_sentinel(self.is_async())
+
+        if self.is_async():
+            self.subscribe(self.lss.LSS_RX_COBID, self.lss.aon_message_received)
+        else:
+            self.subscribe(self.lss.LSS_RX_COBID, self.lss.on_message_received)
 
     def subscribe(self, can_id: int, callback: Callback) -> None:
         """Listen for messages with a specific CAN ID.
@@ -108,7 +121,10 @@ class Network(MutableMapping):
         if self.bus is None:
             self.bus = can.Bus(*args, **kwargs)
         logger.info("Connected to '%s'", self.bus.channel_info)
-        self.notifier = can.Notifier(self.bus, self.listeners, self.NOTIFIER_CYCLE)
+        if self.notifier is None:
+            self.notifier = can.Notifier(self.bus, [], self.NOTIFIER_CYCLE, loop=self.loop)
+        for listener in self.listeners:
+            self.notifier.add_listener(listener)
         return self
 
     def disconnect(self) -> None:
@@ -126,11 +142,16 @@ class Network(MutableMapping):
         self.bus = None
         self.check()
 
+        # Remove the async sentinel
+        set_async_sentinel(False)
+
     def __enter__(self):
         return self
 
     def __exit__(self, type, value, traceback):
         self.disconnect()
+
+    # FIXME: Implement async "aadd_node"
 
     def add_node(
         self,
@@ -206,6 +227,8 @@ class Network(MutableMapping):
                           arbitration_id=can_id,
                           data=data,
                           is_remote_frame=remote)
+        # NOTE: Blocking lock. This is probably ok for async, because async
+        #       only use one thread.
         with self.send_lock:
             self.bus.send(msg)
         self.check()
@@ -229,6 +252,7 @@ class Network(MutableMapping):
         """
         return PeriodicMessageTask(can_id, data, period, self.bus, remote)
 
+    # @callback  # NOTE: called from another thread
     def notify(self, can_id: int, data: bytearray, timestamp: float) -> None:
         """Feed incoming message to this library.
 
@@ -242,10 +266,12 @@ class Network(MutableMapping):
         :param timestamp:
             Timestamp of the message, preferably as a Unix timestamp
         """
-        if can_id in self.subscribers:
-            callbacks = self.subscribers[can_id]
+        callbacks = self.subscribers.get(can_id)
+        if callbacks is not None:
             for callback in callbacks:
-                callback(can_id, data, timestamp)
+                res = callback(can_id, data, timestamp)
+                if res is not None and self.loop is not None and asyncio.iscoroutine(res):
+                    self.loop.create_task(res)
         self.scanner.on_message_received(can_id)
 
     def check(self) -> None:
@@ -259,6 +285,10 @@ class Network(MutableMapping):
             if exc is not None:
                 logger.error("An error has caused receiving of messages to stop")
                 raise exc
+
+    def is_async(self) -> bool:
+        """Check if canopen has been connected with async"""
+        return self.loop is not None
 
     def __getitem__(self, node_id: int) -> Union[RemoteNode, LocalNode]:
         return self.nodes[node_id]
@@ -335,6 +365,7 @@ class PeriodicMessageTask:
         """Stop transmission"""
         self._task.stop()
 
+    # @callback  # NOTE: Indirectly called from another thread via other callbacks
     def update(self, data: bytes) -> None:
         """Update data of message
 
@@ -362,6 +393,7 @@ class MessageListener(Listener):
     def __init__(self, network: Network):
         self.network = network
 
+    # @callback  # NOTE: called from another thread
     def on_message_received(self, msg):
         if msg.is_error_frame or msg.is_remote_frame:
             return
@@ -396,10 +428,15 @@ class NodeScanner:
         #: A :class:`list` of nodes discovered
         self.nodes: List[int] = []
 
+    # @callback  # NOTE: called from another thread
     def on_message_received(self, can_id: int):
         service = can_id & 0x780
         node_id = can_id & 0x7F
         if node_id not in self.nodes and node_id != 0 and service in self.SERVICES:
+            # NOTE: In the current CPython implementation append on lists are
+            #       atomic which makes this thread-safe. However, other py
+            #       interpreters might not. It should be considered if a better
+            #       mechanism is needed to protect against race.
             self.nodes.append(node_id)
 
     def reset(self):
@@ -410,6 +447,7 @@ class NodeScanner:
         """Search for nodes by sending SDO requests to all node IDs."""
         if self.network is None:
             raise RuntimeError("A Network is required to do active scanning")
+        # SDO upload request, parameter 0x1000:0x00
         sdo_req = b"\x40\x00\x10\x00\x00\x00\x00\x00"
         for node_id in range(1, limit + 1):
             self.network.send_message(0x600 + node_id, sdo_req)

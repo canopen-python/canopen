@@ -249,6 +249,7 @@ class TestObjectDictionary(unittest.TestCase):
         self.assertEqual(test_od["Test Array.Test Variable"], member1)
         self.assertEqual(test_od["Test Array.Test Variable 2"], member2)
 
+
 class TestArray(unittest.TestCase):
 
     def test_subindexes(self):

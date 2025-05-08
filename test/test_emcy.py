@@ -1,6 +1,7 @@
 import logging
 import threading
 import unittest
+import asyncio
 from contextlib import contextmanager
 
 import can
@@ -181,44 +182,61 @@ class TestEmcyError(unittest.TestCase):
         check(0xffff, "Device Specific")
 
 
-class TestEmcyProducer(unittest.TestCase):
-    def setUp(self):
-        self.txbus = can.Bus(interface="virtual")
-        self.rxbus = can.Bus(interface="virtual")
-        self.net = canopen.Network(self.txbus)
-        self.net.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
-        self.net.connect()
-        self.emcy = canopen.emcy.EmcyProducer(0x80 + 1)
-        self.emcy.network = self.net
+class BaseTests:
 
-    def tearDown(self):
-        self.net.disconnect()
-        self.txbus.shutdown()
-        self.rxbus.shutdown()
+    class TestEmcyProducer(unittest.IsolatedAsyncioTestCase):
 
-    def check_response(self, expected):
-        msg = self.rxbus.recv(TIMEOUT)
-        self.assertIsNotNone(msg)
-        actual = msg.data
-        self.assertEqual(actual, expected)
+        use_async: bool
 
-    def test_emcy_producer_send(self):
-        def check(*args, res):
-            self.emcy.send(*args)
-            self.check_response(res)
+        def setUp(self):
+            loop = None
+            if self.use_async:
+                loop = asyncio.get_event_loop()
 
-        check(0x2001, res=b'\x01\x20\x00\x00\x00\x00\x00\x00')
-        check(0x2001, 0x2, res=b'\x01\x20\x02\x00\x00\x00\x00\x00')
-        check(0x2001, 0x2, b'\x2a', res=b'\x01\x20\x02\x2a\x00\x00\x00\x00')
+            self.txbus = can.Bus(interface="virtual", loop=loop)
+            self.rxbus = can.Bus(interface="virtual", loop=loop)
+            self.net = canopen.Network(self.txbus, loop=loop)
+            self.net.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
+            self.net.connect()
+            self.emcy = canopen.emcy.EmcyProducer(0x80 + 1)
+            self.emcy.network = self.net
 
-    def test_emcy_producer_reset(self):
-        def check(*args, res):
-            self.emcy.reset(*args)
-            self.check_response(res)
+        def tearDown(self):
+            self.net.disconnect()
+            self.txbus.shutdown()
+            self.rxbus.shutdown()
 
-        check(res=b'\x00\x00\x00\x00\x00\x00\x00\x00')
-        check(3, res=b'\x00\x00\x03\x00\x00\x00\x00\x00')
-        check(3, b"\xaa\xbb", res=b'\x00\x00\x03\xaa\xbb\x00\x00\x00')
+        def check_response(self, expected):
+            msg = self.rxbus.recv(TIMEOUT)  # FIXME: This probably needs to be looked at for async.
+            self.assertIsNotNone(msg)
+            actual = msg.data
+            self.assertEqual(actual, expected)
+
+        async def test_emcy_producer_send(self):
+            def check(*args, res):
+                self.emcy.send(*args)
+                self.check_response(res)
+
+            check(0x2001, res=b'\x01\x20\x00\x00\x00\x00\x00\x00')
+            check(0x2001, 0x2, res=b'\x01\x20\x02\x00\x00\x00\x00\x00')
+            check(0x2001, 0x2, b'\x2a', res=b'\x01\x20\x02\x2a\x00\x00\x00\x00')
+
+        async def test_emcy_producer_reset(self):
+            def check(*args, res):
+                self.emcy.reset(*args)
+                self.check_response(res)
+
+            check(res=b'\x00\x00\x00\x00\x00\x00\x00\x00')
+            check(3, res=b'\x00\x00\x03\x00\x00\x00\x00\x00')
+            check(3, b"\xaa\xbb", res=b'\x00\x00\x03\xaa\xbb\x00\x00\x00')
+
+
+class TestEmcyProducerSync(BaseTests.TestEmcyProducer):
+    use_async = False
+
+
+class TestEmcyProducerAsync(BaseTests.TestEmcyProducer):
+    use_async = True
 
 
 if __name__ == "__main__":

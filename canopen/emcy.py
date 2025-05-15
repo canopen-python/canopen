@@ -1,9 +1,12 @@
+from __future__ import annotations
+import asyncio
 import logging
 import struct
 import threading
 import time
 from typing import Callable, List, Optional
 
+from canopen.async_guard import ensure_not_async
 import canopen.network
 
 
@@ -17,16 +20,20 @@ class EmcyConsumer:
 
     def __init__(self):
         #: Log of all received EMCYs for this node
-        self.log: List["EmcyError"] = []
+        self.log: List[EmcyError] = []
         #: Only active EMCYs. Will be cleared on Error Reset
-        self.active: List["EmcyError"] = []
+        self.active: List[EmcyError] = []
         self.callbacks = []
         self.emcy_received = threading.Condition()
+        self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
 
+    # @callback  # NOTE: called from another thread
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def on_emcy(self, can_id, data, timestamp):
         code, register, data = EMCY_STRUCT.unpack(data)
         entry = EmcyError(code, register, data, timestamp)
 
+        # NOTE: Blocking lock
         with self.emcy_received:
             if code & 0xFF00 == 0:
                 # Error reset
@@ -36,10 +43,10 @@ class EmcyConsumer:
             self.log.append(entry)
             self.emcy_received.notify_all()
 
-        for callback in self.callbacks:
-            callback(entry)
+        # Call all registered callbacks
+        self.network.dispatch_callbacks(self.callbacks, entry)
 
-    def add_callback(self, callback: Callable[["EmcyError"], None]):
+    def add_callback(self, callback: Callable[[EmcyError], None]):
         """Get notified on EMCY messages from this node.
 
         :param callback:
@@ -53,9 +60,10 @@ class EmcyConsumer:
         self.log = []
         self.active = []
 
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def wait(
         self, emcy_code: Optional[int] = None, timeout: float = 10
-    ) -> "EmcyError":
+    ) -> EmcyError:
         """Wait for a new EMCY to arrive.
 
         :param emcy_code: EMCY code to wait for
@@ -65,8 +73,10 @@ class EmcyConsumer:
         """
         end_time = time.time() + timeout
         while True:
+            # NOTE: Blocking lock
             with self.emcy_received:
                 prev_log_size = len(self.log)
+                # NOTE: Blocking call
                 self.emcy_received.wait(timeout)
                 if len(self.log) == prev_log_size:
                     # Resumed due to timeout
@@ -80,6 +90,18 @@ class EmcyConsumer:
                 if emcy_code is None or emcy.code == emcy_code:
                     # This is the one we're interested in
                     return emcy
+
+    async def async_wait(
+        self, emcy_code: Optional[int] = None, timeout: float = 10
+    ) -> EmcyError:
+        """Wait for a new EMCY to arrive.
+
+        :param emcy_code: EMCY code to wait for
+        :param timeout: Max time in seconds to wait
+
+        :return: The EMCY exception object or None if timeout
+        """
+        return await asyncio.to_thread(self.wait, emcy_code, timeout)
 
 
 class EmcyProducer:

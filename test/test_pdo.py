@@ -6,6 +6,7 @@ from .util import SAMPLE_EDS, tmp_file
 
 
 class TestPDO(unittest.TestCase):
+
     def setUp(self):
         node = canopen.Node(1, SAMPLE_EDS)
         pdo = node.pdo.tx[1]

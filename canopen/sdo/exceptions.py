@@ -1,3 +1,5 @@
+from typing import Union
+
 class SdoError(Exception):
     pass
 
@@ -33,23 +35,23 @@ class SdoAbortedError(SdoError):
         0x060A0023: "Resource not available",
         0x08000000: "General error",
         0x08000020: "Data cannot be transferred or stored to the application",
-        0x08000021: (
-            "Data can not be transferred or stored to the application "
-            "because of local control"
-        ),
-        0x08000022: (
-            "Data can not be transferred or stored to the application "
-            "because of the present device state"
-        ),
-        0x08000023: (
-            "Object dictionary dynamic generation fails or no object "
-            "dictionary is present"
-        ),
+        0x08000021: ("Data can not be transferred or stored to the application "
+                     "because of local control"),
+        0x08000022: ("Data can not be transferred or stored to the application "
+                     "because of the present device state"),
+        0x08000023: ("Object dictionary dynamic generation fails or no object "
+                     "dictionary is present"),
         0x08000024: "No data available",
     }
 
-    def __init__(self, code: int):
+    def __init__(self, code: Union[int, str]):
         #: Abort code
+        if isinstance(code, str):
+            try:
+                self.code = self.from_string(code)
+            except ValueError as e:
+                raise ValueError(f"Unknown SDO abort description: {code}") from e
+        else:
         self.code = code
 
     def __str__(self):
@@ -62,8 +64,7 @@ class SdoAbortedError(SdoError):
         """Compare two exception objects based on SDO abort code."""
         return self.code == other.code
 
-    @staticmethod
-    def from_string(text):
+    def from_string(self, text):
         code = list(SdoAbortedError.CODES.keys())[
             list(SdoAbortedError.CODES.values()).index(text)
         ]

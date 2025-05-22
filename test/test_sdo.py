@@ -77,7 +77,6 @@ class TestSDO(unittest.TestCase):
         self.assertSequenceEqual(data, next_data[1])
         self.assertEqual(can_id, 0x602)
         while self.data and self.data[0][0] == RX:
-            # print(" < 0x%03X:%s" % (0x580 + RX, binascii.hexlify(self.data[0][1])))
             self.network.notify(0x582, self.data.pop(0)[1], 0.0)
 
         self.message_sent = True

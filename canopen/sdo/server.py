@@ -9,8 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class SdoBlockException(SdoAbortedError):
-    def __init__(self, code: int):
-        super.__init__(self, code)
+    """ Dedicated SDO Block exception. """
 
 class SdoServer(SdoBase):
     """Creates an SDO server."""
@@ -68,6 +67,14 @@ class SdoServer(SdoBase):
             logger.exception(exc)
 
     def process_block(self, request):
+        """
+        Process a block request, using a state mechanisme from SdoBlock class 
+        to handle the different states of the block transfer.
+
+        :param request:
+            CAN message containing EMCY or SDO request.
+        """
+
         logger.debug('process_block')
         command, _, _, code = SDO_ABORT_STRUCT.unpack_from(request)
         if command == 0x80:
@@ -84,14 +91,12 @@ class SdoServer(SdoBase):
                 logger.debug('BLOCK_STATE_UP_INIT_RESP')
                 #init response was sent, client required to send new request
                 if (command & REQUEST_BLOCK_UPLOAD) != REQUEST_BLOCK_UPLOAD:
-                    raise SdoBlockException(0x05040001)
+                    raise SdoBlockException("Unknown SDO command specified")
                 if (command & START_BLOCK_UPLOAD) != START_BLOCK_UPLOAD:
-                    raise SdoBlockException(0x05040001)
-                # self.sdo_block.update_state(BLOCK_STATE_UP_DATA)
+                    raise SdoBlockException("Unknown SDO command specified")
 
                 # now start blasting data to client from server
                 self.sdo_block.update_state(BLOCK_STATE_UP_DATA)
-                #self.data_succesfull_upload = self.data_uploaded
 
                 blocks = self.sdo_block.get_upload_blocks()
                 for block in blocks:
@@ -101,12 +106,11 @@ class SdoServer(SdoBase):
                 logger.debug('BLOCK_STATE_UP_DATA')
                 command, ackseq, newblk = SDO_BLOCKACK_STRUCT.unpack_from(request)
                 if (command & REQUEST_BLOCK_UPLOAD) != REQUEST_BLOCK_UPLOAD:
-                    raise SdoBlockException(0x05040001)
+                    raise SdoBlockException("Unknown SDO command specified")
                 elif (command & BLOCK_TRANSFER_RESPONSE) != BLOCK_TRANSFER_RESPONSE:
-                    raise SdoBlockException(0x05040001)
+                    raise SdoBlockException("Unknown SDO command specified")
                 elif (ackseq != self.sdo_block.last_seqno):
                     self.sdo_block.data_uploaded = self.sdo_block.data_succesfull_upload
-
 
                 if self.sdo_block.size == self.sdo_block.data_uploaded:
                     logger.debug('BLOCK_STATE_UP_DATA last data')
@@ -131,12 +135,12 @@ class SdoServer(SdoBase):
                 self.sdo_block = None
 
         elif BLOCK_STATE_DOWNLOAD < self.sdo_block.state:
-            logger.debug('BLOCK_STATE_DOWNLOAD')
             # in download state
-            pass
+            logger.debug('BLOCK_STATE_DOWNLOAD')
         else:
             # in neither
-            raise SdoBlockException(0x08000022)
+            raise SdoBlockException("Data can not be transferred or stored to the application "
+                     "because of the present device state")
 
     def init_upload(self, request):
         _, index, subindex = SDO_STRUCT.unpack_from(request)
@@ -188,6 +192,13 @@ class SdoServer(SdoBase):
         self.send_response(response)
 
     def block_upload(self, request):
+        """
+        Process an initial block upload request.
+        Create a CAN response message and update the state of the SDO block.
+        
+        :param request:
+            CAN message containing SDO request.
+        """
         logging.debug('Enter server block upload')
         self.sdo_block = SdoBlock(self._node, request)
 
@@ -314,6 +325,10 @@ class SdoServer(SdoBase):
         return self._node.set_data(index, subindex, data)
 
 class SdoBlock():
+    """
+    SdoBlock class to handle block transfer. It keeps track of the
+    current state and the prepares data to be transferred.
+    """
     state = BLOCK_STATE_NONE
     crc = False
     data_uploaded = 0
@@ -323,7 +338,14 @@ class SdoBlock():
     last_seqno = 0
 
     def __init__(self, node, request, docrc=False):
-
+        """
+        :param node:
+            Node object owning the server
+        :param request:
+            CAN message containing SDO request.
+        :param docrc:
+            If True, CRC is calculated and checked.
+        """
         command, index, subindex = SDO_STRUCT.unpack_from(request)
         # only do crc if crccheck lib is available _and_ if requested
         _req_crc = (command & CRC_SUPPORTED) == CRC_SUPPORTED
@@ -331,8 +353,9 @@ class SdoBlock():
         if (command & SUB_COMMAND_MASK) == INITIATE_BLOCK_TRANSFER:
             self.state = BLOCK_STATE_INIT
         else:
-            raise SdoBlockException(SdoAbortedError.from_string("Unknown SDO command specified"))
+            raise SdoBlockException("Unknown SDO command specified")
 
+        # TODO: CRC of data if requested
         self.crc = CRC_SUPPORTED if (docrc & _req_crc)  else 0
         self._node = node
         self.index = index
@@ -340,24 +363,32 @@ class SdoBlock():
         self.req_blocksize = request[4]
         self.seqno = 0
         if not 1 <= self.req_blocksize <= 127:
-            raise SdoBlockException(SdoAbortedError.from_string("Invalid block size"))
+            raise SdoBlockException("Invalid block size")
 
         self.data = self._node.get_data(index,
                                         subindex,
                                         check_readable=True)
         self.size = len(self.data)
 
-        # TODO: add PST if needed
-        # self.pst = data[5]
-
     def update_state(self, new_state):
+        """
+        Update the state of the SDO block transfer. The state is
+        updated only if the new state is higher than the current
+        state. Otherwise an exception is raised.
+        """
         logging.debug('update_state %X -> %X', self.state, new_state)
         if new_state >= self.state:
             self.state = new_state
         else:
-            raise SdoBlockException(0x08000022)
+            raise SdoBlockException("Data can not be transferred or stored to the application "
+                     "because of the present device state")
 
     def get_upload_blocks(self):
+        """
+        Get the blocks of data to be sent to the client. The blocks are
+        created in a messages list of bytearrays. 
+        """
+
         msgs = []
 
         # seq no 1 - 127, not 0 -..
@@ -387,6 +418,7 @@ class SdoBlock():
         return msgs
 
     def get_data_byte(self):
+        """Get the next byte of data to be sent to the client."""
         if self.data_uploaded < self.size:
             self.data_uploaded += 1
             return self.data[self.data_uploaded-1]

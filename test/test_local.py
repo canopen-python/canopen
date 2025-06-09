@@ -13,10 +13,12 @@ class TestSDO(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.network1 = canopen.Network()
+        cls.network1.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         cls.network1.connect("test", interface="virtual")
         cls.remote_node = cls.network1.add_node(2, SAMPLE_EDS)
 
         cls.network2 = canopen.Network()
+        cls.network2.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         cls.network2.connect("test", interface="virtual")
         cls.local_node = cls.network2.create_node(2, SAMPLE_EDS)
 
@@ -87,7 +89,7 @@ class TestSDO(unittest.TestCase):
     def test_slave_send_heartbeat(self):
         # Setting the heartbeat time should trigger heartbeating
         # to start
-        self.remote_node.sdo["Producer heartbeat time"].raw = 1000
+        self.remote_node.sdo["Producer heartbeat time"].raw = 100
         state = self.remote_node.nmt.wait_for_heartbeat()
         self.local_node.nmt.stop_heartbeat()
         # The NMT master will change the state INITIALISING (0)
@@ -96,7 +98,7 @@ class TestSDO(unittest.TestCase):
 
     def test_nmt_state_initializing_to_preoper(self):
         # Initialize the heartbeat timer
-        self.local_node.sdo["Producer heartbeat time"].raw = 1000
+        self.local_node.sdo["Producer heartbeat time"].raw = 100
         self.local_node.nmt.stop_heartbeat()
         # This transition shall start the heartbeating
         self.local_node.nmt.state = 'INITIALISING'
@@ -176,10 +178,12 @@ class TestPDO(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.network1 = canopen.Network()
+        cls.network1.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         cls.network1.connect("test", interface="virtual")
         cls.remote_node = cls.network1.add_node(2, SAMPLE_EDS)
 
         cls.network2 = canopen.Network()
+        cls.network2.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         cls.network2.connect("test", interface="virtual")
         cls.local_node = cls.network2.create_node(2, SAMPLE_EDS)
 

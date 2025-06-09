@@ -100,12 +100,7 @@ DataType=0x0007
 AccessType=ro
 PDOMapping=0
 
-[1018sub3]
-ParameterName=Revision number
-ObjectType=0x7
-DataType=0x0007
-AccessType=ro
-PDOMapping=0
+; [1018sub3] left out for testing
 
 [1018sub4]
 ParameterName=Serial number
@@ -123,10 +118,61 @@ SupportedObjects=3
 [1003]
 ParameterName=Pre-defined error field
 ObjectType=0x8
-CompactSubObj=255
+SubNumber=9
+
+[1003sub0]
+ParameterName=Number of errors
+ObjectType=0x7
+DataType=0x0005
+AccessType=rw
+DefaultValue=3
+PDOMapping=0
+
+[1003sub1]
+ParameterName=Pre-defined error field_1
+ObjectType=0x7
 DataType=0x0007
 AccessType=ro
+DefaultValue=0
 PDOMapping=0
+
+; [1003sub2] left out for testing
+
+[1003sub3]
+ParameterName=Pre-defined error field_3
+ObjectType=0x7
+DataType=0x0007
+AccessType=ro
+DefaultValue=0
+PDOMapping=0
+
+[1003sub4]
+ParameterName=Pre-defined error field_4
+ObjectType=0x7
+DataType=0x0007
+AccessType=ro
+DefaultValue=0
+PDOMapping=0
+
+[1003sub5]
+ParameterName=Pre-defined error field_5
+ObjectType=0x7
+DataType=0x0007
+AccessType=ro
+DefaultValue=0
+PDOMapping=0
+
+; [1003sub6] left out for testing
+
+[1003sub7]
+ParameterName=Pre-defined error field_7
+ObjectType=0x7
+DataType=0x0007
+AccessType=ro
+DefaultValue=0
+PDOMapping=0
+
+; [1003sub8] left out for testing
 
 [1008]
 ParameterName=Manufacturer device name

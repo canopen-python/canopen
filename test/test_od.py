@@ -261,3 +261,7 @@ class TestArray(unittest.TestCase):
         self.assertEqual(array[1].name, "Test Variable")
         self.assertEqual(array[2].name, "Test Variable 2")
         self.assertEqual(array[3].name, "Test Variable_3")
+
+
+if __name__ == "__main__":
+    unittest.main()

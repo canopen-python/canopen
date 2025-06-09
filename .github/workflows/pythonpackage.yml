@@ -5,9 +5,19 @@ name: Python package
 
 on:
   push:
-    branches: [ "master", "mypy" ]
+    branches:
+    - 'master'
+    - 'mypy'
+    paths-ignore:
+    - 'README.rst'
+    - 'LICENSE.txt'
   pull_request:
-    branches: [ "master", "mypy" ]
+    branches:
+    - 'master'
+    - 'mypy'
+    paths-ignore:
+    - 'README.rst'
+    - 'LICENSE.txt'
 
 jobs:
   build:
@@ -20,19 +30,19 @@ jobs:
         features: ['', '[db_export]']
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+        cache-dependency-path: |
+          'pyproject.toml'
+          'requirements-dev.txt'
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pytest pytest-cov
-        pip install -e '.${{ matrix.features }}'
+      run: python3 -m pip install -e '.${{ matrix.features }}' -r requirements-dev.txt
     - name: Test with pytest
-      run: |
-        pytest -v --cov=canopen --cov-report=xml --cov-branch
+      run: pytest -v --cov=canopen --cov-report=xml --cov-branch
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4
       with:
@@ -53,18 +63,3 @@ jobs:
       run: python3 -m pip install -r doc/requirements.txt -e .
     - name: Build docs
       run: make -C doc html
-
-  mypy:
-    continue-on-error: true
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-python@v5
-      with:
-        python-version: 3.12
-        cache: pip
-        cache-dependency-path: |
-          'pyproject.toml'
-          'requirements-dev.txt'
-    - run: pip install -r requirements-dev.txt -e .
-    - run: mypy --config-file pyproject.toml .

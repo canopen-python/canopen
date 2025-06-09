@@ -10,6 +10,44 @@ TX = 1
 RX = 2
 
 
+class TestSDOVariables(unittest.TestCase):
+    """Some basic assumptions on the behavior of SDO variable objects.
+
+    Mostly what is stated in the API docs.
+    """
+
+    def setUp(self):
+        node = canopen.LocalNode(1, SAMPLE_EDS)
+        self.sdo_node = node.sdo
+
+    def test_record_iter_length(self):
+        """Assume the "highest subindex supported" entry is not counted.
+
+        Sub-objects without an OD entry should be skipped as well.
+        """
+        record = self.sdo_node[0x1018]
+        subs = sum(1 for _ in iter(record))
+        self.assertEqual(len(record), 3)
+        self.assertEqual(subs, 3)
+
+    def test_array_iter_length(self):
+        """Assume the "highest subindex supported" entry is not counted."""
+        array = self.sdo_node[0x1003]
+        subs = sum(1 for _ in iter(array))
+        self.assertEqual(len(array), 3)
+        self.assertEqual(subs, 3)
+        # Simulate more entries getting added dynamically
+        array[0].set_data(b'\x08')
+        subs = sum(1 for _ in iter(array))
+        self.assertEqual(subs, 8)
+
+    def test_array_members_dynamic(self):
+        """Check if sub-objects missing from OD entry are generated dynamically."""
+        array = self.sdo_node[0x1003]
+        for var in array.values():
+            self.assertIsInstance(var, canopen.sdo.SdoVariable)
+
+
 class TestSDO(unittest.TestCase):
     """
     Test SDO traffic by example. Most are taken from
@@ -31,6 +69,7 @@ class TestSDO(unittest.TestCase):
 
     def setUp(self):
         network = canopen.Network()
+        network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         network.send_message = self._send_message
         node = network.add_node(2, SAMPLE_EDS)
         node.sdo.RESPONSE_TIMEOUT = 0.01
@@ -181,6 +220,7 @@ class TestSDOClientDatatypes(unittest.TestCase):
 
     def setUp(self):
         network = canopen.Network()
+        network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         network.send_message = self._send_message
         node = network.add_node(2, DATATYPES_EDS)
         node.sdo.RESPONSE_TIMEOUT = 0.01

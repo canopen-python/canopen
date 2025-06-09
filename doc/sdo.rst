@@ -189,7 +189,10 @@ API
 
     .. describe:: iter(record)
 
-       Return an iterator over the subindexes from the record.
+       Return an iterator over the subindexes from the record.  Only those with
+       a matching object dictionary entry are considered.  The "highest
+       subindex" entry is officially not part of the data and thus skipped in
+       the yielded values.
 
     .. describe:: subindex in record
 
@@ -198,7 +201,9 @@ API
 
     .. describe:: len(record)
 
-       Return the number of subindexes in the record.
+       Return the number of subindexes in the record, not counting the "highest
+       subindex" entry itself.  Only those with a matching object dictionary
+       entry are considered.
 
     .. method:: values()
 
@@ -220,25 +225,27 @@ API
     .. describe:: iter(array)
 
        Return an iterator over the subindexes from the array.
-       This will make a SDO read operation on subindex 0 in order to get the
-       actual length of the array.
+       This will make an SDO read operation on subindex 0 in order to get the
+       actual length of the array.  This "highest subindex" entry is officially
+       not part of the data and thus skipped in the yielded values.
 
     .. describe:: subindex in array
 
        Return ``True`` if the subindex (as int) or name (as string) exists in
        the array.
-       This will make a SDO read operation on subindex 0 in order to get the
+       This will make an SDO read operation on subindex 0 in order to get the
        actual length of the array.
 
     .. describe:: len(array)
 
-       Return the length of the array.
-       This will make a SDO read operation on subindex 0.
+       Return the length of the array, not counting the "highest subindex" entry
+       itself.
+       This will make an SDO read operation on subindex 0.
 
     .. method:: values()
 
        Return a list of :class:`canopen.sdo.SdoVariable` in the array.
-       This will make a SDO read operation on subindex 0 in order to get the
+       This will make an SDO read operation on subindex 0 in order to get the
        actual length of the array.
 
 

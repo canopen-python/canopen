@@ -25,6 +25,9 @@ Callback = Callable[[int, bytearray, float], None]
 class Network(MutableMapping):
     """Representation of one CAN bus containing one or more nodes."""
 
+    NOTIFIER_CYCLE: float = 1.0  #: Maximum waiting time for one notifier iteration.
+    NOTIFIER_SHUTDOWN_TIMEOUT: float = 5.0  #: Maximum waiting time to stop notifiers.
+
     def __init__(self, bus: Optional[can.BusABC] = None):
         """
         :param can.BusABC bus:
@@ -38,7 +41,7 @@ class Network(MutableMapping):
         #: List of :class:`can.Listener` objects.
         #: Includes at least MessageListener.
         self.listeners = [MessageListener(self)]
-        self.notifier = None
+        self.notifier: Optional[can.Notifier] = None
         self.nodes: Dict[int, Union[RemoteNode, LocalNode]] = {}
         self.subscribers: Dict[int, List[Callback]] = {}
         self.send_lock = threading.Lock()
@@ -105,7 +108,7 @@ class Network(MutableMapping):
         if self.bus is None:
             self.bus = can.Bus(*args, **kwargs)
         logger.info("Connected to '%s'", self.bus.channel_info)
-        self.notifier = can.Notifier(self.bus, self.listeners, 1)
+        self.notifier = can.Notifier(self.bus, self.listeners, self.NOTIFIER_CYCLE)
         return self
 
     def disconnect(self) -> None:
@@ -117,7 +120,7 @@ class Network(MutableMapping):
             if hasattr(node, "pdo"):
                 node.pdo.stop()
         if self.notifier is not None:
-            self.notifier.stop()
+            self.notifier.stop(self.NOTIFIER_SHUTDOWN_TIMEOUT)
         if self.bus is not None:
             self.bus.shutdown()
         self.bus = None
@@ -308,7 +311,6 @@ class PeriodicMessageTask:
         self.msg = can.Message(is_extended_id=can_id > 0x7FF,
                                arbitration_id=can_id,
                                data=data, is_remote_frame=remote)
-        self._task = None
         self._start()
 
     def _start(self):

@@ -53,7 +53,7 @@ it in `develop mode`_::
 
 Unit tests can be run using the pytest_ framework::
 
-    $ pip install pytest
+    $ pip install -r requirements-dev.txt
     $ pytest -v
 
 You can also use :mod:`unittest` standard library module::

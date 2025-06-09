@@ -31,6 +31,8 @@ mkdir $package_dir/DEBIAN
 cat > $package_dir/DEBIAN/control <<control_end
 Package: $pkgname
 Version: $version
+Section: python
+Priority: optional
 Architecture: $arch
 Maintainer: $maintainer
 Description: $description

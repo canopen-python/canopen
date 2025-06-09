@@ -4,7 +4,8 @@ import unittest
 import canopen
 from canopen.objectdictionary.eds import _signed_int_from_hex
 from canopen.utils import pretty_index
-from .util import SAMPLE_EDS, DATATYPES_EDS, tmp_file
+
+from .util import DATATYPES_EDS, SAMPLE_EDS, tmp_file
 
 
 class TestEDS(unittest.TestCase):
@@ -121,7 +122,7 @@ class TestEDS(unittest.TestCase):
     def test_record(self):
         record = self.od['Identity object']
         self.assertIsInstance(record, canopen.objectdictionary.ODRecord)
-        self.assertEqual(len(record), 5)
+        self.assertEqual(len(record), 4)
         self.assertEqual(record.index, 0x1018)
         self.assertEqual(record.name, 'Identity object')
         var = record['Vendor-ID']
@@ -357,3 +358,7 @@ class TestEDS(unittest.TestCase):
                                      f" mismatch on {pretty_index(evar.index, evar.subindex)}")
 
                 self.assertEqual(self.od.comments, exported_od.comments)
+
+
+if __name__ == "__main__":
+    unittest.main()

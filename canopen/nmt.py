@@ -1,13 +1,13 @@
-import threading
 import logging
 import struct
+import threading
 import time
-from collections.abc import Callable
-from typing import Dict, Final, List, Optional, TYPE_CHECKING
+from typing import Callable, Dict, Final, List, Optional, TYPE_CHECKING
 
+import canopen.network
 
 if TYPE_CHECKING:
-    from canopen import Network
+    from canopen.network import PeriodicMessageTask
 
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ class NmtBase:
 
     def __init__(self, node_id: int):
         self.id = node_id
-        self.network: Optional[Network] = None
+        self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
         self._state = 0
 
     def on_command(self, can_id, data, timestamp):
@@ -113,7 +113,7 @@ class NmtMaster(NmtBase):
     def __init__(self, node_id: int):
         super(NmtMaster, self).__init__(node_id)
         self._state_received = None
-        self._node_guarding_producer = None
+        self._node_guarding_producer: Optional[PeriodicMessageTask] = None
         #: Timestamp of last heartbeat message
         self.timestamp: Optional[float] = None
         self.state_update = threading.Condition()
@@ -206,7 +206,7 @@ class NmtSlave(NmtBase):
 
     def __init__(self, node_id: int, local_node):
         super(NmtSlave, self).__init__(node_id)
-        self._send_task = None
+        self._send_task: Optional[PeriodicMessageTask] = None
         self._heartbeat_time_ms = 0
         self._local_node = local_node
 

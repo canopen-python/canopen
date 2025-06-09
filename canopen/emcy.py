@@ -1,8 +1,11 @@
-import struct
 import logging
+import struct
 import threading
 import time
 from typing import Callable, List, Optional
+
+import canopen.network
+
 
 # Error code, error register, vendor specific data
 EMCY_STRUCT = struct.Struct("<HB5s")
@@ -82,7 +85,7 @@ class EmcyConsumer:
 class EmcyProducer:
 
     def __init__(self, cob_id: int):
-        self.network = None
+        self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
         self.cob_id = cob_id
 
     def send(self, code: int, register: int = 0, data: bytes = b""):

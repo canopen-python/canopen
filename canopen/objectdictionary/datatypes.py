@@ -1,5 +1,6 @@
 import struct
 
+
 BOOLEAN = 0x1
 INTEGER8 = 0x2
 INTEGER16 = 0x3

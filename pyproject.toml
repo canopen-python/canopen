@@ -33,7 +33,7 @@ db_export = [
 
 [project.urls]
 documentation = "https://canopen.readthedocs.io/en/stable/"
-repository = "https://github.com/christiansandberg/canopen"
+repository = "https://github.com/canopen-python/canopen"
 
 [tool.setuptools]
 packages = ["canopen"]

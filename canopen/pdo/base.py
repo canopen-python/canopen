@@ -1,20 +1,22 @@
 from __future__ import annotations
-import threading
-import math
-from typing import Callable, Dict, Iterator, List, Optional, Union, TYPE_CHECKING
-from collections.abc import Mapping
-import logging
-import binascii
 
-from canopen.sdo import SdoAbortedError
+import binascii
+import logging
+import math
+import threading
+from collections.abc import Mapping
+from typing import Callable, Dict, Iterator, List, Optional, TYPE_CHECKING, Union
+
+import canopen.network
 from canopen import objectdictionary
 from canopen import variable
+from canopen.sdo import SdoAbortedError
 
 if TYPE_CHECKING:
-    from canopen.network import Network
     from canopen import LocalNode, RemoteNode
     from canopen.pdo import RPDO, TPDO
     from canopen.sdo import SdoRecord
+
 
 PDO_NOT_VALID = 1 << 31
 RTR_NOT_ALLOWED = 1 << 30
@@ -30,7 +32,7 @@ class PdoBase(Mapping):
     """
 
     def __init__(self, node: Union[LocalNode, RemoteNode]):
-        self.network: Optional[Network] = None
+        self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
         self.map: Optional[PdoMaps] = None
         self.node: Union[LocalNode, RemoteNode] = node
 

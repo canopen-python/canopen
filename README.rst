@@ -42,18 +42,18 @@ Install from PyPI_ using :program:`pip`::
 
 Install from latest ``master`` on GitHub::
 
-    $ pip install https://github.com/christiansandberg/canopen/archive/master.zip
+    $ pip install https://github.com/canopen-python/canopen/archive/master.zip
 
 If you want to be able to change the code while using it, clone it then install
 it in `develop mode`_::
 
-    $ git clone https://github.com/christiansandberg/canopen.git
+    $ git clone https://github.com/canopen-python/canopen.git
     $ cd canopen
     $ pip install -e .
 
 Unit tests can be run using the pytest_ framework::
 
-    $ pip install pytest
+    $ pip install -r requirements-dev.txt
     $ pytest -v
 
 You can also use :mod:`unittest` standard library module::

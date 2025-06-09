@@ -1,9 +1,10 @@
-import canopen
-import sys
 import os
+import sys
+import time
 import traceback
 
-import time
+import canopen
+
 
 try:
 

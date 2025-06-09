@@ -1,11 +1,17 @@
+from __future__ import annotations
+
 import copy
 import logging
 import re
 from configparser import NoOptionError, NoSectionError, RawConfigParser
+from typing import TYPE_CHECKING
 
 from canopen import objectdictionary
 from canopen.objectdictionary import ObjectDictionary, datatypes
 from canopen.sdo import SdoClient
+
+if TYPE_CHECKING:
+    import canopen.network
 
 
 logger = logging.getLogger(__name__)
@@ -173,7 +179,7 @@ def import_eds(source, node_id):
     return od
 
 
-def import_from_node(node_id, network):
+def import_from_node(node_id: int, network: canopen.network.Network):
     """ Download the configuration from the remote node
     :param int node_id: Identifier of the node
     :param network: network object

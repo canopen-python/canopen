@@ -2,6 +2,7 @@ import threading
 import unittest
 
 import can
+
 import canopen
 
 

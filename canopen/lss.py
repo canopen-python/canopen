@@ -1,7 +1,10 @@
 import logging
-import time
-import struct
 import queue
+import struct
+import time
+
+import canopen.network
+
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +81,8 @@ class LssMaster:
     #: Max time in seconds to wait for response from server
     RESPONSE_TIMEOUT = 0.5
 
-    def __init__(self):
-        self.network = None
+    def __init__(self) -> None:
+        self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
         self._node_id = 0
         self._data = None
         self.responses = queue.Queue()

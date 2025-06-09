@@ -4,7 +4,8 @@ import unittest
 import canopen
 from canopen.objectdictionary.eds import _signed_int_from_hex
 from canopen.utils import pretty_index
-from .util import SAMPLE_EDS, DATATYPES_EDS, tmp_file
+
+from .util import DATATYPES_EDS, SAMPLE_EDS, tmp_file
 
 
 class TestEDS(unittest.TestCase):

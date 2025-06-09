@@ -1,6 +1,7 @@
 import unittest
 
 import canopen
+
 from .util import SAMPLE_EDS, tmp_file
 
 

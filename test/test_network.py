@@ -1,10 +1,11 @@
 import logging
-import threading
 import time
 import unittest
 
-import canopen
 import can
+
+import canopen
+
 from .util import SAMPLE_EDS
 
 

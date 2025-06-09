@@ -3,8 +3,10 @@ import time
 import unittest
 
 import can
+
 import canopen
-from canopen.nmt import COMMAND_TO_STATE, NMT_STATES, NMT_COMMANDS, NmtError
+from canopen.nmt import COMMAND_TO_STATE, NMT_COMMANDS, NMT_STATES, NmtError
+
 from .util import SAMPLE_EDS
 
 

@@ -1,8 +1,10 @@
-import threading
 import logging
 import struct
+import threading
 import time
 from typing import Callable, Optional, TYPE_CHECKING
+
+import canopen.network
 
 if TYPE_CHECKING:
     from canopen.network import PeriodicMessageTask
@@ -49,7 +51,7 @@ class NmtBase:
 
     def __init__(self, node_id: int):
         self.id = node_id
-        self.network = None
+        self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
         self._state = 0
 
     def on_command(self, can_id, data, timestamp):

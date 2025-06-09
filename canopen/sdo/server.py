@@ -4,6 +4,7 @@ from canopen.sdo.base import SdoBase
 from canopen.sdo.constants import *
 from canopen.sdo.exceptions import *
 
+
 logger = logging.getLogger(__name__)
 
 

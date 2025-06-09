@@ -1,21 +1,21 @@
 from __future__ import annotations
 
-from collections.abc import MutableMapping
 import logging
 import threading
-from typing import Callable, Dict, Iterator, List, Optional, Union
+from collections.abc import MutableMapping
+from typing import Callable, Dict, Final, Iterator, List, Optional, Union
 
 import can
 from can import Listener
-from can import CanError
 
-from canopen.node import RemoteNode, LocalNode
+from canopen.lss import LssMaster
+from canopen.nmt import NmtMaster
+from canopen.node import LocalNode, RemoteNode
+from canopen.objectdictionary import ObjectDictionary
+from canopen.objectdictionary.eds import import_from_node
 from canopen.sync import SyncProducer
 from canopen.timestamp import TimeProducer
-from canopen.nmt import NmtMaster
-from canopen.lss import LssMaster
-from canopen.objectdictionary.eds import import_from_node
-from canopen.objectdictionary import ObjectDictionary
+
 
 logger = logging.getLogger(__name__)
 
@@ -75,10 +75,10 @@ class Network(MutableMapping):
             If given, remove only this callback.  Otherwise all callbacks for
             the CAN ID.
         """
-        if callback is None:
-            del self.subscribers[can_id]
-        else:
+        if callback is not None:
             self.subscribers[can_id].remove(callback)
+        if not self.subscribers[can_id] or callback is None:
+            del self.subscribers[can_id]
 
     def connect(self, *args, **kwargs) -> Network:
         """Connect to CAN bus using python-can.
@@ -280,6 +280,21 @@ class Network(MutableMapping):
 
     def __len__(self) -> int:
         return len(self.nodes)
+
+
+class _UninitializedNetwork(Network):
+    """Empty network implementation as a placeholder before actual initialization."""
+
+    def __init__(self, bus: Optional[can.BusABC] = None):
+        """Do not initialize attributes, by skipping the parent constructor."""
+
+    def __getattribute__(self, name):
+        raise RuntimeError("No actual Network object was assigned, "
+                           "try associating to a real network first.")
+
+
+#: Singleton instance
+_UNINITIALIZED_NETWORK: Final[Network] = _UninitializedNetwork()
 
 
 class PeriodicMessageTask:

@@ -2,6 +2,7 @@ import time
 import unittest
 
 import canopen
+
 from .util import SAMPLE_EDS
 
 

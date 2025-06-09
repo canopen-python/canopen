@@ -1,15 +1,17 @@
-import struct
-import logging
 import io
-import time
+import logging
 import queue
+import struct
+import time
 
-from canopen.network import CanError
+from can import CanError
+
 from canopen import objectdictionary
 from canopen.sdo.base import SdoBase
-from canopen.utils import pretty_index
 from canopen.sdo.constants import *
 from canopen.sdo.exceptions import *
+from canopen.utils import pretty_index
+
 
 logger = logging.getLogger(__name__)
 
@@ -351,7 +353,7 @@ class WritableStream(io.RawIOBase):
         self._exp_header = None
         self._done = False
 
-        if size is None or size > 4 or force_segment:
+        if size is None or size < 1 or size > 4 or force_segment:
             # Initiate segmented download
             request = bytearray(8)
             command = REQUEST_DOWNLOAD

@@ -7,6 +7,7 @@ from canopen.node import RemoteNode
 from canopen.pdo import PdoMap
 from canopen.sdo import SdoCommunicationError
 
+
 logger = logging.getLogger(__name__)
 
 

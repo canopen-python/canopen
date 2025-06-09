@@ -1,6 +1,7 @@
-import time
 import struct
+import time
 from typing import Optional
+
 
 # 1 Jan 1984
 OFFSET = 441763200

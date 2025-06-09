@@ -4,6 +4,7 @@ import unittest
 from contextlib import contextmanager
 
 import can
+
 import canopen
 from canopen.emcy import EmcyError
 

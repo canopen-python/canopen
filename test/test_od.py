@@ -1,4 +1,5 @@
 import unittest
+
 from canopen import objectdictionary as od
 
 

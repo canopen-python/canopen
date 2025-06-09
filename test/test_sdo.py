@@ -3,7 +3,8 @@ import unittest
 import canopen
 import canopen.objectdictionary.datatypes as dt
 from canopen.objectdictionary import ODVariable
-from .util import SAMPLE_EDS, DATATYPES_EDS
+
+from .util import DATATYPES_EDS, SAMPLE_EDS
 
 
 TX = 1
@@ -67,6 +68,8 @@ class TestSDO(unittest.TestCase):
         while self.data and self.data[0][0] == RX:
             self.network.notify(0x582, self.data.pop(0)[1], 0.0)
 
+        self.message_sent = True
+
     def setUp(self):
         network = canopen.Network()
         network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
@@ -74,6 +77,8 @@ class TestSDO(unittest.TestCase):
         node = network.add_node(2, SAMPLE_EDS)
         node.sdo.RESPONSE_TIMEOUT = 0.01
         self.network = network
+
+        self.message_sent = False
 
     def test_expedited_upload(self):
         self.data = [
@@ -90,6 +95,7 @@ class TestSDO(unittest.TestCase):
         ]
         trans_type = self.network[2].sdo[0x1400]['Transmission type RPDO 1'].raw
         self.assertEqual(trans_type, 254)
+        self.assertTrue(self.message_sent)
 
     def test_size_not_specified(self):
         self.data = [
@@ -99,6 +105,7 @@ class TestSDO(unittest.TestCase):
         # Make sure the size of the data is 1 byte
         data = self.network[2].sdo.upload(0x1400, 2)
         self.assertEqual(data, b'\xfe')
+        self.assertTrue(self.message_sent)
 
     def test_expedited_download(self):
         self.data = [
@@ -106,6 +113,7 @@ class TestSDO(unittest.TestCase):
             (RX, b'\x60\x17\x10\x00\x00\x00\x00\x00')
         ]
         self.network[2].sdo[0x1017].raw = 4000
+        self.assertTrue(self.message_sent)
 
     def test_segmented_upload(self):
         self.data = [
@@ -151,6 +159,16 @@ class TestSDO(unittest.TestCase):
         with self.network[2].sdo['Writable string'].open(
             'wb', size=len(data), block_transfer=True) as fp:
             fp.write(data)
+
+    def test_segmented_download_zero_length(self):
+        self.data = [
+            (TX, b'\x21\x00\x20\x00\x00\x00\x00\x00'),
+            (RX, b'\x60\x00\x20\x00\x00\x00\x00\x00'),
+            (TX, b'\x0F\x00\x00\x00\x00\x00\x00\x00'),
+            (RX, b'\x20\x00\x00\x00\x00\x00\x00\x00'),
+        ]
+        self.network[2].sdo[0x2000].raw = ""
+        self.assertTrue(self.message_sent)
 
     def test_block_upload(self):
         self.data = [

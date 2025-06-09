@@ -1,11 +1,12 @@
 import copy
 import logging
 import re
-from configparser import RawConfigParser, NoOptionError, NoSectionError
+from configparser import NoOptionError, NoSectionError, RawConfigParser
 
 from canopen import objectdictionary
 from canopen.objectdictionary import ObjectDictionary, datatypes
 from canopen.sdo import SdoClient
+
 
 logger = logging.getLogger(__name__)
 

@@ -1,16 +1,18 @@
 """
 Object Dictionary module
 """
+
 from __future__ import annotations
 
-import struct
-from typing import Dict, Iterator, List, Optional, TextIO, Union
-from collections.abc import MutableMapping, Mapping
 import logging
+import struct
+from collections.abc import Mapping, MutableMapping
+from typing import Dict, Iterator, List, Optional, TextIO, Union
 
 from canopen.objectdictionary.datatypes import *
 from canopen.objectdictionary.datatypes import IntegerN, UnsignedN
 from canopen.utils import pretty_index
+
 
 logger = logging.getLogger(__name__)
 

@@ -171,9 +171,7 @@ class TestSDO(unittest.TestCase):
         self.assertEqual(data, 'Tiny Node - Mega Domains !')
 
     def test_sdo_block_upload_retransmit(self):
-        """Send 'the crazy fox jumps over the lazy dog\n' multiple times 
-        and trigger a retransmit by only validating a block partially.
-        """
+        """Trigger a retransmit by only validating a block partially."""
         self.data = [
             (TX, b"\xa4\x08\x10\x00\x7f\x00\x00\x00"),
             (RX, b"\xc4\x08\x10\x00\x00\x00\x00\x00"),

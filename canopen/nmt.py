@@ -145,7 +145,6 @@ class NmtMaster(NmtBase):
         super(NmtMaster, self).send_command(code)
         logger.info(
             "Sending NMT command 0x%X to node %d", code, self.id)
-        assert self.network is not None
         self.network.send_message(0, [code, self.id])
 
     def wait_for_heartbeat(self, timeout: float = 10):
@@ -189,7 +188,6 @@ class NmtMaster(NmtBase):
         """
         if self._node_guarding_producer:
             self.stop_node_guarding()
-        assert self.network is not None
         self._node_guarding_producer = self.network.send_periodic(0x700 + self.id, None, period, True)
 
     def stop_node_guarding(self):
@@ -225,7 +223,6 @@ class NmtSlave(NmtBase):
 
         if self._state == 0:
             logger.info("Sending boot-up message")
-            assert self.network is not None
             self.network.send_message(0x700 + self.id, [0])
 
         # The heartbeat service should start on the transition
@@ -256,7 +253,6 @@ class NmtSlave(NmtBase):
         self.stop_heartbeat()
         if heartbeat_time_ms > 0:
             logger.info("Start the heartbeat timer, interval is %d ms", self._heartbeat_time_ms)
-            assert self.network is not None
             self._send_task = self.network.send_periodic(
                 0x700 + self.id, [self._state], heartbeat_time_ms / 1000.0)
 

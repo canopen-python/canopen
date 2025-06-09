@@ -471,10 +471,9 @@ class TestSDO(unittest.TestCase):
             (RX, b'\xc9\x3b\x49\x00\x00\x00\x00\x00'),
             (TX, b'\xa1\x00\x00\x00\x00\x00\x00\x00'), # --> Transfer ends without issues
         ]
-        data = []
         with self.network[2].sdo[0x1008].open('r', block_transfer=True) as fp:
             data = fp.read()
-        assert data == 39 * "the crazy fox jumps over the lazy dog\n"
+        self.assertEqual(data, 39 * 'the crazy fox jumps over the lazy dog\n')
 
     def test_writable_file(self):
         self.data = [

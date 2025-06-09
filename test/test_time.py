@@ -1,7 +1,7 @@
-import unittest
-from unittest.mock import patch
 import time
+import unittest
 from datetime import datetime
+from unittest.mock import patch
 
 import canopen
 import canopen.timestamp
@@ -16,7 +16,9 @@ class TestTime(unittest.TestCase):
         producer = canopen.timestamp.TimeProducer(network)
 
         # Test that the epoch is correct
-        epoch = datetime.strptime("1984-01-01 00:00:00 +0000", "%Y-%m-%d %H:%M:%S %z").timestamp()
+        epoch = datetime.strptime(
+            "1984-01-01 00:00:00 +0000", "%Y-%m-%d %H:%M:%S %z"
+        ).timestamp()
         self.assertEqual(int(epoch), canopen.timestamp.OFFSET)
 
         current = time.time()
@@ -44,6 +46,7 @@ class TestTime(unittest.TestCase):
             self.assertEqual(ms, int((current_in_epoch % canopen.timestamp.ONE_DAY) * 1000))
 
         network.disconnect()
+
 
 if __name__ == "__main__":
     unittest.main()

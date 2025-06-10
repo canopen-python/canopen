@@ -52,7 +52,7 @@ class SdoAbortedError(SdoError):
             except ValueError as e:
                 raise ValueError(f"Unknown SDO abort description: {code}") from e
         else:
-        self.code = code
+            self.code = code
 
     def __str__(self):
         text = f"Code 0x{self.code:08X}"

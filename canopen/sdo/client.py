@@ -561,7 +561,7 @@ class BlockUploadStream(io.RawIOBase):
             response = self.sdo_client.read_response()
             res_command, = struct.unpack_from("B", response)
             seqno = res_command & 0x7F
-            if seqno == 1:
+            if seqno == self._ackseq + 1:
                 # We should be back in sync
                 self._ackseq = seqno
                 return response
@@ -575,8 +575,7 @@ class BlockUploadStream(io.RawIOBase):
         request[1] = self._ackseq
         request[2] = self.blksize
         self.sdo_client.send_request(request)
-        if self._ackseq == self.blksize:
-            self._ackseq = 0
+        self._ackseq = 0
 
     def _end_upload(self):
         response = self.sdo_client.read_response()

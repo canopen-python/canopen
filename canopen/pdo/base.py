@@ -425,8 +425,9 @@ class PdoMap:
             # mappings for an invalid object 0x0000:00 to overwrite any
             # excess entries with all-zeros.
             self._fill_map(self.map_array[0].raw)
-        subindex = 1
-        for var in self.map:
+        for subindex, var in enumerate(self.map, start=1):
+            if not var.od.writable:
+                continue
             logger.info("Writing %s (0x%04X:%02X, %d bits) to PDO map",
                         var.name, var.index, var.subindex, var.length)
             if getattr(self.pdo_node.node, "curtis_hack", False):
@@ -438,7 +439,6 @@ class PdoMap:
                 self.map_array[subindex].raw = (var.index << 16 |
                                                 var.subindex << 8 |
                                                 var.length)
-            subindex += 1
         try:
             self.map_array[0].raw = len(self.map)
         except SdoAbortedError as e:

@@ -34,16 +34,13 @@ class TestTime(unittest.TestCase):
             self.assertEqual(days, int(current_in_epoch) // canopen.timestamp.ONE_DAY)
             self.assertEqual(ms, int((current_in_epoch % canopen.timestamp.ONE_DAY) * 1000))
 
-            # Test providing a timestamp
-            faketime = 1_927_999_438  # 2031-02-04 20:23:58
+            # Provide a specific time to verify the proper encoding
+            faketime = 1_927_999_438  # 2031-02-04 19:23:58
             producer.transmit(faketime)
             msg = network.bus.recv(1)
             self.assertEqual(msg.arbitration_id, 0x100)
             self.assertEqual(msg.dlc, 6)
-            ms, days = canopen.timestamp.TIME_OF_DAY_STRUCT.unpack(msg.data)
-            current_in_epoch = faketime - epoch
-            self.assertEqual(days, int(current_in_epoch) // canopen.timestamp.ONE_DAY)
-            self.assertEqual(ms, int((current_in_epoch % canopen.timestamp.ONE_DAY) * 1000))
+            self.assertEqual(msg.data, b"\xb0\xa4\x29\x04\x31\x43")
 
         network.disconnect()
 

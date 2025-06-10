@@ -244,7 +244,7 @@ class TestSDO(unittest.TestCase):
             (RX, b'\x31\x79\x20\x64\x6f\x67\x0a\x74'),
             (RX, b'\x32\x68\x65\x20\x63\x72\x61\x7a'),
             (RX, b'\x34\x79\x20\x66\x6f\x78\x20\x6a'),  # --> Wrong seqno (x34 instead of x33)
-            (RX, b'\x34\x75\x6d\x70\x73\x20\x6f\x76'),  # All the following frames until end of block
+            (RX, b'\x33\x75\x6d\x70\x73\x20\x6f\x76'),  # All the following frames until end of block
             (RX, b'\x35\x65\x72\x20\x74\x68\x65\x20'),  # will be ignored by the client and should be 
             (RX, b'\x36\x6c\x61\x7a\x79\x20\x64\x6f'),  # resent by server.
             (RX, b'\x37\x67\x0a\x74\x68\x65\x20\x63'),  

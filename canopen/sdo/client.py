@@ -353,7 +353,7 @@ class WritableStream(io.RawIOBase):
         self._exp_header = None
         self._done = False
 
-        if size is None or size > 4 or force_segment:
+        if size is None or size < 1 or size > 4 or force_segment:
             # Initiate segmented download
             request = bytearray(8)
             command = REQUEST_DOWNLOAD

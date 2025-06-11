@@ -530,6 +530,7 @@ class BlockUploadStream(io.RawIOBase):
         if seqno == self._ackseq + 1:
             self._ackseq = seqno
         else:
+            logger.debug('Wrong seqno')
             # Wrong sequence number
             response = self._retransmit()
             res_command, = struct.unpack_from("B", response)

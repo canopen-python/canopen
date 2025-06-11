@@ -66,7 +66,11 @@ class SdoServer(SdoBase):
 
         data = self._node.get_data(index, subindex, check_readable=True)
         size = len(data)
-        if size <= 4:
+        if size == 0:
+            logger.info("No content to upload for 0x%04X:%02X", index, subindex)
+            self.abort(0x0800_0024)
+            return
+        elif size <= 4:
             logger.info("Expedited upload for 0x%04X:%02X", index, subindex)
             res_command |= EXPEDITED
             res_command |= (4 - size) << 2

@@ -62,6 +62,13 @@ class TestSDO(unittest.TestCase):
         sampling_rate = self.remote_node.sdo["Sensor Sampling Rate (Hz)"].raw
         self.assertAlmostEqual(sampling_rate, 5.2, places=2)
 
+    def test_upload_zero_length(self):
+        self.local_node.sdo["Manufacturer device name"].raw = b""
+        with self.assertRaises(canopen.SdoAbortedError) as error:
+            self.remote_node.sdo["Manufacturer device name"].data
+        # Should be No data available
+        self.assertEqual(error.exception.code, 0x0800_0024)
+
     def test_segmented_upload(self):
         self.local_node.sdo["Manufacturer device name"].raw = "Some cool device"
         device_name = self.remote_node.sdo["Manufacturer device name"].data

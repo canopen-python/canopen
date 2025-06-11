@@ -393,7 +393,8 @@ class ODVariable:
         if self.data_type in self.STRUCT_TYPES:
             return self.STRUCT_TYPES[self.data_type].size * 8
         else:
-            return 8
+            # FIXME: Temporary fix for trucated 24-bit integers
+            return 64
 
     @property
     def writable(self) -> bool:

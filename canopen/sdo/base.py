@@ -158,7 +158,7 @@ class SdoVariable(variable.Variable):
             var_size = len(self.od) // 8
             if response_size is None or var_size < response_size:
                 # Truncate the data to specified size
-                data = data[0:var_size]
+                data = data[:var_size]
         return data
 
     def set_data(self, data: bytes):

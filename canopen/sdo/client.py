@@ -126,9 +126,7 @@ class SdoClient(SdoBase):
         var = self.od.get_variable(index, subindex)
         if var is not None:
             # Found a matching variable in OD
-            # If this is a data type (string, domain etc) the size is
-            # unknown anyway so keep the data as is
-            if var.data_type not in objectdictionary.DATA_TYPES:
+            if var.fixed_size:
                 # Get the size in bytes for this variable
                 var_size = len(var) // 8
                 if response_size is None or var_size < response_size:

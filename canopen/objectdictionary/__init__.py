@@ -419,6 +419,12 @@ class ODVariable:
         """
         self.bit_definitions[name] = bits
 
+    @property
+    def fixed_size(self) -> bool:
+        """Indicate whether the amount of needed data is known in advance."""
+        # Only for types which we parse using a structure.
+        return self.data_type in self.STRUCT_TYPES
+
     def decode_raw(self, data: bytes) -> Union[int, float, str, bytes, bytearray]:
         if self.data_type == VISIBLE_STRING:
             # Strip any trailing NUL characters from C-based systems

@@ -669,6 +669,8 @@ class BlockDownloadStream(io.RawIOBase):
         self._blksize, = struct.unpack_from("B", response, 4)
         logger.debug("Server requested a block size of %d", self._blksize)
         self.crc_supported = bool(res_command & CRC_SUPPORTED)
+        # Run this last, used later to determine if initialization was successful
+        self._initialized = True
 
     def write(self, b):
         """
@@ -784,6 +786,9 @@ class BlockDownloadStream(io.RawIOBase):
         if self.closed:
             return
         super(BlockDownloadStream, self).close()
+        if not hasattr(self, "_initialized"):
+            # Don't do finalization if initialization was not successful
+            return
         if not self._done:
             logger.error("Block transfer was not finished")
         command = REQUEST_BLOCK_DOWNLOAD | END_BLOCK_TRANSFER

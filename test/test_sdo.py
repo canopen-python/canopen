@@ -102,9 +102,9 @@ class TestSDO(unittest.TestCase):
             (TX, b'\x40\x00\x14\x02\x00\x00\x00\x00'),
             (RX, b'\x42\x00\x14\x02\xfe\x00\x00\x00')
         ]
-        # Make sure the size of the data is 1 byte
+        # This method used to truncate to 1 byte, but returns raw content now
         data = self.network[2].sdo.upload(0x1400, 2)
-        self.assertEqual(data, b'\xfe')
+        self.assertEqual(data, b'\xfe\x00\x00\x00')
         self.assertTrue(self.message_sent)
 
     def test_expedited_download(self):

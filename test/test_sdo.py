@@ -95,6 +95,14 @@ class TestSDO(unittest.TestCase):
         ]
         trans_type = self.network[2].sdo[0x1400]['Transmission type RPDO 1'].raw
         self.assertEqual(trans_type, 254)
+
+        # Same with padding to a full SDO frame
+        self.data = [
+            (TX, b'\x40\x00\x14\x02\x00\x00\x00\x00'),
+            (RX, b'\x4f\x00\x14\x02\xfe\x00\x00\x00')
+        ]
+        trans_type = self.network[2].sdo[0x1400]['Transmission type RPDO 1'].raw
+        self.assertEqual(trans_type, 254)
         self.assertTrue(self.message_sent)
 
     def test_size_not_specified(self):

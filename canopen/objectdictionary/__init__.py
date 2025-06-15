@@ -133,7 +133,9 @@ class ObjectDictionary(MutableMapping):
         self, index: Union[int, str]
     ) -> Union[ODArray, ODRecord, ODVariable]:
         """Get object from object dictionary by name or index."""
-        item = self.names.get(index) or self.indices.get(index)
+        item = self.names.get(index)
+        if item is None:
+            item = self.indices.get(index)
         if item is None:
             if isinstance(index, str) and '.' in index:
                 idx, sub = index.split('.', maxsplit=1)

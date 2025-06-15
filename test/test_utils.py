@@ -3,7 +3,7 @@ import unittest
 from canopen.utils import pretty_index
 
 
-class TestUtils(unittest.TestCase):
+class TestUtils(unittest.IsolatedAsyncioTestCase):
 
     def test_pretty_index(self):
         self.assertEqual(pretty_index(0x12ab), "0x12AB")

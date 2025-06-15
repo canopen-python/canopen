@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import binascii
 import logging
 import math
@@ -10,6 +11,7 @@ from typing import Callable, Dict, Iterator, List, Optional, TYPE_CHECKING, Unio
 import canopen.network
 from canopen import objectdictionary
 from canopen import variable
+from canopen.async_guard import ensure_not_async
 from canopen.sdo import SdoAbortedError
 
 if TYPE_CHECKING:
@@ -56,15 +58,27 @@ class PdoBase(Mapping):
     def __len__(self):
         return len(self.map)
 
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def read(self, from_od=False):
         """Read PDO configuration from node using SDO."""
         for pdo_map in self.map.values():
             pdo_map.read(from_od=from_od)
 
+    async def aread(self, from_od=False):
+        """Read PDO configuration from node using SDO, async variant."""
+        for pdo_map in self.map.values():
+            await pdo_map.aread(from_od=from_od)
+
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def save(self):
         """Save PDO configuration to node using SDO."""
         for pdo_map in self.map.values():
             pdo_map.save()
+
+    async def asave(self):
+        """Save PDO configuration to node using SDO, async variant."""
+        for pdo_map in self.map.values():
+            await pdo_map.asave()
 
     def subscribe(self):
         """Register the node's PDOs for reception on the network.
@@ -309,9 +323,12 @@ class PdoMap:
         # Unknown transmission type, assume non-periodic
         return False
 
+    # @callback  # NOTE: called from another thread
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def on_message(self, can_id, data, timestamp):
         is_transmitting = self._task is not None
         if can_id == self.cob_id and not is_transmitting:
+            # NOTE: Blocking lock
             with self.receive_condition:
                 self.is_received = True
                 self.data = data
@@ -319,8 +336,9 @@ class PdoMap:
                     self.period = timestamp - self.timestamp
                 self.timestamp = timestamp
                 self.receive_condition.notify_all()
-                for callback in self.callbacks:
-                    callback(self)
+
+            # Call all registered callbacks
+            self.pdo_node.network.dispatch_callbacks(self.callbacks, self)
 
     def add_callback(self, callback: Callable[[PdoMap], None]) -> None:
         """Add a callback which will be called on receive.
@@ -331,58 +349,48 @@ class PdoMap:
         """
         self.callbacks.append(callback)
 
-    def read(self, from_od=False) -> None:
-        """Read PDO configuration for this map.
-        
-        :param from_od:
-            Read using SDO if False, read from object dictionary if True.
-            When reading from object dictionary, if DCF populated a value, the
-            DCF value will be used, otherwise the EDS default will be used instead.
+    def read_generator(self):
+        """Generator to run through steps for reading the PDO configuration
+        for this map.
+
+        This function does not do any io. This must be done by the caller.
+
         """
-
-        def _raw_from(param):
-            if from_od:
-                if param.od.value is not None:
-                    return param.od.value
-                else:
-                    return param.od.default
-            return param.raw
-
-        cob_id = _raw_from(self.com_record[1])
+        cob_id = yield self.com_record[1]
         self.cob_id = cob_id & 0x1FFFFFFF
         logger.info("COB-ID is 0x%X", self.cob_id)
         self.enabled = cob_id & PDO_NOT_VALID == 0
         logger.info("PDO is %s", "enabled" if self.enabled else "disabled")
         self.rtr_allowed = cob_id & RTR_NOT_ALLOWED == 0
         logger.info("RTR is %s", "allowed" if self.rtr_allowed else "not allowed")
-        self.trans_type = _raw_from(self.com_record[2])
+        self.trans_type = yield self.com_record[2]
         logger.info("Transmission type is %d", self.trans_type)
         if self.trans_type >= 254:
             try:
-                self.inhibit_time = _raw_from(self.com_record[3])
+                self.inhibit_time = yield self.com_record[3]
             except (KeyError, SdoAbortedError) as e:
                 logger.info("Could not read inhibit time (%s)", e)
             else:
                 logger.info("Inhibit time is set to %d ms", self.inhibit_time)
 
             try:
-                self.event_timer = _raw_from(self.com_record[5])
+                self.event_timer = yield self.com_record[5]
             except (KeyError, SdoAbortedError) as e:
                 logger.info("Could not read event timer (%s)", e)
             else:
                 logger.info("Event timer is set to %d ms", self.event_timer)
 
             try:
-                self.sync_start_value = _raw_from(self.com_record[6])
+                self.sync_start_value = yield self.com_record[6]
             except (KeyError, SdoAbortedError) as e:
                 logger.info("Could not read SYNC start value (%s)", e)
             else:
                 logger.info("SYNC start value is set to %d ms", self.sync_start_value)
 
         self.clear()
-        nof_entries = _raw_from(self.map_array[0])
+        nof_entries = yield self.map_array[0]
         for subindex in range(1, nof_entries + 1):
-            value = _raw_from(self.map_array[subindex])
+            value = yield self.map_array[subindex]
             index = value >> 16
             subindex = (value >> 8) & 0xFF
             # Ignore the highest bit, it is never valid for <= 64 PDO length
@@ -397,65 +405,146 @@ class PdoMap:
 
         self.subscribe()
 
-    def save(self) -> None:
-        """Save PDO configuration for this map using SDO."""
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    def read(self, from_od=False) -> None:
+        """Read PDO configuration for this map.
+
+        :param from_od:
+            Read using SDO if False, read from object dictionary if True.
+            When reading from object dictionary, if DCF populated a value, the
+            DCF value will be used, otherwise the EDS default will be used instead.
+        """
+        gen = self.read_generator()
+        param = next(gen)
+        while param:
+            if from_od:
+                # Use value from OD
+                if param.od.value is not None:
+                    value = param.od.value
+                else:
+                    value = param.od.default
+            else:
+                # Get value from SDO
+                # NOTE: Blocking - protected in SdoClient
+                value = param.raw
+            try:
+                # Deliver value into read_generator and wait for next object
+                param = gen.send(value)
+            except StopIteration:
+                break
+
+    async def aread(self, from_od=False) -> None:
+        """Read PDO configuration for this map. Async variant.
+
+        :param from_od:
+            Read using SDO if False, read from object dictionary if True.
+            When reading from object dictionary, if DCF populated a value, the
+            DCF value will be used, otherwise the EDS default will be used instead.
+        """
+        gen = self.read_generator()
+        param = next(gen)
+        while param:
+            if from_od:
+                # Use value from OD
+                if param.od.value is not None:
+                    value = param.od.value
+                else:
+                    value = param.od.default
+            else:
+                # Get value from SDO
+                value = await param.aget_raw()
+            try:
+                param = gen.send(value)
+            except StopIteration:
+                break
+
+    def save_generator(self):
+        """Generator to run through steps for saving the PDO configuration
+        using SDO.
+
+        This function does not do any io. This must be done by the caller.
+
+        """
         if self.cob_id is None:
             logger.info("Skip saving %s: COB-ID was never set", self.com_record.od.name)
             return
         logger.info("Setting COB-ID 0x%X and temporarily disabling PDO", self.cob_id)
-        self.com_record[1].raw = self.cob_id | PDO_NOT_VALID | (RTR_NOT_ALLOWED if not self.rtr_allowed else 0x0)
+        yield self.com_record[1], self.cob_id | PDO_NOT_VALID | (RTR_NOT_ALLOWED if not self.rtr_allowed else 0x0)
         if self.trans_type is not None:
             logger.info("Setting transmission type to %d", self.trans_type)
-            self.com_record[2].raw = self.trans_type
+            yield self.com_record[2], self.trans_type
         if self.inhibit_time is not None:
             logger.info("Setting inhibit time to %d us", (self.inhibit_time * 100))
-            self.com_record[3].raw = self.inhibit_time
+            yield self.com_record[3], self.inhibit_time
         if self.event_timer is not None:
             logger.info("Setting event timer to %d ms", self.event_timer)
-            self.com_record[5].raw = self.event_timer
+            yield self.com_record[5], self.event_timer
         if self.sync_start_value is not None:
             logger.info("Setting SYNC start value to %d", self.sync_start_value)
-            self.com_record[6].raw = self.sync_start_value
+            yield self.com_record[6], self.sync_start_value
 
-        try:
-            self.map_array[0].raw = 0
-        except SdoAbortedError:
-            # WORKAROUND for broken implementations: If the array has a
-            # fixed number of entries (count not writable), generate dummy
-            # mappings for an invalid object 0x0000:00 to overwrite any
-            # excess entries with all-zeros.
-            self._fill_map(self.map_array[0].raw)
-        subindex = 1
-        for var in self.map:
-            logger.info("Writing %s (0x%04X:%02X, %d bits) to PDO map",
-                        var.name, var.index, var.subindex, var.length)
-            if getattr(self.pdo_node.node, "curtis_hack", False):
-                # Curtis HACK: mixed up field order
-                self.map_array[subindex].raw = (var.index |
-                                                var.subindex << 16 |
-                                                var.length << 24)
-            else:
-                self.map_array[subindex].raw = (var.index << 16 |
-                                                var.subindex << 8 |
-                                                var.length)
-            subindex += 1
-        try:
-            self.map_array[0].raw = len(self.map)
-        except SdoAbortedError as e:
-            # WORKAROUND for broken implementations: If the array
-            # number-of-entries parameter is not writable, we have already
-            # generated the required number of mappings above.
-            if e.code != 0x06010002:
-                # Abort codes other than "Attempt to write a read-only
-                # object" should still be reported.
-                raise
-        self._update_data_size()
+        if self.map is not None:
+            try:
+                yield self.map_array[0], 0
+            except SdoAbortedError:
+                # WORKAROUND for broken implementations: If the array has a
+                # fixed number of entries (count not writable), generate dummy
+                # mappings for an invalid object 0x0000:00 to overwrite any
+                # excess entries with all-zeros.
+                #
+                # The '@@fill_map' yield will run 
+                #    self._fill_map(self.map_array[0].raw())
+                yield self.map_array[0], '@@fill_map'
+            subindex = 1
+            for var in self.map:
+                logger.info("Writing %s (0x%04X:%02X, %d bits) to PDO map",
+                            var.name, var.index, var.subindex, var.length)
+                if hasattr(self.pdo_node.node, "curtis_hack", False):
+                    # Curtis HACK: mixed up field order
+                    yield self.map_array[subindex], (var.index |
+                                                    var.subindex << 16 |
+                                                    var.length << 24)
+                else:
+                    yield self.map_array[subindex], (var.index << 16 |
+                                                    var.subindex << 8 |
+                                                    var.length)
+                subindex += 1
+            try:
+                yield self.map_array[0], len(self.map)
+            except SdoAbortedError as e:
+                # WORKAROUND for broken implementations: If the array
+                # number-of-entries parameter is not writable, we have already
+                # generated the required number of mappings above.
+                if e.code != 0x06010002:
+                    # Abort codes other than "Attempt to write a read-only
+                    # object" should still be reported.
+                    raise
+            self._update_data_size()
 
         if self.enabled:
             cob_id = self.cob_id | (RTR_NOT_ALLOWED if not self.rtr_allowed else 0x0)
             logger.info("Setting COB-ID 0x%X and re-enabling PDO", cob_id)
-            self.com_record[1].raw = cob_id
+            yield self.com_record[1], cob_id
             self.subscribe()
+
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
+    def save(self) -> None:
+        """Read PDO configuration for this map using SDO."""
+        for sdo, value in self.save_generator():
+            if value == '@@fillmap':
+                # NOTE: Blocking - protected in SdoClient
+                self._fill_map(sdo.raw)
+            else:
+                # NOTE: Blocking call
+                sdo.raw = value
+
+    async def asave(self) -> None:
+        """Read PDO configuration for this map using SDO, async variant."""
+        for sdo, value in self.save_generator():
+            if value == '@@fillmap':
+                self._fill_map(await sdo.aget_raw())
+            else:
+                await sdo.aset_raw(value)
 
     def subscribe(self) -> None:
         """Register the PDO for reception on the network.
@@ -555,16 +644,27 @@ class PdoMap:
         if self.enabled and self.rtr_allowed:
             self.pdo_node.network.send_message(self.cob_id, bytes(), remote=True)
 
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def wait_for_reception(self, timeout: float = 10) -> float:
         """Wait for the next transmit PDO.
 
         :param float timeout: Max time to wait in seconds.
         :return: Timestamp of message received or None if timeout.
         """
+        # NOTE: Blocking lock
         with self.receive_condition:
             self.is_received = False
+            # NOTE: Blocking call
             self.receive_condition.wait(timeout)
         return self.timestamp if self.is_received else None
+
+    async def await_for_reception(self, timeout: float = 10) -> float:
+        """Wait for the next transmit PDO.
+
+        :param float timeout: Max time to wait in seconds.
+        :return: Timestamp of message received or None if timeout.
+        """
+        return await asyncio.to_thread(self.wait_for_reception, timeout)
 
 
 class PdoVariable(variable.Variable):
@@ -605,6 +705,11 @@ class PdoVariable(variable.Variable):
 
         return data
 
+    async def aget_data(self) -> bytes:
+        # Since get_data() is not making any IO, it can be called
+        # directly with no special async variant
+        return self.get_data()
+
     def set_data(self, data: bytes):
         """Set for the given variable the PDO data.
 
@@ -637,6 +742,11 @@ class PdoVariable(variable.Variable):
             self.pdo_parent.data[byte_offset:byte_offset + len(data)] = data
 
         self.pdo_parent.update()
+
+    async def aset_data(self, data: bytes):
+        # Since get_data() is not making any IO, it can be called
+        # directly with no special async variant
+        return self.set_data(data)
 
 
 # For compatibility

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 from collections.abc import MutableMapping
@@ -8,6 +9,7 @@ from typing import Callable, Dict, Final, Iterator, List, Optional, Union
 import can
 from can import Listener
 
+from canopen.async_guard import set_async_sentinel, ensure_not_async
 from canopen.lss import LssMaster
 from canopen.nmt import NmtMaster
 from canopen.node import LocalNode, RemoteNode
@@ -28,20 +30,24 @@ class Network(MutableMapping):
     NOTIFIER_CYCLE: float = 1.0  #: Maximum waiting time for one notifier iteration.
     NOTIFIER_SHUTDOWN_TIMEOUT: float = 5.0  #: Maximum waiting time to stop notifiers.
 
-    def __init__(self, bus: Optional[can.BusABC] = None):
+    # NOTE: Function arguments changed to provide notifier, see #556
+    def __init__(self, bus: Optional[can.BusABC] = None, notifier: Optional[can.Notifier] = None,
+                 loop: Optional[asyncio.AbstractEventLoop] = None):
         """
         :param can.BusABC bus:
             A python-can bus instance to re-use.
         """
         #: A python-can :class:`can.BusABC` instance which is set after
         #: :meth:`canopen.Network.connect` is called
-        self.bus = bus
+        self.bus: Optional[can.BusABC] = bus
+        self.loop: Optional[asyncio.AbstractEventLoop] = loop
+        self._tasks: set[asyncio.Task] = set()
         #: A :class:`~canopen.network.NodeScanner` for detecting nodes
         self.scanner = NodeScanner(self)
         #: List of :class:`can.Listener` objects.
         #: Includes at least MessageListener.
         self.listeners = [MessageListener(self)]
-        self.notifier: Optional[can.Notifier] = None
+        self.notifier: Optional[can.Notifier] = notifier
         self.nodes: Dict[int, Union[RemoteNode, LocalNode]] = {}
         self.subscribers: Dict[int, List[Callback]] = {}
         self.send_lock = threading.Lock()
@@ -52,6 +58,12 @@ class Network(MutableMapping):
 
         self.lss = LssMaster()
         self.lss.network = self
+
+        # Register this function as the means to check if canopen is run in
+        # async mode. This enables the @ensure_not_async() decorator to
+        # work. See async_guard.py
+        set_async_sentinel(self.is_async())
+
         self.subscribe(self.lss.LSS_RX_COBID, self.lss.on_message_received)
 
     def subscribe(self, can_id: int, callback: Callback) -> None:
@@ -108,7 +120,16 @@ class Network(MutableMapping):
         if self.bus is None:
             self.bus = can.Bus(*args, **kwargs)
         logger.info("Connected to '%s'", self.bus.channel_info)
-        self.notifier = can.Notifier(self.bus, self.listeners, self.NOTIFIER_CYCLE)
+        if self.notifier is None:
+            # Do not start a can notifier with the async loop. It changes the
+            # behavior of the notifier callbacks. Instead of running the
+            # callbacks from a separate thread, it runs the callbacks in the
+            # same thread as the event loop where blocking calls are not allowed.
+            # This library needs to support both async and sync, so we need to
+            # use the notifier in a separate thread.
+            self.notifier = can.Notifier(self.bus, [], self.NOTIFIER_CYCLE)
+        for listener in self.listeners:
+            self.notifier.add_listener(listener)
         return self
 
     def disconnect(self) -> None:
@@ -126,12 +147,25 @@ class Network(MutableMapping):
         self.bus = None
         self.check()
 
+        # Remove the async sentinel
+        set_async_sentinel(False)
+
     def __enter__(self):
         return self
 
     def __exit__(self, type, value, traceback):
         self.disconnect()
 
+    async def __aenter__(self):
+        # FIXME: When TaskGroup are available, we should use them to manage the
+        # tasks. The user must use the `async with` statement with the Network
+        # to ensure its created.
+        return self
+
+    async def __aexit__(self, type, value, traceback):
+        self.disconnect()
+
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def add_node(
         self,
         node: Union[int, RemoteNode, LocalNode],
@@ -160,6 +194,20 @@ class Network(MutableMapping):
             node = RemoteNode(node, object_dictionary)
         self[node.id] = node
         return node
+
+    async def aadd_node(
+        self,
+        node: Union[int, RemoteNode, LocalNode],
+        object_dictionary: Union[str, ObjectDictionary, None] = None,
+        upload_eds: bool = False,
+    ) -> RemoteNode:
+        """Add a remote node to the network, async variant.
+
+        See add_node() for description
+        """
+        # NOTE: The async variant exists because import_from_node might block
+        return await asyncio.to_thread(self.add_node, node,
+                                       object_dictionary, upload_eds)
 
     def create_node(
         self,
@@ -206,6 +254,8 @@ class Network(MutableMapping):
                           arbitration_id=can_id,
                           data=data,
                           is_remote_frame=remote)
+        # NOTE: Blocking lock. This is probably ok for async, because async
+        #       only use one thread.
         with self.send_lock:
             self.bus.send(msg)
         self.check()
@@ -229,6 +279,7 @@ class Network(MutableMapping):
         """
         return PeriodicMessageTask(can_id, data, period, self.bus, remote)
 
+    # @callback  # NOTE: called from another thread
     def notify(self, can_id: int, data: bytearray, timestamp: float) -> None:
         """Feed incoming message to this library.
 
@@ -243,10 +294,43 @@ class Network(MutableMapping):
             Timestamp of the message, preferably as a Unix timestamp
         """
         if can_id in self.subscribers:
-            callbacks = self.subscribers[can_id]
-            for callback in callbacks:
-                callback(can_id, data, timestamp)
+            self.dispatch_callbacks(self.subscribers[can_id], can_id, data, timestamp)
         self.scanner.on_message_received(can_id)
+
+    def on_error(self, exc: BaseException) -> None:
+        """This method is called to handle any exception in the callbacks."""
+
+        # Exceptions in any callbaks should not affect CAN processing
+        logger.exception("Exception in callback: %s", exc_info=exc)
+
+    def dispatch_callbacks(self, callbacks: List[Callback], *args) -> None:
+        """Dispatch a list of callbacks with the given arguments.
+
+        :param callbacks:
+            List of callbacks to call
+        :param args:
+            Arguments to pass to the callbacks
+        """
+        def task_done(task: asyncio.Task) -> None:
+            """Callback to be called when a task is done."""
+            self._tasks.discard(task)
+
+            # FIXME: This section should probably be migrated to a TaskGroup.
+            # However, this is not available yet in Python 3.8 - 3.10.
+            try:
+                if (exc := task.exception()) is not None:
+                    self.on_error(exc)
+            except (asyncio.CancelledError, asyncio.InvalidStateError) as exc:
+                # Handle cancelled tasks and unfinished tasks gracefully
+                self.on_error(exc)
+
+        # Run the callbacks
+        for callback in callbacks:
+            result = callback(*args)
+            if result is not None and asyncio.iscoroutine(result):
+                task = asyncio.create_task(result)
+                self._tasks.add(task)
+                task.add_done_callback(task_done)
 
     def check(self) -> None:
         """Check that no fatal error has occurred in the receiving thread.
@@ -259,6 +343,10 @@ class Network(MutableMapping):
             if exc is not None:
                 logger.error("An error has caused receiving of messages to stop")
                 raise exc
+
+    def is_async(self) -> bool:
+        """Check if canopen has been connected with async"""
+        return self.loop is not None
 
     def __getitem__(self, node_id: int) -> Union[RemoteNode, LocalNode]:
         return self.nodes[node_id]
@@ -335,6 +423,7 @@ class PeriodicMessageTask:
         """Stop transmission"""
         self._task.stop()
 
+    # @callback  # NOTE: Indirectly called from another thread via other callbacks
     def update(self, data: bytes) -> None:
         """Update data of message
 
@@ -362,6 +451,7 @@ class MessageListener(Listener):
     def __init__(self, network: Network):
         self.network = network
 
+    # @callback  # NOTE: called from another thread
     def on_message_received(self, msg):
         if msg.is_error_frame or msg.is_remote_frame:
             return
@@ -370,7 +460,7 @@ class MessageListener(Listener):
             self.network.notify(msg.arbitration_id, msg.data, msg.timestamp)
         except Exception as e:
             # Exceptions in any callbaks should not affect CAN processing
-            logger.error(str(e))
+            self.network.on_error(e)
 
     def stop(self) -> None:
         """Override abstract base method to release any resources."""
@@ -398,6 +488,7 @@ class NodeScanner:
         #: A :class:`list` of nodes discovered
         self.nodes: List[int] = []
 
+    # @callback  # NOTE: called from another thread
     def on_message_received(self, can_id: int):
         service = can_id & 0x780
         node_id = can_id & 0x7F

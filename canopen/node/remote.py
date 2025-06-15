@@ -59,6 +59,7 @@ class RemoteNode(BaseNode):
         self.tpdo.network = network
         self.rpdo.network = network
         self.nmt.network = network
+        self.emcy.network = network
         for sdo in self.sdo_channels:
             network.subscribe(sdo.tx_cobid, sdo.on_response)
         network.subscribe(0x700 + self.id, self.nmt.on_heartbeat)
@@ -79,6 +80,7 @@ class RemoteNode(BaseNode):
         self.tpdo.network = canopen.network._UNINITIALIZED_NETWORK
         self.rpdo.network = canopen.network._UNINITIALIZED_NETWORK
         self.nmt.network = canopen.network._UNINITIALIZED_NETWORK
+        self.emcy.network = canopen.network._UNINITIALIZED_NETWORK
 
     def add_sdo(self, rx_cobid, tx_cobid):
         """Add an additional SDO channel.
@@ -132,8 +134,10 @@ class RemoteNode(BaseNode):
             if subindex is not None:
                 logger.info('SDO [0x%04X][0x%02X]: %s: %#06x',
                             index, subindex, name, value)
+                # NOTE: Blocking - protected in SdoClient
                 self.sdo[index][subindex].raw = value
             else:
+                # NOTE: Blocking - protected in SdoClient
                 self.sdo[index].raw = value
                 logger.info('SDO [0x%04X]: %s: %#06x',
                             index, name, value)

@@ -133,7 +133,10 @@ class ObjectDictionary(MutableMapping):
         self, index: Union[int, str]
     ) -> Union[ODArray, ODRecord, ODVariable]:
         """Get object from object dictionary by name or index."""
-        item = self.names.get(index) or self.indices.get(index)
+        # FIXME: See upstream #588
+        item = self.names.get(index)
+        if item is None:
+            item = self.indices.get(index)
         if item is None:
             if isinstance(index, str) and '.' in index:
                 idx, sub = index.split('.', maxsplit=1)
@@ -393,7 +396,8 @@ class ODVariable:
         if self.data_type in self.STRUCT_TYPES:
             return self.STRUCT_TYPES[self.data_type].size * 8
         else:
-            return 8
+            # FIXME: Temporary fix for trucated 24-bit integers, see #436
+            return 64
 
     @property
     def writable(self) -> bool:

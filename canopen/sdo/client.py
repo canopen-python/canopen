@@ -1,3 +1,4 @@
+import asyncio
 import io
 import logging
 import queue
@@ -7,6 +8,7 @@ import time
 from can import CanError
 
 from canopen import objectdictionary
+from canopen.async_guard import ensure_not_async
 from canopen.sdo.base import SdoBase
 from canopen.sdo.constants import *
 from canopen.sdo.exceptions import *
@@ -42,13 +44,17 @@ class SdoClient(SdoBase):
         """
         SdoBase.__init__(self, rx_cobid, tx_cobid, od)
         self.responses = queue.Queue()
+        self.lock = asyncio.Lock()  # For ensuring only one pending SDO request in async
 
+    # @callback  # NOTE: called from another thread
     def on_response(self, can_id, data, timestamp):
         self.responses.put(bytes(data))
 
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def send_request(self, request):
         retries_left = self.MAX_RETRIES
         if self.PAUSE_BEFORE_SEND:
+            # NOTE: Blocking
             time.sleep(self.PAUSE_BEFORE_SEND)
         while True:
             try:
@@ -60,12 +66,14 @@ class SdoClient(SdoBase):
                     raise
                 logger.info(str(e))
                 if self.RETRY_DELAY:
+                    # NOTE: Blocking
                     time.sleep(self.RETRY_DELAY)
             else:
                 break
 
     def read_response(self):
         try:
+            # NOTE: Blocking call
             response = self.responses.get(
                 block=True, timeout=self.RESPONSE_TIMEOUT)
         except queue.Empty:
@@ -79,7 +87,8 @@ class SdoClient(SdoBase):
     def request_response(self, sdo_request):
         retries_left = self.MAX_RETRIES
         if not self.responses.empty():
-            # logger.warning("There were unexpected messages in the queue")
+            # FIXME: Recreating the queue
+            logger.warning("There were unexpected messages in the queue")
             self.responses = queue.Queue()
         while True:
             self.send_request(sdo_request)
@@ -102,6 +111,11 @@ class SdoClient(SdoBase):
         self.send_request(request)
         logger.error("Transfer aborted by client with code 0x%08X", abort_code)
 
+    async def aabort(self, abort_code=0x08000000):
+        """Abort current transfer. Async version."""
+        return await asyncio.to_thread(self.abort, abort_code)
+
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def upload(self, index: int, subindex: int) -> bytes:
         """May be called to make a read operation without an Object Dictionary.
 
@@ -120,7 +134,9 @@ class SdoClient(SdoBase):
         with self.open(index, subindex, buffering=0) as fp:
             response_size = fp.size
             data = fp.read()
+        return self.truncate_data(index, subindex, data, response_size)
 
+    def truncate_data(self, index: int, subindex: int, data: bytes, size: int) -> bytes:
         # If size is available through variable in OD, then use the smaller of the two sizes.
         # Some devices send U32/I32 even if variable is smaller in OD
         var = self.od.get_variable(index, subindex)
@@ -131,11 +147,31 @@ class SdoClient(SdoBase):
             if var.data_type not in objectdictionary.DATA_TYPES:
                 # Get the size in bytes for this variable
                 var_size = len(var) // 8
-                if response_size is None or var_size < response_size:
+                if size is None or var_size < size:
                     # Truncate the data to specified size
                     data = data[0:var_size]
         return data
 
+    async def aupload(self, index: int, subindex: int) -> bytes:
+        """May be called to make a read operation without an Object Dictionary.
+           Async version.
+        """
+        async with self.lock:  # Ensure only one active SDO request per channel
+            # Deferring to thread because there are sleeps and queue waits in the call chain
+            # The call stack is typically:
+            #    upload -> open -> ReadableStream -> request_reponse -> send_request -> network.send_message
+            #    recv -> on_reponse -> queue.put
+            #                                        request_reponse -> read_response -> queue.get
+            def _upload():
+                with self.open(index, subindex, buffering=0) as fp:
+                    response_size = fp.size
+                    data = fp.read()
+                return data, response_size
+
+            data, response_size = await asyncio.to_thread(_upload)
+            return self.truncate_data(index, subindex, data, response_size)
+
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def download(
         self,
         index: int,
@@ -163,6 +199,27 @@ class SdoClient(SdoBase):
                        force_segment=force_segment) as fp:
             fp.write(data)
 
+    async def adownload(
+        self,
+        index: int,
+        subindex: int,
+        data: bytes,
+        force_segment: bool = False,
+    ) -> None:
+        """May be called to make a write operation without an Object Dictionary.
+           Async version.
+        """
+        async with self.lock:  # Ensure only one active SDO request per channel
+            # Deferring to thread because there are sleeps in the call chain
+
+            def _download():
+                with self.open(index, subindex, "wb", buffering=7, size=len(data),
+                                force_segment=force_segment) as fp:
+                    fp.write(data)
+
+            return await asyncio.to_thread(_download)
+
+    @ensure_not_async  # NOTE: Safeguard for accidental async use
     def open(self, index, subindex=0, mode="rb", encoding="ascii",
              buffering=1024, size=None, block_transfer=False, force_segment=False, request_crc_support=True):
         """Open the data stream as a file like object.
@@ -669,6 +726,9 @@ class BlockDownloadStream(io.RawIOBase):
         self._blksize, = struct.unpack_from("B", response, 4)
         logger.debug("Server requested a block size of %d", self._blksize)
         self.crc_supported = bool(res_command & CRC_SUPPORTED)
+        # Run this last, used later to determine if initialization was successful
+        # FIXME: Upstream #590
+        self._initialized = True
 
     def write(self, b):
         """
@@ -784,6 +844,10 @@ class BlockDownloadStream(io.RawIOBase):
         if self.closed:
             return
         super(BlockDownloadStream, self).close()
+        # FIXME: Upstream #590
+        if not hasattr(self, "_initialized"):
+            # Don't do finalization if initialization was not successful
+            return
         if not self._done:
             logger.error("Block transfer was not finished")
         command = REQUEST_BLOCK_DOWNLOAD | END_BLOCK_TRANSFER

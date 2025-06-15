@@ -1,6 +1,7 @@
 import logging
 import time
 import unittest
+import asyncio
 
 import can
 
@@ -9,22 +10,39 @@ import canopen
 from .util import SAMPLE_EDS
 
 
-class TestNetwork(unittest.TestCase):
+class TestNetwork(unittest.IsolatedAsyncioTestCase):
+
+    __test__ = False  # This is a base class, tests should not be run directly.
+    use_async: bool
 
     def setUp(self):
-        self.network = canopen.Network()
+        self.loop = None
+        if self.use_async:
+            self.loop = asyncio.get_event_loop()
+
+        self.network = canopen.Network(loop=self.loop)
         self.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
 
-    def test_network_add_node(self):
+    def tearDown(self):
+        if self.network.bus is not None:
+            self.network.disconnect()
+
+    async def test_network_add_node(self):
         # Add using str.
         with self.assertLogs():
-            node = self.network.add_node(2, SAMPLE_EDS)
+            if self.use_async:
+                node = await self.network.aadd_node(2, SAMPLE_EDS)
+            else:
+                node = self.network.add_node(2, SAMPLE_EDS)
         self.assertEqual(self.network[2], node)
         self.assertEqual(node.id, 2)
         self.assertIsInstance(node, canopen.RemoteNode)
 
         # Add using OD.
-        node = self.network.add_node(3, self.network[2].object_dictionary)
+        if self.use_async:
+            node = await self.network.aadd_node(3, self.network[2].object_dictionary)
+        else:
+            node = self.network.add_node(3, self.network[2].object_dictionary)
         self.assertEqual(self.network[3], node)
         self.assertEqual(node.id, 3)
         self.assertIsInstance(node, canopen.RemoteNode)
@@ -32,7 +50,10 @@ class TestNetwork(unittest.TestCase):
         # Add using RemoteNode.
         with self.assertLogs():
             node = canopen.RemoteNode(4, SAMPLE_EDS)
-        self.network.add_node(node)
+        if self.use_async:
+            await self.network.aadd_node(node)
+        else:
+            self.network.add_node(node)
         self.assertEqual(self.network[4], node)
         self.assertEqual(node.id, 4)
         self.assertIsInstance(node, canopen.RemoteNode)
@@ -40,7 +61,10 @@ class TestNetwork(unittest.TestCase):
         # Add using LocalNode.
         with self.assertLogs():
             node = canopen.LocalNode(5, SAMPLE_EDS)
-        self.network.add_node(node)
+        if self.use_async:
+            await self.network.aadd_node(node)
+        else:
+            self.network.add_node(node)
         self.assertEqual(self.network[5], node)
         self.assertEqual(node.id, 5)
         self.assertIsInstance(node, canopen.LocalNode)
@@ -48,12 +72,15 @@ class TestNetwork(unittest.TestCase):
         # Verify that we've got the correct number of nodes.
         self.assertEqual(len(self.network), 4)
 
-    def test_network_add_node_upload_eds(self):
+    async def test_network_add_node_upload_eds(self):
         # Will err because we're not connected to a real network.
         with self.assertLogs(level=logging.ERROR):
-            self.network.add_node(2, SAMPLE_EDS, upload_eds=True)
+            if self.use_async:
+                await self.network.aadd_node(2, SAMPLE_EDS, upload_eds=True)
+            else:
+                self.network.add_node(2, SAMPLE_EDS, upload_eds=True)
 
-    def test_network_create_node(self):
+    async def test_network_create_node(self):
         with self.assertLogs():
             self.network.create_node(2, SAMPLE_EDS)
             self.network.create_node(3, SAMPLE_EDS)
@@ -63,7 +90,7 @@ class TestNetwork(unittest.TestCase):
         self.assertIsInstance(self.network[3], canopen.LocalNode)
         self.assertIsInstance(self.network[4], canopen.RemoteNode)
 
-    def test_network_check(self):
+    async def test_network_check(self):
         self.network.connect(interface="virtual")
 
         def cleanup():
@@ -86,18 +113,29 @@ class TestNetwork(unittest.TestCase):
             with self.assertLogs(level=logging.ERROR):
                 self.network.disconnect()
 
-    def test_network_notify(self):
+    async def test_network_notify(self):
         with self.assertLogs():
-            self.network.add_node(2, SAMPLE_EDS)
+            if self.use_async:
+                await self.network.aadd_node(2, SAMPLE_EDS)
+            else:
+                self.network.add_node(2, SAMPLE_EDS)
         node = self.network[2]
-        self.network.notify(0x82, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1473418396.0)
+        async def notify(*args):
+            """Simulate a notification from the network."""
+            if self.use_async:
+                # If we're using async, we must run the notify in a thread
+                # to avoid getting blocking call errors.
+                await asyncio.to_thread(self.network.notify, *args)
+            else:
+                self.network.notify(*args)
+        await notify(0x82, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1473418396.0)
         self.assertEqual(len(node.emcy.active), 1)
-        self.network.notify(0x702, b'\x05', 1473418396.0)
+        await notify(0x702, b'\x05', 1473418396.0)
         self.assertEqual(node.nmt.state, 'OPERATIONAL')
         self.assertListEqual(self.network.scanner.nodes, [2])
 
-    def test_network_send_message(self):
-        bus = can.interface.Bus(interface="virtual")
+    async def test_network_send_message(self):
+        bus = can.interface.Bus(interface="virtual", loop=self.loop)
         self.addCleanup(bus.shutdown)
 
         self.network.connect(interface="virtual")
@@ -118,7 +156,7 @@ class TestNetwork(unittest.TestCase):
         self.assertEqual(msg.arbitration_id, 0x12345)
         self.assertTrue(msg.is_extended_id)
 
-    def test_network_subscribe_unsubscribe(self):
+    async def test_network_subscribe_unsubscribe(self):
         N_HOOKS = 3
         accumulators = [] * N_HOOKS
 
@@ -148,7 +186,7 @@ class TestNetwork(unittest.TestCase):
         # Verify that no new data was added to the accumulator.
         self.assertEqual(accumulators[0], [(0, bytes([1, 2, 3]), 1000)])
 
-    def test_network_subscribe_multiple(self):
+    async def test_network_subscribe_multiple(self):
         N_HOOKS = 3
         self.network.connect(interface="virtual", receive_own_messages=True)
         self.addCleanup(self.network.disconnect)
@@ -201,16 +239,20 @@ class TestNetwork(unittest.TestCase):
         self.assertEqual(accumulators[1], BATCH1)
         self.assertEqual(accumulators[2], BATCH1 + [BATCH2] + [BATCH3])
 
-    def test_network_context_manager(self):
+    async def test_network_context_manager(self):
         with self.network.connect(interface="virtual"):
             pass
         with self.assertRaisesRegex(RuntimeError, "Not connected"):
             self.network.send_message(0, [])
 
-    def test_network_item_access(self):
+    async def test_network_item_access(self):
         with self.assertLogs():
-            self.network.add_node(2, SAMPLE_EDS)
-            self.network.add_node(3, SAMPLE_EDS)
+            if self.use_async:
+                await self.network.aadd_node(2, SAMPLE_EDS)
+                await self.network.aadd_node(3, SAMPLE_EDS)
+            else:
+                self.network.add_node(2, SAMPLE_EDS)
+                self.network.add_node(3, SAMPLE_EDS)
         self.assertEqual([2, 3], [node for node in self.network])
 
         # Check __delitem__.
@@ -229,7 +271,7 @@ class TestNetwork(unittest.TestCase):
         self.assertNotEqual(self.network[3], old)
         self.assertEqual([3], [node for node in self.network])
 
-    def test_network_send_periodic(self):
+    async def test_network_send_periodic(self):
         DATA1 = bytes([1, 2, 3])
         DATA2 = bytes([4, 5, 6])
         COB_ID = 0x123
@@ -238,7 +280,7 @@ class TestNetwork(unittest.TestCase):
         self.network.connect(interface="virtual")
         self.addCleanup(self.network.disconnect)
 
-        bus = can.Bus(interface="virtual")
+        bus = can.Bus(interface="virtual", loop=self.loop)
         self.addCleanup(bus.shutdown)
 
         acc = []
@@ -285,14 +327,90 @@ class TestNetwork(unittest.TestCase):
         if msg is not None:
             self.assertIsNone(bus.recv(PERIOD))
 
+    def test_dispatch_callbacks_sync(self):
 
-class TestScanner(unittest.TestCase):
+        result1 = 0
+        result2 = 0
+
+        def callback1(arg):
+            nonlocal result1
+            result1 = arg + 1
+
+        def callback2(arg):
+            nonlocal result2
+            result2 = arg * 2
+
+        # Check that the synchronous callbacks are called correctly
+        self.network.dispatch_callbacks([callback1, callback2], 5)
+        self.assertEqual([result1, result2], [6, 10])
+
+        async def async_callback(arg):
+            return arg + 1
+
+        # This is a workaround to create an async callback which we have the
+        # ability to clean up after the test. Logicallt its the same as calling
+        # async_callback directly.
+        coro = None
+        def _create_async_callback(arg):
+            nonlocal coro
+            coro = async_callback(arg)
+            return coro
+
+        # Check that it's not possible to call async callbacks in a non-async context
+        with self.assertRaises(RuntimeError):
+            self.network.dispatch_callbacks([_create_async_callback], 5)
+
+        # Cleanup
+        if coro is not None:
+            coro.close()  # Close the coroutine to prevent warnings.
+
+    async def test_dispatch_callbacks_async(self):
+
+        result1 = 0
+        result2 = 0
+
+        event = asyncio.Event()
+
+        def callback(arg):
+            nonlocal result1
+            result1 = arg + 1
+
+        async def async_callback(arg):
+            nonlocal result2
+            result2 = arg * 2
+            event.set()  # Notify the test that the async callback is done
+
+        # Check that both callbacks are called correctly in an async context
+        self.network.dispatch_callbacks([callback, async_callback], 5)
+        await event.wait()
+        self.assertEqual([result1, result2], [6, 10])
+
+
+class TestNetworkSync(TestNetwork):
+    """ Run tests in a synchronous context. """
+    __test__ = True
+    use_async = False
+
+
+class TestNetworkAsync(TestNetwork):
+    """ Run tests in an asynchronous context. """
+    __test__ = True
+    use_async = True
+
+
+class TestScanner(unittest.IsolatedAsyncioTestCase):
     TIMEOUT = 0.1
 
+    __test__ = False  # This is a base class, tests should not be run directly.
+    use_async: bool
+
     def setUp(self):
+        self.loop = None
+        if self.use_async:
+            self.loop = asyncio.get_event_loop()
         self.scanner = canopen.network.NodeScanner()
 
-    def test_scanner_on_message_received(self):
+    async def test_scanner_on_message_received(self):
         # Emergency frames should be recognized.
         self.scanner.on_message_received(0x081)
         # Heartbeats should be recognized.
@@ -312,23 +430,23 @@ class TestScanner(unittest.TestCase):
         self.scanner.on_message_received(0x50e)
         self.assertListEqual(self.scanner.nodes, [1, 3, 5, 7, 9, 11, 13])
 
-    def test_scanner_reset(self):
+    async def test_scanner_reset(self):
         self.scanner.nodes = [1, 2, 3]  # Mock scan.
         self.scanner.reset()
         self.assertListEqual(self.scanner.nodes, [])
 
-    def test_scanner_search_no_network(self):
+    async def test_scanner_search_no_network(self):
         with self.assertRaisesRegex(RuntimeError, "No actual Network object was assigned"):
             self.scanner.search()
 
-    def test_scanner_search(self):
-        rxbus = can.Bus(interface="virtual")
+    async def test_scanner_search(self):
+        rxbus = can.Bus(interface="virtual", loop=self.loop)
         self.addCleanup(rxbus.shutdown)
 
-        txbus = can.Bus(interface="virtual")
+        txbus = can.Bus(interface="virtual", loop=self.loop)
         self.addCleanup(txbus.shutdown)
 
-        net = canopen.Network(txbus)
+        net = canopen.Network(txbus, loop=self.loop)
         net.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         net.connect()
         self.addCleanup(net.disconnect)
@@ -346,9 +464,9 @@ class TestScanner(unittest.TestCase):
         # Check that no spurious packets were sent.
         self.assertIsNone(rxbus.recv(self.TIMEOUT))
 
-    def test_scanner_search_limit(self):
-        bus = can.Bus(interface="virtual", receive_own_messages=True)
-        net = canopen.Network(bus)
+    async def test_scanner_search_limit(self):
+        bus = can.Bus(interface="virtual", receive_own_messages=True, loop=self.loop)
+        net = canopen.Network(bus, loop=self.loop)
         net.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         net.connect()
         self.addCleanup(net.disconnect)
@@ -361,6 +479,18 @@ class TestScanner(unittest.TestCase):
         self.assertEqual(msg.arbitration_id, 0x601)
         # Check that no spurious packets were sent.
         self.assertIsNone(bus.recv(self.TIMEOUT))
+
+
+class TestScannerSync(TestScanner):
+    """ Run the tests in a synchronous context. """
+    __test__ = True
+    use_async = False
+
+
+class TestScannerAsync(TestScanner):
+    """ Run the tests in an asynchronous context. """
+    __test__ = True
+    use_async = True
 
 
 if __name__ == "__main__":

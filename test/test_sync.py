@@ -1,5 +1,6 @@
 import threading
 import unittest
+import asyncio
 
 import can
 
@@ -10,26 +11,34 @@ PERIOD = 0.01
 TIMEOUT = PERIOD * 10
 
 
-class TestSync(unittest.TestCase):
+class TestSync(unittest.IsolatedAsyncioTestCase):
+
+    __test__ = False  # This is a base class, tests should not be run directly.
+    use_async: bool
+
     def setUp(self):
-        self.net = canopen.Network()
+        loop = None
+        if self.use_async:
+            loop = asyncio.get_event_loop()
+
+        self.net = canopen.Network(loop=loop)
         self.net.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         self.net.connect(interface="virtual")
         self.sync = canopen.sync.SyncProducer(self.net)
-        self.rxbus = can.Bus(interface="virtual")
+        self.rxbus = can.Bus(interface="virtual", loop=loop)
 
     def tearDown(self):
         self.net.disconnect()
         self.rxbus.shutdown()
 
-    def test_sync_producer_transmit(self):
+    async def test_sync_producer_transmit(self):
         self.sync.transmit()
         msg = self.rxbus.recv(TIMEOUT)
         self.assertIsNotNone(msg)
         self.assertEqual(msg.arbitration_id, 0x80)
         self.assertEqual(msg.dlc, 0)
 
-    def test_sync_producer_transmit_count(self):
+    async def test_sync_producer_transmit_count(self):
         self.sync.transmit(2)
         msg = self.rxbus.recv(TIMEOUT)
         self.assertIsNotNone(msg)
@@ -37,11 +46,11 @@ class TestSync(unittest.TestCase):
         self.assertEqual(msg.dlc, 1)
         self.assertEqual(msg.data, b"\x02")
 
-    def test_sync_producer_start_invalid_period(self):
+    async def test_sync_producer_start_invalid_period(self):
         with self.assertRaises(ValueError):
             self.sync.start(0)
 
-    def test_sync_producer_start(self):
+    async def test_sync_producer_start(self):
         self.sync.start(PERIOD)
         self.addCleanup(self.sync.stop)
 
@@ -73,6 +82,18 @@ class TestSync(unittest.TestCase):
         msg = self.rxbus.recv(TIMEOUT)
         if msg is not None:
             self.assertIsNone(self.net.bus.recv(TIMEOUT))
+
+
+class TestSyncSync(TestSync):
+    """ Test the functions in synchronous mode. """
+    __test__ = True
+    use_async = False
+
+
+class TestSyncAsync(TestSync):
+    """ Test the functions in asynchronous mode. """
+    __test__ = True
+    use_async = True
 
 
 if __name__ == "__main__":

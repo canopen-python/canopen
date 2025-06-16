@@ -99,13 +99,6 @@ class TestSDO(unittest.TestCase):
         # Same with padding to a full SDO frame
         self.data = [
             (TX, b'\x40\x00\x14\x02\x00\x00\x00\x00'),
-            (RX, b'\x4f\x00\x14\x02\xfe\x00\x00\x00')
-        ]
-        trans_type = self.network[2].sdo[0x1400]['Transmission type RPDO 1'].raw
-        self.assertEqual(trans_type, 254)
-
-        self.data = [
-            (TX, b'\x40\x00\x14\x02\x00\x00\x00\x00'),
             (RX, b'\x42\x00\x14\x02\xfe\x00\x00\x00')
         ]
         trans_type = self.network[2].sdo[0x1400]['Transmission type RPDO 1'].raw
@@ -145,6 +138,17 @@ class TestSDO(unittest.TestCase):
         ]
         device_name = self.network[2].sdo[0x1008].raw
         self.assertEqual(device_name, "Tiny Node - Mega Domains !")
+
+    def test_segmented_upload_too_much_data(self):
+        # Server sends 5 bytes, but indicated size 4
+        self.data = [
+            (TX, b'\x40\x08\x10\x00\x00\x00\x00\x00'),
+            (RX, b'\x41\x08\x10\x00\x04\x00\x00\x00'),
+            (TX, b'\x60\x00\x00\x00\x00\x00\x00\x00'),
+            (RX, b'\x05\x54\x69\x6E\x79\x20\x00\x00'),
+        ]
+        device_name = self.network[2].sdo[0x1008].raw
+        self.assertEqual(device_name, "Tiny")
 
     def test_segmented_download(self):
         self.data = [

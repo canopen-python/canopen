@@ -7,7 +7,7 @@ from .util import SAMPLE_EDS, tmp_file
 
 class TestPDO(unittest.TestCase):
     def setUp(self):
-        node = canopen.Node(1, SAMPLE_EDS)
+        node = canopen.LocalNode(1, SAMPLE_EDS)
         pdo = node.pdo.tx[1]
         pdo.add_variable('INTEGER16 value')  # 0x2001
         pdo.add_variable('UNSIGNED8 value', length=4)  # 0x2002

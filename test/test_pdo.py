@@ -69,9 +69,12 @@ class TestPDO(unittest.TestCase):
         # Saving only happens with a defined COB ID and for specified parameters
         self.node.tpdo[1].cob_id = self.node.tpdo[1].predefined_cob_id
         self.node.tpdo[1].trans_type = 1
-        self.node.tpdo[1].inhibit_time = 10
-        self.node.tpdo[1].com_record[2].od.access_type = "r"
         self.node.tpdo[1].save()
+
+        self.node.tpdo[2].cob_id = self.node.tpdo[2].predefined_cob_id
+        self.node.tpdo[2].trans_type = 1
+        self.node.tpdo[2].com_record[2].od.access_type = "r"
+        self.node.tpdo[2].save()
 
     def test_pdo_export(self):
         try:

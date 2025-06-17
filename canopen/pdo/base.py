@@ -403,7 +403,11 @@ class PdoMap:
             logger.info("Skip saving %s: COB-ID was never set", self.com_record.od.name)
             return
         logger.info("Setting COB-ID 0x%X and temporarily disabling PDO", self.cob_id)
-        self.com_record[1].raw = self.cob_id | PDO_NOT_VALID | (RTR_NOT_ALLOWED if not self.rtr_allowed else 0x0)
+        self.com_record[1].raw = (
+            self.cob_id
+            | PDO_NOT_VALID
+            | (RTR_NOT_ALLOWED if not self.rtr_allowed else 0)
+        )
 
         def _set_com_record(
             subindex: int, value: Optional[int], log_fmt: str, log_factor: int = 1
@@ -432,8 +436,13 @@ class PdoMap:
         for var, entry in zip(self.map, self.map_array):
             if not entry.writable:
                 continue
-            logger.info("Writing %s (0x%04X:%02X, %d bits) to PDO map",
-                        var.name, var.index, var.subindex, var.length)
+            logger.info(
+                "Writing %s (0x%04X:%02X, %d bits) to PDO map",
+                var.name,
+                var.index,
+                var.subindex,
+                var.length,
+            )
             if getattr(self.pdo_node.node, "curtis_hack", False):
                 # Curtis HACK: mixed up field order
                 entry.raw = var.index | var.subindex << 16 | var.length << 24

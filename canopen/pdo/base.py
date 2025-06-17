@@ -15,7 +15,7 @@ from canopen.sdo import SdoAbortedError
 if TYPE_CHECKING:
     from canopen import LocalNode, RemoteNode
     from canopen.pdo import RPDO, TPDO
-    from canopen.sdo import SdoRecord, SdoVariable
+    from canopen.sdo import SdoRecord
 
 
 PDO_NOT_VALID = 1 << 31

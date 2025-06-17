@@ -64,6 +64,12 @@ class TestPDO(unittest.TestCase):
         self.node.tpdo.save()
         self.node.rpdo.save()
 
+    def test_pdo_save_skip_readonly(self):
+        """Expect no exception when a record entry is not writable."""
+        self.node.tpdo[1].cob_id = self.node.tpdo[1].predefined_cob_id
+        self.node.tpdo[1].com_record[2].od.access_type = "r"
+        self.node.tpdo[1].save()
+
     def test_pdo_export(self):
         try:
             import canmatrix

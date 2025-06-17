@@ -571,7 +571,7 @@ class BlockUploadStream(io.RawIOBase):
                 return response
         self._error = True
         self.sdo_client.abort(0x0504_0000)
-        raise SdoCommunicationError("Some data were lost and could not be retransmitted")
+        raise SdoCommunicationError("Some data was lost and could not be retransmitted")
 
     def _ack_block(self):
         request = bytearray(8)

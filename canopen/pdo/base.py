@@ -433,8 +433,8 @@ class PdoMap:
             # mappings for an invalid object 0x0000:00 to overwrite any
             # excess entries with all-zeros.
             self._fill_map(self.map_array[0].raw)
-        for var, entry in zip(self.map, self.map_array):
-            if not entry.writable:
+        for var, entry in zip(self.map, self.map_array.values()):
+            if not entry.od.writable:
                 continue
             logger.info(
                 "Writing %s (0x%04X:%02X, %d bits) to PDO map",

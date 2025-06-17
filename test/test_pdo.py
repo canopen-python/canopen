@@ -69,6 +69,7 @@ class TestPDO(unittest.TestCase):
         # Saving only happens with a defined COB ID and for specified parameters
         self.node.tpdo[1].cob_id = self.node.tpdo[1].predefined_cob_id
         self.node.tpdo[1].trans_type = 1
+        self.node.tpdo[1].map_array[1].od.access_type = "r"
         self.node.tpdo[1].save()
 
         self.node.tpdo[2].cob_id = self.node.tpdo[2].predefined_cob_id

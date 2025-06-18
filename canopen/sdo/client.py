@@ -786,7 +786,7 @@ class BlockDownloadStream(io.RawIOBase):
         if self.closed:
             return
         super(BlockDownloadStream, self).close()
-        if not hasattr(self, "_initialized"):
+        if not getattr(self, "_initialized", False):
             # Don't do finalization if initialization was not successful
             return
         if not self._done:

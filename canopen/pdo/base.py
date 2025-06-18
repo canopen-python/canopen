@@ -403,19 +403,27 @@ class PdoMap:
             logger.info("Skip saving %s: COB-ID was never set", self.com_record.od.name)
             return
         logger.info("Setting COB-ID 0x%X and temporarily disabling PDO", self.cob_id)
-        self.com_record[1].raw = self.cob_id | PDO_NOT_VALID | (RTR_NOT_ALLOWED if not self.rtr_allowed else 0x0)
-        if self.trans_type is not None:
-            logger.info("Setting transmission type to %d", self.trans_type)
-            self.com_record[2].raw = self.trans_type
-        if self.inhibit_time is not None:
-            logger.info("Setting inhibit time to %d us", (self.inhibit_time * 100))
-            self.com_record[3].raw = self.inhibit_time
-        if self.event_timer is not None:
-            logger.info("Setting event timer to %d ms", self.event_timer)
-            self.com_record[5].raw = self.event_timer
-        if self.sync_start_value is not None:
-            logger.info("Setting SYNC start value to %d", self.sync_start_value)
-            self.com_record[6].raw = self.sync_start_value
+        self.com_record[1].raw = (
+            self.cob_id
+            | PDO_NOT_VALID
+            | (RTR_NOT_ALLOWED if not self.rtr_allowed else 0)
+        )
+
+        def _set_com_record(
+            subindex: int, value: Optional[int], log_fmt: str, log_factor: int = 1
+        ):
+            if value is None:
+                return
+            if self.com_record[subindex].writable:
+                logger.info(f"Setting {log_fmt}", value * log_factor)
+                self.com_record[subindex].raw = value
+            else:
+                logger.info(f"Cannot set {log_fmt}, not writable", value * log_factor)
+
+        _set_com_record(2, self.trans_type, "transmission type to %d")
+        _set_com_record(3, self.inhibit_time, "inhibit time to %d us", 100)
+        _set_com_record(5, self.event_timer, "event timer to %d ms")
+        _set_com_record(6, self.sync_start_value, "SYNC start value to %d")
 
         try:
             self.map_array[0].raw = 0
@@ -425,20 +433,21 @@ class PdoMap:
             # mappings for an invalid object 0x0000:00 to overwrite any
             # excess entries with all-zeros.
             self._fill_map(self.map_array[0].raw)
-        subindex = 1
-        for var in self.map:
-            logger.info("Writing %s (0x%04X:%02X, %d bits) to PDO map",
-                        var.name, var.index, var.subindex, var.length)
+        for var, entry in zip(self.map, self.map_array.values()):
+            if not entry.od.writable:
+                continue
+            logger.info(
+                "Writing %s (0x%04X:%02X, %d bits) to PDO map",
+                var.name,
+                var.index,
+                var.subindex,
+                var.length,
+            )
             if getattr(self.pdo_node.node, "curtis_hack", False):
                 # Curtis HACK: mixed up field order
-                self.map_array[subindex].raw = (var.index |
-                                                var.subindex << 16 |
-                                                var.length << 24)
+                entry.raw = var.index | var.subindex << 16 | var.length << 24
             else:
-                self.map_array[subindex].raw = (var.index << 16 |
-                                                var.subindex << 8 |
-                                                var.length)
-            subindex += 1
+                entry.raw = var.index << 16 | var.subindex << 8 | var.length
         try:
             self.map_array[0].raw = len(self.map)
         except SdoAbortedError as e:

@@ -64,12 +64,13 @@ class SdoClient(SdoBase):
             else:
                 break
 
-    def read_response(self):
+    def read_response(self, timeout_abort: bool = False):
         try:
             response = self.responses.get(
                 block=True, timeout=self.RESPONSE_TIMEOUT)
         except queue.Empty:
-            self.abort(0x0504_0000)
+            if timeout_abort:
+                self.abort(0x0504_0000)
             raise SdoCommunicationError("No SDO response received")
         res_command, = struct.unpack_from("B", response)
         if res_command == RESPONSE_ABORTED:
@@ -86,7 +87,7 @@ class SdoClient(SdoBase):
             self.send_request(sdo_request)
             # Wait for node to respond
             try:
-                return self.read_response()
+                return self.read_response(timeout_abort=False)
             except SdoCommunicationError as e:
                 retries_left -= 1
                 if not retries_left:
@@ -526,7 +527,7 @@ class BlockUploadStream(io.RawIOBase):
             return self.readall()
 
         try:
-            response = self.sdo_client.read_response()
+            response = self.sdo_client.read_response(timeout_abort=False)
         except SdoCommunicationError:
             response = self._retransmit()
         res_command, = struct.unpack_from("B", response)
@@ -562,7 +563,7 @@ class BlockUploadStream(io.RawIOBase):
         end_time = time.time() + self.sdo_client.RESPONSE_TIMEOUT
         self._ack_block()
         while time.time() < end_time:
-            response = self.sdo_client.read_response()
+            response = self.sdo_client.read_response(timeout_abort=False)
             res_command, = struct.unpack_from("B", response)
             seqno = res_command & 0x7F
             if seqno == self._ackseq + 1:
@@ -582,7 +583,7 @@ class BlockUploadStream(io.RawIOBase):
         self._ackseq = 0
 
     def _end_upload(self):
-        response = self.sdo_client.read_response()
+        response = self.sdo_client.read_response(timeout_abort=True)
         res_command, self._server_crc = struct.unpack_from("<BH", response)
         if res_command & 0xE0 != RESPONSE_BLOCK_UPLOAD:
             self._error = True
@@ -740,7 +741,7 @@ class BlockDownloadStream(io.RawIOBase):
 
     def _block_ack(self):
         logger.debug("Waiting for acknowledgement of last block...")
-        response = self.sdo_client.read_response()
+        response = self.sdo_client.read_response(timeout_abort=True)
         res_command, ackseq, blksize = struct.unpack_from("BBB", response)
         if res_command & 0xE0 != RESPONSE_BLOCK_DOWNLOAD:
             self.sdo_client.abort(0x0504_0001)

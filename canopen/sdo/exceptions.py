@@ -1,4 +1,4 @@
-
+from typing import Union
 
 class SdoError(Exception):
     pass
@@ -44,9 +44,15 @@ class SdoAbortedError(SdoError):
         0x08000024: "No data available",
     }
 
-    def __init__(self, code: int):
+    def __init__(self, code: Union[int, str]):
         #: Abort code
-        self.code = code
+        if isinstance(code, str):
+            try:
+                self.code = self.from_string(code)
+            except ValueError as e:
+                raise ValueError(f"Unknown SDO abort description: {code}") from e
+        else:
+            self.code = code
 
     def __str__(self):
         text = f"Code 0x{self.code:08X}"
@@ -57,6 +63,12 @@ class SdoAbortedError(SdoError):
     def __eq__(self, other):
         """Compare two exception objects based on SDO abort code."""
         return self.code == other.code
+
+    def from_string(self, text):
+        code = list(SdoAbortedError.CODES.keys())[
+            list(SdoAbortedError.CODES.values()).index(text)
+        ]
+        return code
 
 
 class SdoCommunicationError(SdoError):

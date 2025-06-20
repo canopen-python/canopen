@@ -1,3 +1,4 @@
+import asyncio
 import struct
 import time
 import unittest
@@ -8,17 +9,26 @@ import canopen
 import canopen.timestamp
 
 
-class TestTime(unittest.TestCase):
+class TestTime(unittest.IsolatedAsyncioTestCase):
 
-    def test_epoch(self):
+    __test__ = False  # This is a base class, tests should not be run directly.
+    use_async: bool
+
+    def setUp(self):
+        self.loop = None
+        if self.use_async:
+            self.loop = asyncio.get_event_loop()
+
+    async def test_epoch(self):
         """Verify that the epoch matches the standard definition."""
         epoch = datetime.strptime(
             "1984-01-01 00:00:00 +0000", "%Y-%m-%d %H:%M:%S %z"
         ).timestamp()
         self.assertEqual(int(epoch), canopen.timestamp.OFFSET)
 
-    def test_time_producer(self):
-        network = canopen.Network()
+    async def test_time_producer(self):
+        network = canopen.Network(loop=self.loop)
+        self.addCleanup(network.disconnect)
         network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         network.connect(interface="virtual", receive_own_messages=True)
         producer = canopen.timestamp.TimeProducer(network)
@@ -42,7 +52,17 @@ class TestTime(unittest.TestCase):
             self.assertEqual(days, int(current_from_epoch) // 86400)
             self.assertEqual(ms, int(current_from_epoch % 86400 * 1000))
 
-        network.disconnect()
+
+class TestTimeSync(TestTime):
+    """ Test time functions in synchronous mode. """
+    __test__ = True
+    use_async = False
+
+
+class TestTimeAsync(TestTime):
+    """ Test time functions in asynchronous mode. """
+    __test__ = True
+    use_async = True
 
 
 if __name__ == "__main__":

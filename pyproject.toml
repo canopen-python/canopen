@@ -8,10 +8,11 @@ authors = [
     {name = "Christian Sandberg", email = "christiansandberg@me.com"},
     {name = "André Colomb", email = "src@andre.colomb.de"},
     {name = "André Filipe Silva", email = "afsilva.work@gmail.com"},
+    {name = "Svein Seldal", email = "sveinse@seldal.com"},
 ]
 description = "CANopen stack implementation"
 readme = "README.rst"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = {file = "LICENSE.txt"}
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -50,9 +51,17 @@ filterwarnings = [
 ]
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.9"
 exclude = [
     "^examples*",
     "^test*",
     "^setup.py*",
+]
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+exclude_also = [
+    'if TYPE_CHECKING:',
 ]

@@ -213,8 +213,6 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(var2.factor, 1)
         self.assertEqual(var2.unit, '')
 
-
-
     def test_comments(self):
         self.assertEqual(self.od.comments,
                          """
@@ -295,7 +293,6 @@ class TestEDS(unittest.TestCase):
             # 'name' member.
             buf.name = "mock.eds"
             self.verify_od(buf, "eds")
-
 
     def verify_od(self, source, doctype):
         exported_od = canopen.import_od(source)

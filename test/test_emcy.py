@@ -1,20 +1,36 @@
 import logging
 import threading
 import unittest
+import asyncio
 from contextlib import contextmanager
 
 import can
 
 import canopen
-from canopen.emcy import EmcyError
+from canopen.emcy import EmcyError, EmcyConsumer
 
 
 TIMEOUT = 0.1
 
 
-class TestEmcy(unittest.TestCase):
+class TestEmcy(unittest.IsolatedAsyncioTestCase):
+
+    __test__ = False  # This is a base class, tests should not be run directly.
+    use_async: bool
+
     def setUp(self):
-        self.emcy = canopen.emcy.EmcyConsumer()
+        loop = None
+        if self.use_async:
+            loop = asyncio.get_event_loop()
+        self.loop = loop
+
+        self.net = canopen.Network(loop=loop)
+        self.net.connect(interface="virtual")
+        self.emcy = EmcyConsumer()
+        self.emcy.network = self.net
+
+    def tearDown(self):
+        self.net.disconnect()
 
     def check_error(self, err, code, reg, data, ts):
         self.assertIsInstance(err, EmcyError)
@@ -24,7 +40,16 @@ class TestEmcy(unittest.TestCase):
         self.assertEqual(err.data, data)
         self.assertAlmostEqual(err.timestamp, ts)
 
-    def test_emcy_consumer_on_emcy(self):
+    async def dispatch_emcy(self, can_id, data, ts):
+        # Dispatch an EMCY datagram.
+        if self.use_async:
+            await asyncio.to_thread(
+                self.emcy.on_emcy, can_id, data, ts
+            )
+        else:
+            self.emcy.on_emcy(can_id, data, ts)
+
+    async def test_emcy_consumer_on_emcy(self):
         # Make sure multiple callbacks receive the same information.
         acc1 = []
         acc2 = []
@@ -32,7 +57,7 @@ class TestEmcy(unittest.TestCase):
         self.emcy.add_callback(lambda err: acc2.append(err))
 
         # Dispatch an EMCY datagram.
-        self.emcy.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
+        await self.dispatch_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
 
         self.assertEqual(len(self.emcy.log), 1)
         self.assertEqual(len(self.emcy.active), 1)
@@ -46,7 +71,7 @@ class TestEmcy(unittest.TestCase):
             )
 
         # Dispatch a new EMCY datagram.
-        self.emcy.on_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
+        await self.dispatch_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
         self.assertEqual(len(self.emcy.log), 2)
         self.assertEqual(len(self.emcy.active), 2)
 
@@ -59,13 +84,13 @@ class TestEmcy(unittest.TestCase):
             )
 
         # Dispatch an EMCY reset.
-        self.emcy.on_emcy(0x81, b'\x00\x00\x00\x00\x00\x00\x00\x00', 2000)
+        await self.dispatch_emcy(0x81, b'\x00\x00\x00\x00\x00\x00\x00\x00', 2000)
         self.assertEqual(len(self.emcy.log), 3)
         self.assertEqual(len(self.emcy.active), 0)
 
-    def test_emcy_consumer_reset(self):
-        self.emcy.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
-        self.emcy.on_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
+    async def test_emcy_consumer_reset(self):
+        await self.dispatch_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
+        await self.dispatch_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
         self.assertEqual(len(self.emcy.log), 2)
         self.assertEqual(len(self.emcy.active), 2)
 
@@ -73,7 +98,10 @@ class TestEmcy(unittest.TestCase):
         self.assertEqual(len(self.emcy.log), 0)
         self.assertEqual(len(self.emcy.active), 0)
 
-    def test_emcy_consumer_wait(self):
+    async def test_emcy_consumer_wait(self):
+        if self.use_async:
+            self.skipTest("Not implemented for async")
+
         PAUSE = TIMEOUT / 2
 
         def push_err():
@@ -95,7 +123,10 @@ class TestEmcy(unittest.TestCase):
                 t.join(TIMEOUT)
 
         # Check unfiltered wait, on timeout.
-        self.assertIsNone(self.emcy.wait(timeout=TIMEOUT))
+        if self.use_async:
+            self.assertIsNone(await self.emcy.async_wait(timeout=TIMEOUT))
+        else:
+            self.assertIsNone(self.emcy.wait(timeout=TIMEOUT))
 
         # Check unfiltered wait, on success.
         with timer(push_err) as t:
@@ -122,6 +153,18 @@ class TestEmcy(unittest.TestCase):
         with timer(push_reset) as t:
             t.start()
             self.assertIsNone(self.emcy.wait(0x9000, TIMEOUT))
+
+
+class TestEmcySync(TestEmcy):
+    """ Run the tests in non-asynchronous mode. """
+    __test__ = True
+    use_async = False
+
+
+class TestEmcyAsync(TestEmcy):
+    """ Run the tests in asynchronous mode. """
+    __test__ = True
+    use_async = True
 
 
 class TestEmcyError(unittest.TestCase):
@@ -181,11 +224,19 @@ class TestEmcyError(unittest.TestCase):
         check(0xffff, "Device Specific")
 
 
-class TestEmcyProducer(unittest.TestCase):
+class TestEmcyProducer(unittest.IsolatedAsyncioTestCase):
+
+    __test__ = False  # This is a base class, tests should not be run directly.
+    use_async: bool
+
     def setUp(self):
-        self.txbus = can.Bus(interface="virtual")
-        self.rxbus = can.Bus(interface="virtual")
-        self.net = canopen.Network(self.txbus)
+        loop = None
+        if self.use_async:
+            loop = asyncio.get_event_loop()
+
+        self.txbus = can.Bus(interface="virtual", loop=loop)
+        self.rxbus = can.Bus(interface="virtual", loop=loop)
+        self.net = canopen.Network(self.txbus, loop=loop)
         self.net.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         self.net.connect()
         self.emcy = canopen.emcy.EmcyProducer(0x80 + 1)
@@ -202,7 +253,7 @@ class TestEmcyProducer(unittest.TestCase):
         actual = msg.data
         self.assertEqual(actual, expected)
 
-    def test_emcy_producer_send(self):
+    async def test_emcy_producer_send(self):
         def check(*args, res):
             self.emcy.send(*args)
             self.check_response(res)
@@ -211,7 +262,7 @@ class TestEmcyProducer(unittest.TestCase):
         check(0x2001, 0x2, res=b'\x01\x20\x02\x00\x00\x00\x00\x00')
         check(0x2001, 0x2, b'\x2a', res=b'\x01\x20\x02\x2a\x00\x00\x00\x00')
 
-    def test_emcy_producer_reset(self):
+    async def test_emcy_producer_reset(self):
         def check(*args, res):
             self.emcy.reset(*args)
             self.check_response(res)
@@ -219,6 +270,18 @@ class TestEmcyProducer(unittest.TestCase):
         check(res=b'\x00\x00\x00\x00\x00\x00\x00\x00')
         check(3, res=b'\x00\x00\x03\x00\x00\x00\x00\x00')
         check(3, b"\xaa\xbb", res=b'\x00\x00\x03\xaa\xbb\x00\x00\x00')
+
+
+class TestEmcyProducerSync(TestEmcyProducer):
+    """ Run the tests in non-asynchronous mode. """
+    __test__ = True
+    use_async = False
+
+
+class TestEmcyProducerAsync(TestEmcyProducer):
+    """ Run the tests in asynchronous mode. """
+    __test__ = True
+    use_async = True
 
 
 if __name__ == "__main__":

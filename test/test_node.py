@@ -1,4 +1,5 @@
 import unittest
+import asyncio
 
 import canopen
 
@@ -8,21 +9,26 @@ def count_subscribers(network: canopen.Network) -> int:
     return sum(len(n) for n in network.subscribers.values())
 
 
-class TestLocalNode(unittest.TestCase):
+class TestLocalNode(unittest.IsolatedAsyncioTestCase):
 
-    @classmethod
-    def setUpClass(cls):
-        cls.network = canopen.Network()
-        cls.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
-        cls.network.connect(interface="virtual")
+    __test__ = False  # This is a base class, tests should not be run directly.
+    use_async: bool
 
-        cls.node = canopen.LocalNode(2, canopen.objectdictionary.ObjectDictionary())
+    def setUp(self):
+        loop = None
+        if self.use_async:
+            loop = asyncio.get_event_loop()
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.network.disconnect()
+        self.network = canopen.Network(loop=loop)
+        self.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
+        self.network.connect(interface="virtual")
 
-    def test_associate_network(self):
+        self.node = canopen.LocalNode(2, canopen.objectdictionary.ObjectDictionary())
+
+    def tearDown(self):
+        self.network.disconnect()
+
+    async def test_associate_network(self):
         # Need to store the number of subscribers before associating because the
         # network implementation automatically adds subscribers to the list
         n_subscribers = count_subscribers(self.network)
@@ -57,21 +63,38 @@ class TestLocalNode(unittest.TestCase):
         self.node.remove_network()
 
 
-class TestRemoteNode(unittest.TestCase):
+class TestLocalNodeSync(TestLocalNode):
+    """ Run the tests in non-asynchronous mode. """
+    __test__ = True
+    use_async = False
 
-    @classmethod
-    def setUpClass(cls):
-        cls.network = canopen.Network()
-        cls.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
-        cls.network.connect(interface="virtual")
 
-        cls.node = canopen.RemoteNode(2, canopen.objectdictionary.ObjectDictionary())
+class TestLocalNodeAsync(TestLocalNode):
+    """ Run the tests in asynchronous mode. """
+    __test__ = True
+    use_async = True
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.network.disconnect()
 
-    def test_associate_network(self):
+class TestRemoteNode(unittest.IsolatedAsyncioTestCase):
+
+    __test__ = False  # This is a base class, tests should not be run directly.
+    use_async: bool
+
+    def setUp(self):
+        loop = None
+        if self.use_async:
+            loop = asyncio.get_event_loop()
+
+        self.network = canopen.Network(loop=loop)
+        self.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
+        self.network.connect(interface="virtual")
+
+        self.node = canopen.RemoteNode(2, canopen.objectdictionary.ObjectDictionary())
+
+    def tearDown(self):
+        self.network.disconnect()
+
+    async def test_associate_network(self):
         # Need to store the number of subscribers before associating because the
         # network implementation automatically adds subscribers to the list
         n_subscribers = count_subscribers(self.network)
@@ -83,6 +106,7 @@ class TestRemoteNode(unittest.TestCase):
         self.assertIs(self.node.tpdo.network, self.network)
         self.assertIs(self.node.rpdo.network, self.network)
         self.assertIs(self.node.nmt.network, self.network)
+        self.assertIs(self.node.emcy.network, self.network)
 
         # Test that its not possible to associate the network multiple times
         with self.assertRaises(RuntimeError) as cm:
@@ -98,7 +122,20 @@ class TestRemoteNode(unittest.TestCase):
         self.assertIs(self.node.tpdo.network, uninitalized)
         self.assertIs(self.node.rpdo.network, uninitalized)
         self.assertIs(self.node.nmt.network, uninitalized)
+        self.assertIs(self.node.emcy.network, uninitalized)
         self.assertEqual(count_subscribers(self.network), n_subscribers)
 
         # Test that its possible to deassociate the network multiple times
         self.node.remove_network()
+
+
+class TestRemoteNodeSync(TestRemoteNode):
+    """ Run the tests in non-asynchronous mode. """
+    __test__ = True
+    use_async = False
+
+
+class TestRemoteNodeAsync(TestRemoteNode):
+    """ Run the tests in asynchronous mode. """
+    __test__ = True
+    use_async = True

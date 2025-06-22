@@ -48,11 +48,11 @@ class SdoServer(SdoBase):
             elif ccs == REQUEST_ABORTED:
                 self.request_aborted(data)
             else:
-                self.abort(0x05040001)
+                self.abort(ABORT_INVALID_COMMAND_SPECIFIER)
         except SdoAbortedError as exc:
             self.abort(exc.code)
         except KeyError as exc:
-            self.abort(0x06020000)
+            self.abort(ABORT_NOT_IN_OD)
         except Exception as exc:
             self.abort()
             logger.exception(exc)
@@ -68,7 +68,7 @@ class SdoServer(SdoBase):
         size = len(data)
         if size == 0:
             logger.info("No content to upload for 0x%04X:%02X", index, subindex)
-            self.abort(0x0800_0024)
+            self.abort(ABORT_NO_DATA_AVAILABLE)
             return
         elif size <= 4:
             logger.info("Expedited upload for 0x%04X:%02X", index, subindex)
@@ -87,7 +87,7 @@ class SdoServer(SdoBase):
     def segmented_upload(self, command):
         if command & TOGGLE_BIT != self._toggle:
             # Toggle bit mismatch
-            raise SdoAbortedError(0x05030000)
+            raise SdoAbortedError(ABORT_TOGGLE_NOT_ALTERNATED)
         data = self._buffer[:7]
         size = len(data)
 
@@ -129,7 +129,7 @@ class SdoServer(SdoBase):
         self._index = index
         self._subindex = subindex
         logger.error("Block download is not supported")
-        self.abort(0x05040001)
+        self.abort(ABORT_INVALID_COMMAND_SPECIFIER)
 
     def init_download(self, request):
         # TODO: Check if writable (now would fail on end of segmented downloads)
@@ -160,7 +160,7 @@ class SdoServer(SdoBase):
     def segmented_download(self, command, request):
         if command & TOGGLE_BIT != self._toggle:
             # Toggle bit mismatch
-            raise SdoAbortedError(0x05030000)
+            raise SdoAbortedError(ABORT_TOGGLE_NOT_ALTERNATED)
         last_byte = 8 - ((command >> 1) & 0x7)
         self._buffer.extend(request[1:last_byte])
 
@@ -183,7 +183,7 @@ class SdoServer(SdoBase):
     def send_response(self, response):
         self.network.send_message(self.tx_cobid, response)
 
-    def abort(self, abort_code=0x08000000):
+    def abort(self, abort_code=ABORT_GENERAL_ERROR):
         """Abort current transfer."""
         data = struct.pack("<BHBL", RESPONSE_ABORTED,
                            self._index, self._subindex, abort_code)

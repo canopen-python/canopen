@@ -116,11 +116,11 @@ class TestSDO(unittest.TestCase):
         self.assertEqual(state, 'PRE-OPERATIONAL')
 
     def test_receive_abort_request(self):
-        self.remote_node.sdo.abort(0x05040003)
+        self.remote_node.sdo.abort(0x0504_0003)  # Invalid sequence number
         # Line below is just so that we are sure the client have received the abort
         # before we do the check
         time.sleep(0.1)
-        self.assertEqual(self.local_node.sdo.last_received_error, 0x05040003)
+        self.assertEqual(self.local_node.sdo.last_received_error, 0x0504_0003)
 
     def test_start_remote_node(self):
         self.remote_node.nmt.state = 'OPERATIONAL'

@@ -583,7 +583,11 @@ class BlockUploadStream(io.RawIOBase):
         self._ackseq = 0
 
     def _end_upload(self):
-        response = self.sdo_client.read_response(timeout_abort=True)
+        try:
+            response = self.sdo_client.read_response(timeout_abort=False)
+        except SdoCommunicationError:
+            self.abort(0x0504_0000)
+            raise
         res_command, self._server_crc = struct.unpack_from("<BH", response)
         if res_command & 0xE0 != RESPONSE_BLOCK_UPLOAD:
             self._error = True
@@ -741,7 +745,11 @@ class BlockDownloadStream(io.RawIOBase):
 
     def _block_ack(self):
         logger.debug("Waiting for acknowledgement of last block...")
-        response = self.sdo_client.read_response(timeout_abort=True)
+        try:
+            response = self.sdo_client.read_response(timeout_abort=False)
+        except SdoCommunicationError:
+            self.sdo_client.abort(0x0504_0000)
+            raise
         res_command, ackseq, blksize = struct.unpack_from("BBB", response)
         if res_command & 0xE0 != RESPONSE_BLOCK_DOWNLOAD:
             self.sdo_client.abort(0x0504_0001)

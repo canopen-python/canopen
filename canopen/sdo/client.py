@@ -93,7 +93,7 @@ class SdoClient(SdoBase):
                     raise
                 logger.warning(str(e))
 
-    def abort(self, abort_code=0x08000000):
+    def abort(self, abort_code=0x0800_0000):
         """Abort current transfer."""
         request = bytearray(8)
         request[0] = REQUEST_ABORTED

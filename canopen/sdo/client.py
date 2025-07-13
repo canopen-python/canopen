@@ -65,6 +65,13 @@ class SdoClient(SdoBase):
                 break
 
     def read_response(self):
+        """Wait for an SDO response and handle timeout or remote abort.
+
+        :raises canopen.SdoAbortedError:
+            When receiving an SDO abort response from the server.
+        :raises canopen.SdoCommunicationError:
+            After timeout with no response received.
+        """
         try:
             response = self.responses.get(
                 block=True, timeout=self.RESPONSE_TIMEOUT)

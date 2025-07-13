@@ -96,11 +96,11 @@ class SdoClient(SdoBase):
             except SdoCommunicationError as e:
                 retries_left -= 1
                 if not retries_left:
-                    self.abort(0x0504_0000)
+                    self.abort(ABORT_TIMED_OUT)
                     raise
                 logger.warning(str(e))
 
-    def abort(self, abort_code=0x0800_0000):
+    def abort(self, abort_code=ABORT_GENERAL_ERROR):
         """Abort current transfer."""
         request = bytearray(8)
         request[0] = REQUEST_ABORTED
@@ -309,10 +309,10 @@ class ReadableStream(io.RawIOBase):
         response = self.sdo_client.request_response(request)
         res_command, = struct.unpack_from("B", response)
         if res_command & 0xE0 != RESPONSE_SEGMENT_UPLOAD:
-            self.sdo_client.abort(0x0504_0001)
+            self.sdo_client.abort(ABORT_INVALID_COMMAND_SPECIFIER)
             raise SdoCommunicationError(f"Unexpected response 0x{res_command:02X}")
         if res_command & TOGGLE_BIT != self._toggle:
-            self.sdo_client.abort(0x0503_0000)
+            self.sdo_client.abort(ABORT_TOGGLE_NOT_ALTERNATED)
             raise SdoCommunicationError("Toggle bit mismatch")
         length = 7 - ((res_command >> 1) & 0x7)
         if res_command & NO_MORE_DATA:
@@ -371,7 +371,7 @@ class WritableStream(io.RawIOBase):
             response = sdo_client.request_response(request)
             res_command, = struct.unpack_from("B", response)
             if res_command != RESPONSE_DOWNLOAD:
-                self.sdo_client.abort(0x0504_0001)
+                self.sdo_client.abort(ABORT_INVALID_COMMAND_SPECIFIER)
                 raise SdoCommunicationError(
                     f"Unexpected response 0x{res_command:02X}")
         else:
@@ -400,7 +400,7 @@ class WritableStream(io.RawIOBase):
             response = self.sdo_client.request_response(request)
             res_command, = struct.unpack_from("B", response)
             if res_command & 0xE0 != RESPONSE_DOWNLOAD:
-                self.sdo_client.abort(0x0504_0001)
+                self.sdo_client.abort(ABORT_INVALID_COMMAND_SPECIFIER)
                 raise SdoCommunicationError(
                     f"Unexpected response 0x{res_command:02X}")
             bytes_sent = len(b)
@@ -425,7 +425,7 @@ class WritableStream(io.RawIOBase):
             response = self.sdo_client.request_response(request)
             res_command, = struct.unpack("B", response[0:1])
             if res_command & 0xE0 != RESPONSE_SEGMENT_DOWNLOAD:
-                self.sdo_client.abort(0x0504_0001)
+                self.sdo_client.abort(ABORT_INVALID_COMMAND_SPECIFIER)
                 raise SdoCommunicationError(
                     f"Unexpected response 0x{res_command:02X} "
                     f"(expected 0x{RESPONSE_SEGMENT_DOWNLOAD:02X})")
@@ -499,7 +499,7 @@ class BlockUploadStream(io.RawIOBase):
         res_command, res_index, res_subindex = SDO_STRUCT.unpack_from(response)
         if res_command & 0xE0 != RESPONSE_BLOCK_UPLOAD:
             self._error = True
-            self.sdo_client.abort(0x0504_0001)
+            self.sdo_client.abort(ABORT_INVALID_COMMAND_SPECIFIER)
             raise SdoCommunicationError(f"Unexpected response 0x{res_command:02X}")
         # Check that the message is for us
         if res_index != index or res_subindex != subindex:
@@ -556,7 +556,7 @@ class BlockUploadStream(io.RawIOBase):
             if self._done:
                 if self._server_crc != self._crc.final():
                     self._error = True
-                    self.sdo_client.abort(0x0504_0004)
+                    self.sdo_client.abort(ABORT_CRC_ERROR)
                     raise SdoCommunicationError("CRC is not OK")
                 logger.info("CRC is OK")
         self.pos += len(data)
@@ -576,7 +576,7 @@ class BlockUploadStream(io.RawIOBase):
                 self._ackseq = seqno
                 return response
         self._error = True
-        self.sdo_client.abort(0x0504_0000)
+        self.sdo_client.abort(ABORT_TIMED_OUT)
         raise SdoCommunicationError("Some data was lost and could not be retransmitted")
 
     def _ack_block(self):
@@ -591,16 +591,16 @@ class BlockUploadStream(io.RawIOBase):
         try:
             response = self.sdo_client.read_response()
         except SdoCommunicationError:
-            self.abort(0x0504_0000)
+            self.abort(ABORT_TIMED_OUT)
             raise
         res_command, self._server_crc = struct.unpack_from("<BH", response)
         if res_command & 0xE0 != RESPONSE_BLOCK_UPLOAD:
             self._error = True
-            self.sdo_client.abort(0x0504_0001)
+            self.sdo_client.abort(ABORT_INVALID_COMMAND_SPECIFIER)
             raise SdoCommunicationError(f"Unexpected response 0x{res_command:02X}")
         if res_command & 0x3 != END_BLOCK_TRANSFER:
             self._error = True
-            self.sdo_client.abort(0x0504_0001)
+            self.sdo_client.abort(ABORT_INVALID_COMMAND_SPECIFIER)
             raise SdoCommunicationError("Server did not end transfer as expected")
         # Return number of bytes not used in last message
         return (res_command >> 2) & 0x7
@@ -670,7 +670,7 @@ class BlockDownloadStream(io.RawIOBase):
         response = sdo_client.request_response(request)
         res_command, res_index, res_subindex = SDO_STRUCT.unpack_from(response)
         if res_command & 0xE0 != RESPONSE_BLOCK_DOWNLOAD:
-            self.sdo_client.abort(0x0504_0001)
+            self.sdo_client.abort(ABORT_INVALID_COMMAND_SPECIFIER)
             raise SdoCommunicationError(
                 f"Unexpected response 0x{res_command:02X}")
         # Check that the message is for us
@@ -755,15 +755,15 @@ class BlockDownloadStream(io.RawIOBase):
         try:
             response = self.sdo_client.read_response()
         except SdoCommunicationError:
-            self.sdo_client.abort(0x0504_0000)
+            self.sdo_client.abort(ABORT_TIMED_OUT)
             raise
         res_command, ackseq, blksize = struct.unpack_from("BBB", response)
         if res_command & 0xE0 != RESPONSE_BLOCK_DOWNLOAD:
-            self.sdo_client.abort(0x0504_0001)
+            self.sdo_client.abort(ABORT_INVALID_COMMAND_SPECIFIER)
             raise SdoCommunicationError(
                 f"Unexpected response 0x{res_command:02X}")
         if res_command & 0x3 != BLOCK_TRANSFER_RESPONSE:
-            self.sdo_client.abort(0x0504_0001)
+            self.sdo_client.abort(ABORT_INVALID_COMMAND_SPECIFIER)
             raise SdoCommunicationError("Server did not respond with a "
                                         "block download response")
         if ackseq != self._blksize:

@@ -41,6 +41,8 @@ class PdoBase(Mapping):
 
     def __getitem__(self, key):
         if isinstance(key, int):
+            if key == 0:
+                raise KeyError("PDO index zero requested for 1-based sequence")
             if (
                 0 < key <= 512  # By PDO Index
                 or 0x1600 <= key <= 0x17FF  # By RPDO ID (512)

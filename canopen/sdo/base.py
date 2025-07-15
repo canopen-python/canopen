@@ -148,7 +148,18 @@ class SdoVariable(variable.Variable):
         variable.Variable.__init__(self, od)
 
     def get_data(self) -> bytes:
-        return self.sdo_node.upload(self.od.index, self.od.subindex)
+        data = self.sdo_node.upload(self.od.index, self.od.subindex)
+        response_size = len(data)
+
+        # If size is available through variable in OD, then use the smaller of the two sizes.
+        # Some devices send U32/I32 even if variable is smaller in OD
+        if self.od.fixed_size:
+            # Get the size in bytes for this variable
+            var_size = len(self.od) // 8
+            if response_size is None or var_size < response_size:
+                # Truncate the data to specified size
+                data = data[:var_size]
+        return data
 
     def set_data(self, data: bytes):
         force_segment = self.od.data_type == objectdictionary.DOMAIN

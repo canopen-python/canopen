@@ -39,7 +39,7 @@ class PdoBase(Mapping):
     def __iter__(self):
         return iter(self.map)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: Union[int, str]):
         if isinstance(key, int):
             if key == 0:
                 raise KeyError("PDO index zero requested for 1-based sequence")

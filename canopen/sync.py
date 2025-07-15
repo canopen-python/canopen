@@ -22,6 +22,8 @@ class SyncProducer:
 
         :param count:
             Counter to add in message.
+        :raises ValueError:
+            If the counter value does not fit in one byte.
         """
         data = bytes([count]) if count is not None else b""
         self.network.send_message(self.cob_id, data)
@@ -31,6 +33,10 @@ class SyncProducer:
 
         :param period:
             Period of SYNC message in seconds.
+        :raises RuntimeError:
+            If a periodic transmission is already started.
+        :raises ValueError:
+            If no period is set via argument nor the instance attribute.
         """
         if self._task is not None:
             raise RuntimeError("Periodic SYNC transmission task already running")

@@ -32,6 +32,9 @@ class SyncProducer:
         :param period:
             Period of SYNC message in seconds.
         """
+        if self._task is not None:
+            raise RuntimeError("Periodic SYNC transmission task already running")
+
         if period is not None:
             self.period = period
 
@@ -44,3 +47,4 @@ class SyncProducer:
         """Stop periodic transmission of SYNC message."""
         if self._task is not None:
             self._task.stop()
+        self._task = None

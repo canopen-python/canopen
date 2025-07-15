@@ -15,7 +15,7 @@ class SyncProducer:
     def __init__(self, network: canopen.network.Network):
         self.network = network
         self.period: Optional[float] = None
-        self._task = None
+        self._task: Optional[canopen.network.PeriodicMessageTask] = None
 
     def transmit(self, count: Optional[int] = None):
         """Send out a SYNC message once.
@@ -23,7 +23,7 @@ class SyncProducer:
         :param count:
             Counter to add in message.
         """
-        data = [count] if count is not None else []
+        data = bytes([count]) if count is not None else b""
         self.network.send_message(self.cob_id, data)
 
     def start(self, period: Optional[float] = None):
@@ -41,7 +41,7 @@ class SyncProducer:
         if not self.period:
             raise ValueError("A valid transmission period has not been given")
 
-        self._task = self.network.send_periodic(self.cob_id, [], self.period)
+        self._task = self.network.send_periodic(self.cob_id, b"", self.period)
 
     def stop(self):
         """Stop periodic transmission of SYNC message."""

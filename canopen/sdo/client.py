@@ -1,6 +1,5 @@
 import io
-import
- logging
+import logging
 import queue
 import struct
 import time

@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import logging
 import struct
-from collections.abc import Mapping, MutableMapping
-from typing import Iterator, Optional, TextIO, Union
+from collections.abc import Iterator, Mapping, MutableMapping
+from typing import Optional, TextIO, Union
 
 from canopen.objectdictionary.datatypes import *
 from canopen.objectdictionary.datatypes import IntegerN, UnsignedN

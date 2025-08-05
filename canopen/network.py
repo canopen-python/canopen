@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import MutableMapping
-from typing import Callable, Final, Iterator, Optional, Union
+from collections.abc import Iterator, MutableMapping
+from typing import Callable, Final, Optional, Union
 
 import can
 

@@ -4,8 +4,8 @@ import binascii
 import logging
 import math
 import threading
-from collections.abc import Mapping
-from typing import Callable, Iterator, Optional, TYPE_CHECKING, Union
+from collections.abc import Iterator, Mapping
+from typing import Callable, Optional, TYPE_CHECKING, Union
 
 import canopen.network
 from canopen import objectdictionary

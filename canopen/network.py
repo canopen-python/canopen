@@ -6,7 +6,6 @@ from collections.abc import MutableMapping
 from typing import Callable, Final, Iterator, Optional, Union
 
 import can
-from can import Listener
 
 from canopen.lss import LssMaster
 from canopen.nmt import NmtMaster
@@ -352,7 +351,7 @@ class PeriodicMessageTask:
             self._start()
 
 
-class MessageListener(Listener):
+class MessageListener(can.Listener):
     """Listens for messages on CAN bus and feeds them to a Network instance.
 
     :param network:

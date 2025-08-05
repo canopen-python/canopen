@@ -35,8 +35,8 @@ db_export = [
 documentation = "https://canopen.readthedocs.io/en/stable/"
 repository = "https://github.com/canopen-python/canopen"
 
-[tool.setuptools]
-packages = ["canopen"]
+[tool.setuptools.packages.find]
+include = ["canopen", "canopen.*"]
 
 [tool.setuptools_scm]
 version_file = "canopen/_version.py"

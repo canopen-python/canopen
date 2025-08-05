@@ -36,7 +36,7 @@ Incomplete support for creating slave nodes also exists.
 Installation
 ------------
 
-Install from PyPI_ using :program:`pip`::
+Install from PyPI_ using ``pip``::
 
     $ pip install canopen
 
@@ -56,7 +56,7 @@ Unit tests can be run using the pytest_ framework::
     $ pip install -r requirements-dev.txt
     $ pytest -v
 
-You can also use :mod:`unittest` standard library module::
+You can also use ``unittest`` standard library module::
 
     $ python3 -m unittest discover test -v
 

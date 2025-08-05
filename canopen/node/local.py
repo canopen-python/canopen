@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, Union
+from typing import Union
 
 import canopen.network
 from canopen import objectdictionary
@@ -25,7 +25,7 @@ class LocalNode(BaseNode):
     ):
         super(LocalNode, self).__init__(node_id, object_dictionary)
 
-        self.data_store: Dict[int, Dict[int, bytes]] = {}
+        self.data_store: dict[int, dict[int, bytes]] = {}
         self._read_callbacks = []
         self._write_callbacks = []
 

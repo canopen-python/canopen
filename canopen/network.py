@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import MutableMapping
-from typing import Callable, Dict, Final, Iterator, List, Optional, Union
+from typing import Callable, Final, Iterator, Optional, Union
 
 import can
 from can import Listener
@@ -40,10 +40,10 @@ class Network(MutableMapping):
         self.scanner = NodeScanner(self)
         #: List of :class:`can.Listener` objects.
         #: Includes at least MessageListener.
-        self.listeners = [MessageListener(self)]
+        self.listeners: list[can.Listener] = [MessageListener(self)]
         self.notifier: Optional[can.Notifier] = None
-        self.nodes: Dict[int, Union[RemoteNode, LocalNode]] = {}
-        self.subscribers: Dict[int, List[Callback]] = {}
+        self.nodes: dict[int, Union[RemoteNode, LocalNode]] = {}
+        self.subscribers: dict[int, list[Callback]] = {}
         self.send_lock = threading.Lock()
         self.sync = SyncProducer(self)
         self.time = TimeProducer(self)
@@ -396,7 +396,7 @@ class NodeScanner:
             network = _UNINITIALIZED_NETWORK
         self.network: Network = network
         #: A :class:`list` of nodes discovered
-        self.nodes: List[int] = []
+        self.nodes: list[int] = []
 
     def on_message_received(self, can_id: int):
         service = can_id & 0x780

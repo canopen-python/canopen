@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import logging
 import struct
-from collections.abc import Mapping, MutableMapping
-from typing import Dict, Iterator, List, Optional, TextIO, Union
+from collections.abc import Iterator, Mapping, MutableMapping
+from typing import Optional, TextIO, Union
 
 from canopen.objectdictionary.datatypes import *
 from canopen.objectdictionary.datatypes import IntegerN, UnsignedN
@@ -367,9 +367,9 @@ class ODVariable:
         #: Description of variable
         self.description: str = ""
         #: Dictionary of value descriptions
-        self.value_descriptions: Dict[int, str] = {}
+        self.value_descriptions: dict[int, str] = {}
         #: Dictionary of bitfield definitions
-        self.bit_definitions: Dict[str, List[int]] = {}
+        self.bit_definitions: dict[str, list[int]] = {}
         #: Storage location of index
         self.storage_location = None
         #: Can this variable be mapped to a PDO

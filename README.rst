@@ -6,7 +6,7 @@ The aim of the project is to support the most common parts of the CiA 301
 standard in a simple Pythonic interface. It is mainly targeted for testing and
 automation tasks rather than a standard compliant master implementation.
 
-The library supports Python 3.8 or newer.
+The library supports Python 3.9 or newer.
 
 
 Features

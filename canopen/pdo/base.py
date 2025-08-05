@@ -4,8 +4,8 @@ import binascii
 import logging
 import math
 import threading
-from collections.abc import Mapping
-from typing import Callable, Dict, Iterator, List, Optional, TYPE_CHECKING, Union
+from collections.abc import Iterator, Mapping
+from typing import Callable, Optional, TYPE_CHECKING, Union
 
 import canopen.network
 from canopen import objectdictionary
@@ -150,7 +150,7 @@ class PdoMaps(Mapping):
         :param pdo_node:
         :param cob_base:
         """
-        self.maps: Dict[int, PdoMap] = {}
+        self.maps: dict[int, PdoMap] = {}
         for map_no in range(512):
             if com_offset + map_no in pdo_node.node.object_dictionary:
                 new_map = PdoMap(
@@ -196,7 +196,7 @@ class PdoMap:
         #: Ignores SYNC objects up to this SYNC counter value (optional)
         self.sync_start_value: Optional[int] = None
         #: List of variables mapped to this PDO
-        self.map: List[PdoVariable] = []
+        self.map: list[PdoVariable] = []
         self.length: int = 0
         #: Current message data
         self.data = bytearray()

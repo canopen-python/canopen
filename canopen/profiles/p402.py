@@ -1,7 +1,6 @@
 # inspired by the NmtMaster code
 import logging
 import time
-from typing import Dict
 
 from canopen.node import RemoteNode
 from canopen.pdo import PdoMap
@@ -215,8 +214,8 @@ class BaseNode402(RemoteNode):
     def __init__(self, node_id, object_dictionary):
         super(BaseNode402, self).__init__(node_id, object_dictionary)
         self.tpdo_values = {}  # { index: value from last received TPDO }
-        self.tpdo_pointers: Dict[int, PdoMap] = {}
-        self.rpdo_pointers: Dict[int, PdoMap] = {}
+        self.tpdo_pointers: dict[int, PdoMap] = {}
+        self.rpdo_pointers: dict[int, PdoMap] = {}
 
     def setup_402_state_machine(self, read_pdos=True):
         """Configure the state machine by searching for a TPDO that has the StatusWord mapped.

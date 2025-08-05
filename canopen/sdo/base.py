@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import binascii
-from collections.abc import Mapping
-from typing import Iterator, Optional, Union
+from collections.abc import Iterator, Mapping
+from typing import Optional, Union
 
 import canopen.network
 from canopen import objectdictionary

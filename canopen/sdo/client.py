@@ -112,6 +112,10 @@ class SdoClient(SdoBase):
     def upload(self, index: int, subindex: int) -> bytes:
         """May be called to make a read operation without an Object Dictionary.
 
+        No validation against the Object Dictionary is performed, even if an object description
+        would be available.  The length of the returned data depends only on the transferred
+        amount, possibly truncated to the size indicated by the server.
+
         :param index:
             Index of object to read.
         :param subindex:
@@ -128,17 +132,8 @@ class SdoClient(SdoBase):
             response_size = fp.size
             data = fp.read()
 
-        # If size is available through variable in OD, then use the smaller of the two sizes.
-        # Some devices send U32/I32 even if variable is smaller in OD
-        var = self.od.get_variable(index, subindex)
-        if var is not None:
-            # Found a matching variable in OD
-            if var.fixed_size:
-                # Get the size in bytes for this variable
-                var_size = len(var) // 8
-                if response_size is None or var_size < response_size:
-                    # Truncate the data to specified size
-                    data = data[0:var_size]
+        if response_size and response_size < len(data):
+            data = data[:response_size]
         return data
 
     def download(

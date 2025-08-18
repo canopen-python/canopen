@@ -2,7 +2,7 @@ import logging
 import struct
 import threading
 import time
-from typing import Callable, Dict, Final, List, Optional, TYPE_CHECKING
+from typing import Callable, Final, Optional, TYPE_CHECKING
 
 import canopen.network
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-NMT_STATES: Final[Dict[int, str]] = {
+NMT_STATES: Final[dict[int, str]] = {
     0: 'INITIALISING',
     4: 'STOPPED',
     5: 'OPERATIONAL',
@@ -21,7 +21,7 @@ NMT_STATES: Final[Dict[int, str]] = {
     127: 'PRE-OPERATIONAL'
 }
 
-NMT_COMMANDS: Final[Dict[str, int]] = {
+NMT_COMMANDS: Final[dict[str, int]] = {
     'OPERATIONAL': 1,
     'STOPPED': 2,
     'SLEEP': 80,
@@ -32,7 +32,7 @@ NMT_COMMANDS: Final[Dict[str, int]] = {
     'RESET COMMUNICATION': 130
 }
 
-COMMAND_TO_STATE: Final[Dict[int, int]] = {
+COMMAND_TO_STATE: Final[dict[int, int]] = {
     1: 5,
     2: 4,
     80: 80,
@@ -117,7 +117,7 @@ class NmtMaster(NmtBase):
         #: Timestamp of last heartbeat message
         self.timestamp: Optional[float] = None
         self.state_update = threading.Condition()
-        self._callbacks: List[Callable[[int], None]] = []
+        self._callbacks: list[Callable[[int], None]] = []
 
     def on_heartbeat(self, can_id, data, timestamp):
         with self.state_update:

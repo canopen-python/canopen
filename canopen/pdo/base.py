@@ -4,8 +4,8 @@ import binascii
 import logging
 import math
 import threading
-from collections.abc import Mapping
-from typing import Callable, Dict, Iterator, List, Optional, TYPE_CHECKING, Union
+from collections.abc import Iterator, Mapping
+from typing import Callable, Optional, TYPE_CHECKING, Union
 
 import canopen.network
 from canopen import objectdictionary
@@ -150,7 +150,7 @@ class PdoMaps(Mapping):
         :param pdo_node:
         :param cob_base:
         """
-        self.maps: Dict[int, PdoMap] = {}
+        self.maps: dict[int, PdoMap] = {}
         for map_no in range(512):
             if com_offset + map_no in pdo_node.node.object_dictionary:
                 new_map = PdoMap(
@@ -196,7 +196,7 @@ class PdoMap:
         #: Ignores SYNC objects up to this SYNC counter value (optional)
         self.sync_start_value: Optional[int] = None
         #: List of variables mapped to this PDO
-        self.map: List[PdoVariable] = []
+        self.map: list[PdoVariable] = []
         self.length: int = 0
         #: Current message data
         self.data = bytearray()
@@ -403,19 +403,27 @@ class PdoMap:
             logger.info("Skip saving %s: COB-ID was never set", self.com_record.od.name)
             return
         logger.info("Setting COB-ID 0x%X and temporarily disabling PDO", self.cob_id)
-        self.com_record[1].raw = self.cob_id | PDO_NOT_VALID | (RTR_NOT_ALLOWED if not self.rtr_allowed else 0x0)
-        if self.trans_type is not None:
-            logger.info("Setting transmission type to %d", self.trans_type)
-            self.com_record[2].raw = self.trans_type
-        if self.inhibit_time is not None:
-            logger.info("Setting inhibit time to %d us", (self.inhibit_time * 100))
-            self.com_record[3].raw = self.inhibit_time
-        if self.event_timer is not None:
-            logger.info("Setting event timer to %d ms", self.event_timer)
-            self.com_record[5].raw = self.event_timer
-        if self.sync_start_value is not None:
-            logger.info("Setting SYNC start value to %d", self.sync_start_value)
-            self.com_record[6].raw = self.sync_start_value
+        self.com_record[1].raw = (
+            self.cob_id
+            | PDO_NOT_VALID
+            | (RTR_NOT_ALLOWED if not self.rtr_allowed else 0)
+        )
+
+        def _set_com_record(
+            subindex: int, value: Optional[int], log_fmt: str, log_factor: int = 1
+        ):
+            if value is None:
+                return
+            if self.com_record[subindex].writable:
+                logger.info(f"Setting {log_fmt}", value * log_factor)
+                self.com_record[subindex].raw = value
+            else:
+                logger.info(f"Cannot set {log_fmt}, not writable", value * log_factor)
+
+        _set_com_record(2, self.trans_type, "transmission type to %d")
+        _set_com_record(3, self.inhibit_time, "inhibit time to %d us", 100)
+        _set_com_record(5, self.event_timer, "event timer to %d ms")
+        _set_com_record(6, self.sync_start_value, "SYNC start value to %d")
 
         try:
             self.map_array[0].raw = 0
@@ -425,20 +433,21 @@ class PdoMap:
             # mappings for an invalid object 0x0000:00 to overwrite any
             # excess entries with all-zeros.
             self._fill_map(self.map_array[0].raw)
-        subindex = 1
-        for var in self.map:
-            logger.info("Writing %s (0x%04X:%02X, %d bits) to PDO map",
-                        var.name, var.index, var.subindex, var.length)
+        for var, entry in zip(self.map, self.map_array.values()):
+            if not entry.od.writable:
+                continue
+            logger.info(
+                "Writing %s (0x%04X:%02X, %d bits) to PDO map",
+                var.name,
+                var.index,
+                var.subindex,
+                var.length,
+            )
             if getattr(self.pdo_node.node, "curtis_hack", False):
                 # Curtis HACK: mixed up field order
-                self.map_array[subindex].raw = (var.index |
-                                                var.subindex << 16 |
-                                                var.length << 24)
+                entry.raw = var.index | var.subindex << 16 | var.length << 24
             else:
-                self.map_array[subindex].raw = (var.index << 16 |
-                                                var.subindex << 8 |
-                                                var.length)
-            subindex += 1
+                entry.raw = var.index << 16 | var.subindex << 8 | var.length
         try:
             self.map_array[0].raw = len(self.map)
         except SdoAbortedError as e:

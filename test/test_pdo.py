@@ -7,7 +7,7 @@ from .util import SAMPLE_EDS, tmp_file
 
 class TestPDO(unittest.TestCase):
     def setUp(self):
-        node = canopen.Node(1, SAMPLE_EDS)
+        node = canopen.LocalNode(1, SAMPLE_EDS)
         pdo = node.pdo.tx[1]
         pdo.add_variable('INTEGER16 value')  # 0x2001
         pdo.add_variable('UNSIGNED8 value', length=4)  # 0x2002
@@ -63,6 +63,19 @@ class TestPDO(unittest.TestCase):
     def test_pdo_save(self):
         self.node.tpdo.save()
         self.node.rpdo.save()
+
+    def test_pdo_save_skip_readonly(self):
+        """Expect no exception when a record entry is not writable."""
+        # Saving only happens with a defined COB ID and for specified parameters
+        self.node.tpdo[1].cob_id = self.node.tpdo[1].predefined_cob_id
+        self.node.tpdo[1].trans_type = 1
+        self.node.tpdo[1].map_array[1].od.access_type = "r"
+        self.node.tpdo[1].save()
+
+        self.node.tpdo[2].cob_id = self.node.tpdo[2].predefined_cob_id
+        self.node.tpdo[2].trans_type = 1
+        self.node.tpdo[2].com_record[2].od.access_type = "r"
+        self.node.tpdo[2].save()
 
     def test_pdo_export(self):
         try:

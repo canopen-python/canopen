@@ -473,7 +473,7 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
     for rate in od.device_information.allowed_baudrates.union(
             {10e3, 20e3, 50e3, 125e3, 250e3, 500e3, 800e3, 1000e3}):
         eds.set(
-            "DeviceInfo", f"BaudRate_{rate//1000}",
+            "DeviceInfo", f"BaudRate_{int(rate//1000)}",
             int(rate in od.device_information.allowed_baudrates))
 
     if device_commisioning and (od.bitrate or od.node_id):

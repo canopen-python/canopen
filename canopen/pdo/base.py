@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import binascii
+import contextlib
 import logging
 import math
 import threading
@@ -33,24 +34,28 @@ class PdoBase(Mapping):
 
     def __init__(self, node: Union[LocalNode, RemoteNode]):
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
-        self.map: Optional[PdoMaps] = None
+        self.map: PdoMaps  # must initialize in derived classes
         self.node: Union[LocalNode, RemoteNode] = node
 
     def __iter__(self):
         return iter(self.map)
 
-    def __getitem__(self, key):
-        if isinstance(key, int) and (0x1A00 <= key <= 0x1BFF or   # By TPDO ID (512)
-                                     0x1600 <= key <= 0x17FF or   # By RPDO ID (512)
-                                     0 < key <= 512):             # By PDO Index
-            return self.map[key]
-        else:
-            for pdo_map in self.map.values():
-                try:
-                    return pdo_map[key]
-                except KeyError:
-                    # ignore if one specific PDO does not have the key and try the next one
-                    continue
+    def __getitem__(self, key: Union[int, str]):
+        if isinstance(key, int):
+            if key == 0:
+                raise KeyError("PDO index zero requested for 1-based sequence")
+            if (
+                0 < key <= 512  # By PDO Index
+                or 0x1600 <= key <= 0x17FF  # By RPDO ID (512)
+                or 0x1A00 <= key <= 0x1BFF  # By TPDO ID (512)
+            ):
+                return self.map[key]
+        for pdo_map in self.map.values():
+            try:
+                return pdo_map[key]
+            except KeyError:
+                # ignore if one specific PDO does not have the key and try the next one
+                continue
         raise KeyError(f"PDO: {key} was not found in any map")
 
     def __len__(self):
@@ -140,10 +145,10 @@ class PdoBase(Mapping):
             pdo_map.stop()
 
 
-class PdoMaps(Mapping):
+class PdoMaps(Mapping[int, 'PdoMap']):
     """A collection of transmit or receive maps."""
 
-    def __init__(self, com_offset, map_offset, pdo_node: PdoBase, cob_base=None):
+    def __init__(self, com_offset: int, map_offset: int, pdo_node: PdoBase, cob_base=None):
         """
         :param com_offset:
         :param map_offset:
@@ -151,6 +156,11 @@ class PdoMaps(Mapping):
         :param cob_base:
         """
         self.maps: dict[int, PdoMap] = {}
+        self.com_offset = com_offset
+        self.map_offset = map_offset
+        if not com_offset and not map_offset:
+            # Skip generating entries without parameter index offsets
+            return
         for map_no in range(512):
             if com_offset + map_no in pdo_node.node.object_dictionary:
                 new_map = PdoMap(
@@ -163,7 +173,9 @@ class PdoMaps(Mapping):
                 self.maps[map_no + 1] = new_map
 
     def __getitem__(self, key: int) -> PdoMap:
-        return self.maps[key]
+        with contextlib.suppress(KeyError):
+            return self.maps[key]
+        return self.maps[key + 1 - self.map_offset]
 
     def __iter__(self) -> Iterator[int]:
         return iter(self.maps)

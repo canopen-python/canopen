@@ -144,10 +144,10 @@ class PdoBase(Mapping):
             pdo_map.stop()
 
 
-class PdoMaps(Mapping):
+class PdoMaps(Mapping[int, 'PdoMap']):
     """A collection of transmit or receive maps."""
 
-    def __init__(self, com_offset, map_offset, pdo_node: PdoBase, cob_base=None):
+    def __init__(self, com_offset: int, map_offset: int, pdo_node: PdoBase, cob_base=None):
         """
         :param com_offset:
         :param map_offset:
@@ -155,6 +155,8 @@ class PdoMaps(Mapping):
         :param cob_base:
         """
         self.maps: dict[int, PdoMap] = {}
+        self.com_offset = com_offset
+        self.map_offset = map_offset
         for map_no in range(512):
             if com_offset + map_no in pdo_node.node.object_dictionary:
                 new_map = PdoMap(

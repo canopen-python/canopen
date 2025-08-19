@@ -34,7 +34,7 @@ class PdoBase(Mapping):
 
     def __init__(self, node: Union[LocalNode, RemoteNode]):
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
-        self.map: Optional[PdoMaps] = None
+        self.map: PdoMaps  # must initialize in derived classes
         self.node: Union[LocalNode, RemoteNode] = node
 
     def __iter__(self):
@@ -158,6 +158,9 @@ class PdoMaps(Mapping[int, 'PdoMap']):
         self.maps: dict[int, PdoMap] = {}
         self.com_offset = com_offset
         self.map_offset = map_offset
+        if not com_offset and not map_offset:
+            # Skip generating entries without parameter index offsets
+            return
         for map_no in range(512):
             if com_offset + map_no in pdo_node.node.object_dictionary:
                 new_map = PdoMap(

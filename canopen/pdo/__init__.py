@@ -24,17 +24,19 @@ class PDO(PdoBase):
     :param tpdo: TPDO object holding the Transmit PDO mappings
     """
 
-    def __init__(self, node, rpdo, tpdo):
+    def __init__(self, node, rpdo: PdoBase, tpdo: PdoBase):
         super(PDO, self).__init__(node)
         self.rx = rpdo.map
         self.tx = tpdo.map
 
-        self.map = {}
-        # the object 0x1A00 equals to key '1' so we remove 1 from the key
+        self.map = PdoMaps(0, 0, self)
+        # Combine RX and TX entries, but only via mapping parameter index.  Relative index
+        # numbers would be ambiguous.
+        # The object 0x1A00 equals to key '1' so we remove 1 from the key
         for key, value in self.rx.items():
-            self.map[0x1600 + (key - 1)] = value
+            self.map.maps[self.rx.map_offset + (key - 1)] = value
         for key, value in self.tx.items():
-            self.map[0x1A00 + (key - 1)] = value
+            self.map.maps[self.tx.map_offset + (key - 1)] = value
 
 
 class RPDO(PdoBase):

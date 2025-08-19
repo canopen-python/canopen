@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import binascii
+import contextlib
 import logging
 import math
 import threading
@@ -169,7 +170,9 @@ class PdoMaps(Mapping[int, 'PdoMap']):
                 self.maps[map_no + 1] = new_map
 
     def __getitem__(self, key: int) -> PdoMap:
-        return self.maps[key]
+        with contextlib.suppress(KeyError):
+            return self.maps[key]
+        return self.maps[key + 1 - self.map_offset]
 
     def __iter__(self) -> Iterator[int]:
         return iter(self.maps)

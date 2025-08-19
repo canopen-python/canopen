@@ -32,9 +32,9 @@ class PDO(PdoBase):
         self.map = {}
         # the object 0x1A00 equals to key '1' so we remove 1 from the key
         for key, value in self.rx.items():
-            self.map[0x1A00 + (key - 1)] = value
-        for key, value in self.tx.items():
             self.map[0x1600 + (key - 1)] = value
+        for key, value in self.tx.items():
+            self.map[0x1A00 + (key - 1)] = value
 
 
 class RPDO(PdoBase):

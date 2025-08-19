@@ -50,7 +50,7 @@ class TestPDO(unittest.TestCase):
         self.assertEqual(node.tpdo[1]['BOOLEAN value 2'].raw, True)
 
         # Test different types of access
-        by_mapping_record = node.pdo[0x1600]
+        by_mapping_record = node.pdo[0x1A00]
         self.assertIsInstance(by_mapping_record, canopen.pdo.PdoMap)
         self.assertEqual(by_mapping_record['INTEGER16 value'].raw, -3)
         by_object_name = node.pdo['INTEGER16 value']
@@ -68,7 +68,7 @@ class TestPDO(unittest.TestCase):
         self.assertEqual(by_object_index.raw, 0xf)
         self.assertIs(node.pdo['0x2002'], by_object_index)
         self.assertIs(node.tpdo[0x2002], by_object_index)
-        self.assertIs(node.pdo[0x1600][0x2002], by_object_index)
+        self.assertIs(node.pdo[0x1A00][0x2002], by_object_index)
 
         self.assertRaises(KeyError, lambda: node.pdo[0])
         self.assertRaises(KeyError, lambda: node.tpdo[0])

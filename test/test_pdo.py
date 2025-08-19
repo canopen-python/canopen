@@ -80,6 +80,9 @@ class TestPDO(unittest.TestCase):
         self.assertEqual(len(node.tpdo), sum(1 for _ in node.tpdo))
         self.assertEqual(len(node.rpdo), sum(1 for _ in node.rpdo))
 
+        pdo = node.tpdo[1]
+        self.assertEqual(len(pdo), sum(1 for _ in pdo))
+
     def test_pdo_save(self):
         self.node.tpdo.save()
         self.node.rpdo.save()

@@ -120,14 +120,13 @@ class NmtMaster(NmtBase):
         self._callbacks: list[Callable[[int], None]] = []
 
     def on_heartbeat(self, can_id, data, timestamp):
+        new_state, = struct.unpack_from("B", data)
+        # Mask out toggle bit
+        new_state &= 0x7F
+        logger.debug("Received heartbeat can-id %d, state is %d", can_id, new_state)
+
         with self.state_update:
             self.timestamp = timestamp
-            new_state, = struct.unpack_from("B", data)
-            # Mask out toggle bit
-            new_state &= 0x7F
-            logger.debug("Received heartbeat can-id %d, state is %d", can_id, new_state)
-            for callback in self._callbacks:
-                callback(new_state)
             if new_state == 0:
                 # Boot-up, will go to PRE-OPERATIONAL automatically
                 self._state = 127
@@ -135,6 +134,9 @@ class NmtMaster(NmtBase):
                 self._state = new_state
             self._state_received = new_state
             self.state_update.notify_all()
+
+        for callback in self._callbacks:
+            callback(new_state)
 
     def send_command(self, code: int):
         """Send an NMT command code to the node.

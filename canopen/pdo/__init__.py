@@ -42,7 +42,7 @@ class PDO(PdoBase):
 class RPDO(PdoBase):
     """Receive PDO to transfer data from somewhere to the represented node.
 
-    Properties 0x1400 to 0x1403 | Mapping 0x1600 to 0x1603.
+    Properties 0x1400 to 0x15FF | Mapping 0x1600 to 0x17FF.
     :param object node: Parent node for this object.
     """
 
@@ -67,7 +67,7 @@ class RPDO(PdoBase):
 class TPDO(PdoBase):
     """Transmit PDO to broadcast data from the represented node to the network.
 
-    Properties 0x1800 to 0x1803 | Mapping 0x1A00 to 0x1A03.
+    Properties 0x1800 to 0x19FF | Mapping 0x1A00 to 0x1BFF.
     :param object node: Parent node for this object.
     """
 

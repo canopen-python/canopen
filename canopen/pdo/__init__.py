@@ -1,4 +1,6 @@
+import itertools
 import logging
+from collections.abc import Iterator
 
 from canopen import node
 from canopen.pdo.base import PdoBase, PdoMap, PdoMaps, PdoVariable
@@ -35,8 +37,16 @@ class PDO(PdoBase):
         # The object 0x1A00 equals to key '1' so we remove 1 from the key
         for key, value in self.rx.items():
             self.map.maps[self.rx.map_offset + (key - 1)] = value
+            self.map.maps[self.rx.com_offset + (key - 1)] = value
         for key, value in self.tx.items():
             self.map.maps[self.tx.map_offset + (key - 1)] = value
+            self.map.maps[self.tx.com_offset + (key - 1)] = value
+
+    def __iter__(self) -> Iterator[int]:
+        return itertools.chain(self.rx, self.tx)
+
+    def __len__(self) -> int:
+        return len(self.rx) + len(self.tx)
 
 
 class RPDO(PdoBase):

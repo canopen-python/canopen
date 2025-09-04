@@ -73,6 +73,8 @@ class TestPDO(unittest.TestCase):
         self.assertRaises(KeyError, lambda: node.pdo[0])
         self.assertRaises(KeyError, lambda: node.tpdo[0])
         self.assertRaises(KeyError, lambda: node.pdo['DOES NOT EXIST'])
+        self.assertRaises(KeyError, lambda: node.pdo[0x1BFF])
+        self.assertRaises(KeyError, lambda: node.tpdo[0x1BFF])
 
     def test_pdo_maps_iterate(self):
         node = self.node

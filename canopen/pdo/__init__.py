@@ -43,7 +43,10 @@ class PDO(PdoBase):
             self.map.maps[self.tx.com_offset + (key - 1)] = value
 
     def __iter__(self) -> Iterator[int]:
-        return itertools.chain(self.rx, self.tx)
+        return itertools.chain(
+            (self.rx.map_offset + i - 1 for i in self.rx),
+            (self.tx.map_offset + i - 1 for i in self.tx),
+        )
 
     def __len__(self) -> int:
         return len(self.rx) + len(self.tx)

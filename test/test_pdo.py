@@ -79,6 +79,20 @@ class TestPDO(unittest.TestCase):
         self.assertRaises(KeyError, lambda: node.pdo[0x1BFF])
         self.assertRaises(KeyError, lambda: node.tpdo[0x1BFF])
 
+    def test_pdo_iterate(self):
+        node = self.node
+        pdo_iter = iter(node.pdo.items())
+        prev = 0  # To check strictly increasing record index number
+        for rpdo, (index, pdo) in zip(node.rpdo.values(), pdo_iter):
+            self.assertIs(rpdo, pdo)
+            self.assertGreater(index, prev)
+            prev = index
+        # Continue consuming from pdo_iter
+        for tpdo, (index, pdo) in zip(node.tpdo.values(), pdo_iter):
+            self.assertIs(tpdo, pdo)
+            self.assertGreater(index, prev)
+            prev = index
+
     def test_pdo_maps_iterate(self):
         node = self.node
         self.assertEqual(len(node.pdo), sum(1 for _ in node.pdo))

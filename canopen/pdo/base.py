@@ -173,9 +173,12 @@ class PdoMaps(Mapping[int, 'PdoMap']):
                 self.maps[map_no + 1] = new_map
 
     def __getitem__(self, key: int) -> PdoMap:
-        with contextlib.suppress(KeyError):
+        try:
             return self.maps[key]
-        return self.maps[key + 1 - self.map_offset]
+        except KeyError:
+            with contextlib.suppress(KeyError):
+                return self.maps[key + 1 - self.map_offset]
+            raise
 
     def __iter__(self) -> Iterator[int]:
         return iter(self.maps)

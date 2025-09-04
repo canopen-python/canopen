@@ -54,6 +54,7 @@ class TestPDO(unittest.TestCase):
         self.assertIsInstance(by_mapping_record, canopen.pdo.PdoMap)
         self.assertEqual(by_mapping_record['INTEGER16 value'].raw, -3)
         self.assertIs(node.tpdo[0x1A00], by_mapping_record)
+        self.assertIs(node.tpdo[0x1800], by_mapping_record)
         by_object_name = node.pdo['INTEGER16 value']
         self.assertIsInstance(by_object_name, canopen.pdo.PdoVariable)
         self.assertIs(by_object_name.od, node.object_dictionary['INTEGER16 value'])

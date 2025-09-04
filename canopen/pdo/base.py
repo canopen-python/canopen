@@ -46,8 +46,7 @@ class PdoBase(Mapping):
                 raise KeyError("PDO index zero requested for 1-based sequence")
             if (
                 0 < key <= 512  # By PDO Index
-                or 0x1600 <= key <= 0x17FF  # By RPDO ID (512)
-                or 0x1A00 <= key <= 0x1BFF  # By TPDO ID (512)
+                or 0x1600 <= key <= 0x1BFF  # By RPDO / TPDO mapping or communication record
             ):
                 return self.map[key]
         for pdo_map in self.map.values():
@@ -178,6 +177,8 @@ class PdoMaps(Mapping[int, 'PdoMap']):
         except KeyError:
             with contextlib.suppress(KeyError):
                 return self.maps[key + 1 - self.map_offset]
+            with contextlib.suppress(KeyError):
+                return self.maps[key + 1 - self.com_offset]
             raise
 
     def __iter__(self) -> Iterator[int]:

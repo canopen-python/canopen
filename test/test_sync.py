@@ -74,6 +74,16 @@ class TestSync(unittest.TestCase):
         if msg is not None:
             self.assertIsNone(self.net.bus.recv(TIMEOUT))
 
+    def test_sync_producer_restart(self):
+        self.sync.start(PERIOD)
+        self.addCleanup(self.sync.stop)
+        # Cannot start again while running
+        with self.assertRaises(RuntimeError):
+            self.sync.start(PERIOD)
+        # Can restart after stopping
+        self.sync.stop()
+        self.sync.start(PERIOD)
+
 
 if __name__ == "__main__":
     unittest.main()

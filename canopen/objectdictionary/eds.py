@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from canopen import objectdictionary
 from canopen.objectdictionary import ObjectDictionary, datatypes
 from canopen.sdo import SdoClient
+from canopen.utils import signed_int_from_hex, calc_bit_length
 
 if TYPE_CHECKING:
     import canopen.network
@@ -201,30 +202,6 @@ def import_from_node(node_id: int, network: canopen.network.Network):
         network.unsubscribe(0x580 + node_id)
     return od
 
-
-def _calc_bit_length(data_type):
-    if data_type == datatypes.INTEGER8:
-        return 8
-    elif data_type == datatypes.INTEGER16:
-        return 16
-    elif data_type == datatypes.INTEGER32:
-        return 32
-    elif data_type == datatypes.INTEGER64:
-        return 64
-    else:
-        raise ValueError(f"Invalid data_type '{data_type}', expecting a signed integer data_type.")
-
-
-def _signed_int_from_hex(hex_str, bit_length):
-    number = int(hex_str, 0)
-    max_value = (1 << (bit_length - 1)) - 1
-
-    if number > max_value:
-        return number - (1 << bit_length)
-    else:
-        return number
-
-
 def _convert_variable(node_id, var_type, value):
     if var_type in (datatypes.OCTET_STRING, datatypes.DOMAIN):
         return bytes.fromhex(value)
@@ -288,7 +265,7 @@ def build_variable(eds, section, node_id, index, subindex=0):
         try:
             min_string = eds.get(section, "LowLimit")
             if var.data_type in datatypes.SIGNED_TYPES:
-                var.min = _signed_int_from_hex(min_string, _calc_bit_length(var.data_type))
+                var.min = signed_int_from_hex(min_string, calc_bit_length(var.data_type))
             else:
                 var.min = int(min_string, 0)
         except ValueError:
@@ -297,7 +274,7 @@ def build_variable(eds, section, node_id, index, subindex=0):
         try:
             max_string = eds.get(section, "HighLimit")
             if var.data_type in datatypes.SIGNED_TYPES:
-                var.max = _signed_int_from_hex(max_string, _calc_bit_length(var.data_type))
+                var.max = signed_int_from_hex(max_string, calc_bit_length(var.data_type))
             else:
                 var.max = int(max_string, 0)
         except ValueError:

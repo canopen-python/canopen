@@ -209,6 +209,8 @@ class ODRecord(MutableMapping):
         self.storage_location = None
         self.subindices = {}
         self.names = {}
+        #: Key-Value pairs not defined by the standard
+        self.custom_options = {}
 
     def __repr__(self) -> str:
         return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
@@ -268,6 +270,8 @@ class ODArray(Mapping):
         self.storage_location = None
         self.subindices = {}
         self.names = {}
+        #: Key-Value pairs not defined by the standard
+        self.custom_options = {}
 
     def __repr__(self) -> str:
         return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
@@ -374,6 +378,8 @@ class ODVariable:
         self.storage_location = None
         #: Can this variable be mapped to a PDO
         self.pdo_mappable = False
+        #: Key-Value pairs not defined by the standard
+        self.custom_options = {}
 
     def __repr__(self) -> str:
         subindex = self.subindex if isinstance(self.parent, (ODRecord, ODArray)) else None

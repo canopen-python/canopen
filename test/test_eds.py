@@ -2,8 +2,7 @@ import os
 import unittest
 
 import canopen
-from canopen.objectdictionary.eds import _signed_int_from_hex
-from canopen.utils import pretty_index
+from canopen.utils import pretty_index, signed_int_from_hex
 
 from .util import DATATYPES_EDS, SAMPLE_EDS, tmp_file
 
@@ -151,7 +150,7 @@ class TestEDS(unittest.TestCase):
         for data_type, test_cases in self.test_data.items():
             for test_case in test_cases:
                 with self.subTest(data_type=data_type, test_case=test_case):
-                    result = _signed_int_from_hex('0x' + test_case["hex_str"], test_case["bit_length"])
+                    result = signed_int_from_hex('0x' + test_case["hex_str"], test_case["bit_length"])
                     self.assertEqual(result, test_case["expected"])
 
     def test_array_compact_subobj(self):

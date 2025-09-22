@@ -5,6 +5,7 @@ import tempfile
 
 DATATYPES_EDS = os.path.join(os.path.dirname(__file__), "datatypes.eds")
 SAMPLE_EDS = os.path.join(os.path.dirname(__file__), "sample.eds")
+SAMPLE_XDD = os.path.join(os.path.dirname(__file__), "sample.xdd")
 
 
 @contextlib.contextmanager

@@ -9,9 +9,11 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+*.tar.gz
 .Python
 env/
 build/
+deb_dist/
 develop-eggs/
 dist/
 downloads/

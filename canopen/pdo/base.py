@@ -469,57 +469,70 @@ class PdoMap:
             logger.info("Skip saving %s: COB-ID was never set", self.com_record.od.name)
             return
         logger.info("Setting COB-ID 0x%X and temporarily disabling PDO", self.cob_id)
-        yield self.com_record[1], self.cob_id | PDO_NOT_VALID | (RTR_NOT_ALLOWED if not self.rtr_allowed else 0x0)
-        if self.trans_type is not None:
-            logger.info("Setting transmission type to %d", self.trans_type)
-            yield self.com_record[2], self.trans_type
-        if self.inhibit_time is not None:
-            logger.info("Setting inhibit time to %d us", (self.inhibit_time * 100))
-            yield self.com_record[3], self.inhibit_time
-        if self.event_timer is not None:
-            logger.info("Setting event timer to %d ms", self.event_timer)
-            yield self.com_record[5], self.event_timer
-        if self.sync_start_value is not None:
-            logger.info("Setting SYNC start value to %d", self.sync_start_value)
-            yield self.com_record[6], self.sync_start_value
+        yield self.com_record[1], (
+            self.cob_id
+            | PDO_NOT_VALID
+            | (RTR_NOT_ALLOWED if not self.rtr_allowed else 0)
+        )
 
-        if self.map is not None:
-            try:
-                yield self.map_array[0], 0
-            except SdoAbortedError:
-                # WORKAROUND for broken implementations: If the array has a
-                # fixed number of entries (count not writable), generate dummy
-                # mappings for an invalid object 0x0000:00 to overwrite any
-                # excess entries with all-zeros.
-                #
-                # The '@@fill_map' yield will run 
-                #    self._fill_map(self.map_array[0].raw())
-                yield self.map_array[0], '@@fill_map'
-            subindex = 1
-            for var in self.map:
-                logger.info("Writing %s (0x%04X:%02X, %d bits) to PDO map",
-                            var.name, var.index, var.subindex, var.length)
-                if hasattr(self.pdo_node.node, "curtis_hack", False):
-                    # Curtis HACK: mixed up field order
-                    yield self.map_array[subindex], (var.index |
-                                                    var.subindex << 16 |
-                                                    var.length << 24)
-                else:
-                    yield self.map_array[subindex], (var.index << 16 |
-                                                    var.subindex << 8 |
-                                                    var.length)
-                subindex += 1
-            try:
-                yield self.map_array[0], len(self.map)
-            except SdoAbortedError as e:
-                # WORKAROUND for broken implementations: If the array
-                # number-of-entries parameter is not writable, we have already
-                # generated the required number of mappings above.
-                if e.code != 0x06010002:
-                    # Abort codes other than "Attempt to write a read-only
-                    # object" should still be reported.
-                    raise
-            self._update_data_size()
+        def _set_com_record(
+            subindex: int, value: Optional[int], log_fmt: str, log_factor: int = 1
+        ):
+            if value is None:
+                return
+            if self.com_record[subindex].writable:
+                logger.info(f"Setting {log_fmt}", value * log_factor)
+                return self.com_record[subindex], value
+            else:
+                logger.info(f"Cannot set {log_fmt}, not writable", value * log_factor)
+
+        for result in (
+            _set_com_record(2, self.trans_type, "transmission type to %d"),
+            _set_com_record(3, self.inhibit_time, "inhibit time to %d us", 100),
+            _set_com_record(5, self.event_timer, "event timer to %d ms"),
+            _set_com_record(6, self.sync_start_value, "SYNC start value to %d"),
+        ):
+            # Each call might return None, which is not a usable result.
+            if result is not None:
+                yield result
+
+        try:
+            yield self.map_array[0], 0
+        except SdoAbortedError:
+            # WORKAROUND for broken implementations: If the array has a
+            # fixed number of entries (count not writable), generate dummy
+            # mappings for an invalid object 0x0000:00 to overwrite any
+            # excess entries with all-zeros.
+            #
+            # The '@@fill_map' yield will run
+            #    self._fill_map(self.map_array[0].raw())
+            yield self.map_array[0], '@@fill_map'
+        for var, entry in zip(self.map, self.map_array.values()):
+            if not entry.od.writable:
+                continue
+            logger.info(
+                "Writing %s (0x%04X:%02X, %d bits) to PDO map",
+                var.name,
+                var.index,
+                var.subindex,
+                var.length,
+            )
+            if getattr(self.pdo_node.node, "curtis_hack", False):
+                # Curtis HACK: mixed up field order
+                yield entry, var.index | var.subindex << 16 | var.length << 24
+            else:
+                yield entry, var.index << 16 | var.subindex << 8 | var.length
+        try:
+            yield self.map_array[0], len(self.map)
+        except SdoAbortedError as e:
+            # WORKAROUND for broken implementations: If the array
+            # number-of-entries parameter is not writable, we have already
+            # generated the required number of mappings above.
+            if e.code != 0x06010002:
+                # Abort codes other than "Attempt to write a read-only
+                # object" should still be reported.
+                raise
+        self._update_data_size()
 
         if self.enabled:
             cob_id = self.cob_id | (RTR_NOT_ALLOWED if not self.rtr_allowed else 0x0)

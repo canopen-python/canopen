@@ -173,16 +173,16 @@ class TestSDO(unittest.IsolatedAsyncioTestCase):
 
     async def test_receive_abort_request(self):
         if self.use_async:
-            await self.remote_node.sdo.aabort(0x05040003)
+            await self.remote_node.sdo.aabort(0x0504_0003)
         else:
-            self.remote_node.sdo.abort(0x05040003)
+            self.remote_node.sdo.abort(0x0504_0003)
         # Line below is just so that we are sure the client have received the abort
         # before we do the check
         if self.use_async:
             await asyncio.sleep(0.1)
         else:
             time.sleep(0.1)
-        self.assertEqual(self.local_node.sdo.last_received_error, 0x05040003)
+        self.assertEqual(self.local_node.sdo.last_received_error, 0x0504_0003)
 
     async def test_start_remote_node(self):
         self.remote_node.nmt.state = 'OPERATIONAL'

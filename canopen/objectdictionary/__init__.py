@@ -484,8 +484,12 @@ class ODVariable:
 
     def encode_phys(self, value: Union[int, bool, float, str, bytes]) -> int:
         if self.data_type in INTEGER_TYPES:
-            value /= self.factor
-            value = int(round(value))
+            if self.factor == 1:
+                pass
+            elif isinstance(value, int) and isinstance(self.factor, int):
+                value = value // self.factor
+            else:
+                value = int(round(value / self.factor))
         return value
 
     def decode_desc(self, value: int) -> str:

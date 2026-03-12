@@ -73,6 +73,8 @@ class TestPDO(unittest.TestCase):
         self.assertIs(node.tpdo[0x2002], by_object_index)
         self.assertIs(node.pdo[0x1A00][0x2002], by_object_index)
 
+        self.assertIs(node.pdo[0x1400], node.pdo[0x1600])
+
         self.assertRaises(KeyError, lambda: node.pdo[0])
         self.assertRaises(KeyError, lambda: node.tpdo[0])
         self.assertRaises(KeyError, lambda: node.pdo['DOES NOT EXIST'])

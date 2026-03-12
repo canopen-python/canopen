@@ -46,7 +46,7 @@ class PdoBase(Mapping):
                 raise KeyError("PDO index zero requested for 1-based sequence")
             if (
                 0 < key <= 512  # By PDO Index
-                or 0x1600 <= key <= 0x1BFF  # By RPDO / TPDO mapping or communication record
+                or 0x1400 <= key <= 0x1BFF  # By RPDO / TPDO mapping or communication record
             ):
                 return self.map[key]
         for pdo_map in self.map.values():

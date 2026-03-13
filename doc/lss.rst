@@ -46,6 +46,8 @@ Or, you can call this method with 4 IDs if you want to switch only one slave::
 Or, you can run fastscan procedure ::
 
     ret_bool, lss_id_list = network.lss.fast_scan()
+    
+**NOTE**: Before you run fastscan, you have to make sure the devices are in non-configured or unconfigured state.    
 
 Once one of sensors goes to CONFIGURATION state, you can read the current node id of the LSS slave::
 

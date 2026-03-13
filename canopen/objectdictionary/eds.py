@@ -130,6 +130,7 @@ def import_eds(source, node_id):
 
             if object_type in (objectcodes.VAR, objectcodes.DOMAIN):
                 var = build_variable(eds, section, node_id, index)
+                var.custom_options = _get_custom_options(eds, section)
                 od.add_object(var)
             elif object_type == objectcodes.ARRAY and eds.has_option(section, "CompactSubObj"):
                 arr = ODArray(name, index)
@@ -139,14 +140,17 @@ def import_eds(source, node_id):
                 arr.add_member(last_subindex)
                 arr.add_member(build_variable(eds, section, node_id, index, 1))
                 arr.storage_location = storage_location
+                arr.custom_options = _get_custom_options(eds, section)
                 od.add_object(arr)
             elif object_type == objectcodes.ARRAY:
                 arr = ODArray(name, index)
                 arr.storage_location = storage_location
+                arr.custom_options = _get_custom_options(eds, section)
                 od.add_object(arr)
             elif object_type == objectcodes.RECORD:
                 record = ODRecord(name, index)
                 record.storage_location = storage_location
+                record.custom_options = _get_custom_options(eds, section)
                 od.add_object(record)
 
             continue
@@ -251,6 +255,18 @@ def _revert_variable(var_type, value):
     else:
         return f"0x{value:02X}"
 
+_STANDARD_OPTIONS = ["ObjectType"      , "ParameterName" , "DataType"    , "AccessType"   ,
+                     "PDOMapping"      , "LowLimit"      , "HighLimit"   , "DefaultValue" ,
+                     "ParameterValue"  , "Factor"        , "Description" , "Unit"         ,
+                     "StorageLocation" , "CompactSubObj"                                  ]
+
+def _get_custom_options(eds, section):
+    custom_options = {}
+    for option, value in eds.items(section):
+        if option not in _STANDARD_OPTIONS:
+            custom_options[option] = value
+    return custom_options
+
 
 def build_variable(eds, section, node_id, index, subindex=0):
     """Creates a object dictionary entry.
@@ -330,6 +346,8 @@ def build_variable(eds, section, node_id, index, subindex=0):
             var.unit = eds.get(section, "Unit")
         except ValueError:
             pass
+
+    var.custom_options = _get_custom_options(eds, section)
     return var
 
 
@@ -404,12 +422,17 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
         if getattr(var, 'unit', '') != '':
             eds.set(section, "Unit", var.unit)
 
+        for option, value in var.custom_options.items():
+            eds.set(section, option, value)
+
     def export_record(var, eds):
         section = f"{var.index:04X}"
         export_common(var, eds, section)
         eds.set(section, "SubNumber", f"0x{len(var.subindices):X}")
         ot = objectcodes.RECORD if isinstance(var, ODRecord) else objectcodes.ARRAY
         eds.set(section, "ObjectType", f"0x{ot:X}")
+        for option, value in var.custom_options.items():
+            eds.set(section, option, value)
         for i in var:
             export_variable(var[i], eds)
 
@@ -496,19 +519,19 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
     def mandatory_indices(x):
         return x in {0x1000, 0x1001, 0x1018}
 
-    def manufacturer_idices(x):
-        return x in range(0x2000, 0x6000)
+    def manufacturer_indices(x):
+        return 0x2000 <= x < 0x6000
 
     def optional_indices(x):
         return all((
             x > 0x1001,
             not mandatory_indices(x),
-            not manufacturer_idices(x),
+            not manufacturer_indices(x),
         ))
 
     supported_mantatory_indices = list(filter(mandatory_indices, od))
     supported_optional_indices = list(filter(optional_indices, od))
-    supported_manufacturer_indices = list(filter(manufacturer_idices, od))
+    supported_manufacturer_indices = list(filter(manufacturer_indices, od))
 
     def add_list(section, list):
         eds.add_section(section)

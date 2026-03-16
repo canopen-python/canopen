@@ -119,6 +119,48 @@ class TestPDO(unittest.TestCase):
                         self.assertIn("ID", header)
                         self.assertIn("Frame Name", header)
 
+    def test_pdo_maps_access_by_parameter_index(self):
+    """Test that PdoMaps supports access by communication and mapping parameter index."""
+    node = self.node
+    # --- TPDO: sequential vs communication param vs mapping param ---
+    by_seq = node.tpdo[1]
+    by_com = node.tpdo[0x1800]      # communication parameter index
+    by_map = node.tpdo[0x1A00]      # mapping parameter index
+    self.assertIs(by_seq, by_com)
+    self.assertIs(by_seq, by_map)
+    # Second TPDO (if present)
+    if 2 in node.tpdo.map:
+        by_seq2 = node.tpdo[2]
+        by_com2 = node.tpdo[0x1801]
+        by_map2 = node.tpdo[0x1A01]
+        self.assertIs(by_seq2, by_com2)
+        self.assertIs(by_seq2, by_map2)
+        self.assertIsNot(by_seq, by_seq2)
+    # --- RPDO: sequential vs communication param vs mapping param ---
+    by_seq = node.rpdo[1]
+    by_com = node.rpdo[0x1400]      # communication parameter index
+    by_map = node.rpdo[0x1600]      # mapping parameter index
+    self.assertIs(by_seq, by_com)
+    self.assertIs(by_seq, by_map)
+    if 2 in node.rpdo.map:
+        by_seq2 = node.rpdo[2]
+        by_com2 = node.rpdo[0x1401]
+        by_map2 = node.rpdo[0x1601]
+        self.assertIs(by_seq2, by_com2)
+        self.assertIs(by_seq2, by_map2)
+    # --- Legacy PDO wrapper: mapping parameter index access ---
+    by_legacy = node.pdo[0x1A00]
+    self.assertIs(by_legacy, node.tpdo[1])
+    by_legacy_rpdo = node.pdo[0x1600]
+    self.assertIs(by_legacy_rpdo, node.rpdo[1])
+    # --- KeyError for out-of-range parameter indices ---
+    self.assertRaises(KeyError, lambda: node.tpdo[0x1400])  # RPDO com param on TPDO
+    self.assertRaises(KeyError, lambda: node.rpdo[0x1800])  # TPDO com param on RPDO
+    self.assertRaises(KeyError, lambda: node.tpdo[0x1600])  # RPDO map param on TPDO
+    self.assertRaises(KeyError, lambda: node.rpdo[0x1A00])  # TPDO map param on RPDO
+    self.assertRaises(KeyError, lambda: node.tpdo.map[0x1FFF])  # nonsense index
+    self.assertRaises(KeyError, lambda: node.rpdo.map[0x1FFF])
+
 
 if __name__ == "__main__":
     unittest.main()

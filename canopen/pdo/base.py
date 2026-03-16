@@ -154,6 +154,8 @@ class PdoMaps(Mapping):
         :param pdo_node:
         :param cob_base:
         """
+        self.com_offset = com_offset
+        self.map_offset = map_offset
         self.maps: dict[int, PdoMap] = {}
         for map_no in range(512):
             if com_offset + map_no in pdo_node.node.object_dictionary:
@@ -161,13 +163,25 @@ class PdoMaps(Mapping):
                     pdo_node,
                     pdo_node.node.sdo[com_offset + map_no],
                     pdo_node.node.sdo[map_offset + map_no])
-                # Generate default COB-IDs for predefined connection set
                 if cob_base is not None and map_no < 4:
                     new_map.predefined_cob_id = cob_base + map_no * 0x100 + pdo_node.node.id
                 self.maps[map_no + 1] = new_map
+    
+    def _resolve_key(self, key: int) -> int:
+        """Translate a communication or mapping parameter index to the
+        sequential 1-based key used internally, or return the key as-is."""
+        if key in self.maps:
+            return key
+        offset = key - self.com_offset
+        if 0 <= offset < 512 and (offset + 1) in self.maps:
+            return offset + 1
+        offset = key - self.map_offset
+        if 0 <= offset < 512 and (offset + 1) in self.maps:
+            return offset + 1
+        raise KeyError(key)
 
     def __getitem__(self, key: int) -> PdoMap:
-        return self.maps[key]
+        return self.maps[self._resolve_key(key)]
 
     def __iter__(self) -> Iterator[int]:
         return iter(self.maps)

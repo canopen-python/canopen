@@ -1,3 +1,4 @@
+import itertools
 import logging
 
 from canopen import node

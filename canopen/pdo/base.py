@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import binascii
+import contextlib
 import logging
 import math
 import threading
@@ -33,7 +34,7 @@ class PdoBase(Mapping):
 
     def __init__(self, node: Union[LocalNode, RemoteNode]):
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
-        self.map: Optional[PdoMaps] = None
+        self.map: PdoMaps  # must initialize in derived classes
         self.node: Union[LocalNode, RemoteNode] = node
 
     def __iter__(self):
@@ -144,10 +145,10 @@ class PdoBase(Mapping):
             pdo_map.stop()
 
 
-class PdoMaps(Mapping):
+class PdoMaps(Mapping[int, 'PdoMap']):
     """A collection of transmit or receive maps."""
 
-    def __init__(self, com_offset, map_offset, pdo_node: PdoBase, cob_base=None):
+    def __init__(self, com_offset: int, map_offset: int, pdo_node: PdoBase, cob_base=None):
         """
         :param com_offset:
         :param map_offset:
@@ -155,6 +156,8 @@ class PdoMaps(Mapping):
         :param cob_base:
         """
         self.maps: dict[int, PdoMap] = {}
+        self.com_offset = com_offset
+        self.map_offset = map_offset
         for map_no in range(512):
             if com_offset + map_no in pdo_node.node.object_dictionary:
                 new_map = PdoMap(
@@ -167,7 +170,14 @@ class PdoMaps(Mapping):
                 self.maps[map_no + 1] = new_map
 
     def __getitem__(self, key: int) -> PdoMap:
-        return self.maps[key]
+        try:
+            return self.maps[key]
+        except KeyError:
+            with contextlib.suppress(KeyError):
+                return self.maps[key + 1 - self.map_offset]
+            with contextlib.suppress(KeyError):
+                return self.maps[key + 1 - self.com_offset]
+            raise
 
     def __iter__(self) -> Iterator[int]:
         return iter(self.maps)

@@ -39,23 +39,21 @@ class PdoBase(Mapping):
 
     def __iter__(self):
         return iter(self.map)
-
-    def __getitem__(self, key: Union[int, str]):
+    
+    def __getitem__(self, key: Union[int, str]) -> PdoVariable:
         if isinstance(key, int):
-            if key == 0:
-                raise KeyError("PDO index zero requested for 1-based sequence")
-            if (
-                0 < key <= 512  # By PDO Index
-                or 0x1400 <= key <= 0x1BFF  # By RPDO / TPDO mapping or communication record
-            ):
-                return self.map[key]
-        for pdo_map in self.map.values():
+            # there is a maximum available of 8 slots per PDO map
+            if key in range(0, 8):
+                try:
+                    return self.map[key]
+                except IndexError:
+                    raise KeyError(f"{key} not found in PDO map")
+            return self.__getitem_by_index(key)
+        else:
             try:
-                return pdo_map[key]
-            except KeyError:
-                # ignore if one specific PDO does not have the key and try the next one
-                continue
-        raise KeyError(f"PDO: {key} was not found in any map")
+                return self.__getitem_by_index(int(key, 16))
+            except ValueError:
+                return self.__getitem_by_name(key)
 
     def __len__(self):
         return len(self.map)

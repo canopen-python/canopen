@@ -49,7 +49,7 @@ class TestPDO(unittest.TestCase):
         self.assertEqual(node.tpdo[1]['BOOLEAN value'].raw, False)
         self.assertEqual(node.tpdo[1]['BOOLEAN value 2'].raw, True)
 
-        # Test different types of access (0x1A00 = TPDO mapping per CiA 301)
+        # Test different types of access
         by_mapping_record = node.pdo[0x1A00]
         self.assertIsInstance(by_mapping_record, canopen.pdo.PdoMap)
         self.assertEqual(by_mapping_record['INTEGER16 value'].raw, -3)
@@ -73,6 +73,8 @@ class TestPDO(unittest.TestCase):
         self.assertIs(node.tpdo[0x2002], by_object_index)
         self.assertIs(node.pdo[0x1A00][0x2002], by_object_index)
 
+        self.assertIs(node.pdo[0x1400], node.pdo[0x1600])
+
         self.assertRaises(KeyError, lambda: node.pdo[0])
         self.assertRaises(KeyError, lambda: node.tpdo[0])
         self.assertRaises(KeyError, lambda: node.pdo['DOES NOT EXIST'])
@@ -82,11 +84,12 @@ class TestPDO(unittest.TestCase):
     def test_pdo_iterate(self):
         node = self.node
         pdo_iter = iter(node.pdo.items())
-        prev = 0
+        prev = 0  # To check strictly increasing record index number
         for rpdo, (index, pdo) in zip(node.rpdo.values(), pdo_iter):
             self.assertIs(rpdo, pdo)
             self.assertGreater(index, prev)
             prev = index
+        # Continue consuming from pdo_iter
         for tpdo, (index, pdo) in zip(node.tpdo.values(), pdo_iter):
             self.assertIs(tpdo, pdo)
             self.assertGreater(index, prev)

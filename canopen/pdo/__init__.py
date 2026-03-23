@@ -1,7 +1,6 @@
 import itertools
 import logging
-from collections.abc import Iterator, Mapping
-from typing import Union
+from collections.abc import Iterator
 
 from canopen import node
 from canopen.pdo.base import PdoBase, PdoMap, PdoMaps, PdoVariable
@@ -56,28 +55,30 @@ class PDO(PdoBase):
     :param tpdo: TPDO object holding the Transmit PDO mappings
     """
 
-    def __init__(self, node, rpdo, tpdo):
+    def __init__(self, node, rpdo: PdoBase, tpdo: PdoBase):
         super(PDO, self).__init__(node)
         self.rx = rpdo.map
         self.tx = tpdo.map
-        self.map = _CombinedPdoMaps(self.rx, self.tx)
 
-    def __getitem__(self, key: Union[int, str]):
-        if isinstance(key, int):
-            if key == 0:
-                raise KeyError("PDO index zero requested for 1-based sequence")
-            if 0 < key <= 512:
-                return self.map[key]
-            if 0x1400 <= key <= 0x17FF:
-                return self.rx[key]
-            if 0x1800 <= key <= 0x1BFF:
-                return self.tx[key]
-        for pdo_map in self.map.values():
-            try:
-                return pdo_map[key]
-            except KeyError:
-                continue
-        raise KeyError(f"PDO: {key} was not found in any map")
+        self.map = PdoMaps(0, 0, self)
+        # Combine RX and TX entries, but only via mapping parameter index.  Relative index
+        # numbers would be ambiguous.
+        # The object 0x1A00 equals to key '1' so we remove 1 from the key
+        for key, value in self.rx.items():
+            self.map.maps[self.rx.map_offset + (key - 1)] = value
+            self.map.maps[self.rx.com_offset + (key - 1)] = value
+        for key, value in self.tx.items():
+            self.map.maps[self.tx.map_offset + (key - 1)] = value
+            self.map.maps[self.tx.com_offset + (key - 1)] = value
+
+    def __iter__(self) -> Iterator[int]:
+        return itertools.chain(
+            (self.rx.map_offset + i - 1 for i in self.rx),
+            (self.tx.map_offset + i - 1 for i in self.tx),
+        )
+
+    def __len__(self) -> int:
+        return len(self.rx) + len(self.tx)
 
 
 class RPDO(PdoBase):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import binascii
+import contextlib
 import logging
 import math
 import threading
@@ -33,7 +34,7 @@ class PdoBase(Mapping):
 
     def __init__(self, node: Union[LocalNode, RemoteNode]):
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
-        self.map: Optional[PdoMaps] = None
+        self.map: Optional[Union[PdoMaps, Mapping[int, PdoMap]]] = None
         self.node: Union[LocalNode, RemoteNode] = node
 
     def __iter__(self):
@@ -45,8 +46,7 @@ class PdoBase(Mapping):
                 raise KeyError("PDO index zero requested for 1-based sequence")
             if (
                 0 < key <= 512  # By PDO Index
-                or 0x1600 <= key <= 0x17FF  # By RPDO ID (512)
-                or 0x1A00 <= key <= 0x1BFF  # By TPDO ID (512)
+                or 0x1400 <= key <= 0x1BFF  # RPDO/TPDO communication or mapping record
             ):
                 return self.map[key]
         for pdo_map in self.map.values():
@@ -155,6 +155,8 @@ class PdoMaps(Mapping):
         :param cob_base:
         """
         self.maps: dict[int, PdoMap] = {}
+        self.com_offset = com_offset
+        self.map_offset = map_offset
         for map_no in range(512):
             if com_offset + map_no in pdo_node.node.object_dictionary:
                 new_map = PdoMap(
@@ -167,7 +169,14 @@ class PdoMaps(Mapping):
                 self.maps[map_no + 1] = new_map
 
     def __getitem__(self, key: int) -> PdoMap:
-        return self.maps[key]
+        try:
+            return self.maps[key]
+        except KeyError:
+            with contextlib.suppress(KeyError):
+                return self.maps[key + 1 - self.map_offset]
+            with contextlib.suppress(KeyError):
+                return self.maps[key + 1 - self.com_offset]
+            raise KeyError(key)
 
     def __iter__(self) -> Iterator[int]:
         return iter(self.maps)

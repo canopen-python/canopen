@@ -175,10 +175,12 @@ class PdoMaps(Mapping[int, 'PdoMap']):
         try:
             return self.maps[key]
         except KeyError:
-            with contextlib.suppress(KeyError):
-                return self.maps[key + 1 - self.map_offset]
-            with contextlib.suppress(KeyError):
-                return self.maps[key + 1 - self.com_offset]
+            if self.map_offset:
+                with contextlib.suppress(KeyError):
+                    return self.maps[key + 1 - self.map_offset]
+            if self.com_offset:
+                with contextlib.suppress(KeyError):
+                    return self.maps[key + 1 - self.com_offset]
             raise
 
     def __iter__(self) -> Iterator[int]:

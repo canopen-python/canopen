@@ -45,8 +45,7 @@ class PdoBase(Mapping):
                 raise KeyError("PDO index zero requested for 1-based sequence")
             if (
                 0 < key <= 512  # By PDO Index
-                or 0x1600 <= key <= 0x17FF  # By RPDO ID (512)
-                or 0x1A00 <= key <= 0x1BFF  # By TPDO ID (512)
+                or 0x1400 <= key <= 0x1BFF  # By record ID
             ):
                 return self.map[key]
         for pdo_map in self.map.values():
@@ -154,6 +153,8 @@ class PdoMaps(Mapping):
         :param pdo_node:
         :param cob_base:
         """
+        self.com_offset = com_offset
+        self.map_offset = map_offset
         self.maps: dict[int, PdoMap] = {}
         for map_no in range(512):
             if com_offset + map_no in pdo_node.node.object_dictionary:
@@ -167,6 +168,10 @@ class PdoMaps(Mapping):
                 self.maps[map_no + 1] = new_map
 
     def __getitem__(self, key: int) -> PdoMap:
+        if self.com_offset <= key <= self.com_offset + 511:
+            return self.maps[key - self.com_offset + 1]
+        if self.map_offset <= key <= self.map_offset + 511:
+            return self.maps[key - self.map_offset + 1]
         return self.maps[key]
 
     def __iter__(self) -> Iterator[int]:

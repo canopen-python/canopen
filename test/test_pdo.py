@@ -76,6 +76,28 @@ class TestPDO(unittest.TestCase):
         self.assertRaises(KeyError, lambda: node.pdo[0x1BFF])
         self.assertRaises(KeyError, lambda: node.tpdo[0x1BFF])
 
+    def test_pdo_getitem_communication_records(self):
+        # Test PDO access by communication parameter record indices
+        node = self.node
+        rpdo_comm = node.rpdo[0x1400]
+        self.assertIsInstance(rpdo_comm, canopen.pdo.PdoMap)
+        self.assertIs(rpdo_comm, node.rpdo[1])
+        tpdo_comm = node.tpdo[0x1800]
+        self.assertIsInstance(tpdo_comm, canopen.pdo.PdoMap)
+        self.assertIs(tpdo_comm, node.tpdo[1])
+
+        # Test generic PDO with RPDO
+        pdo_rpdo_comm = node.pdo[0x1400]
+        self.assertIsInstance(pdo_rpdo_comm, canopen.pdo.PdoMap)
+
+        # Test generic PDO with TPDO
+        pdo_tpdo_comm = node.pdo[0x1800]
+        self.assertIsInstance(pdo_tpdo_comm, canopen.pdo.PdoMap)
+
+        # Verify the returned objects are the same as mapping record access
+        self.assertIs(node.rpdo[0x1400], node.rpdo[0x1600])
+        self.assertIs(node.tpdo[0x1800], node.tpdo[0x1A00])
+
     def test_pdo_maps_iterate(self):
         node = self.node
         self.assertEqual(len(node.pdo), sum(1 for _ in node.pdo))

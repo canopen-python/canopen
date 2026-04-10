@@ -1,4 +1,5 @@
 import logging
+from typing import Union
 
 from canopen import node
 from canopen.pdo.base import PdoBase, PdoMap, PdoMaps, PdoVariable
@@ -30,11 +31,18 @@ class PDO(PdoBase):
         self.tx = tpdo.map
 
         self.map = {}
-        # the object 0x1A00 equals to key '1' so we remove 1 from the key
         for key, value in self.rx.items():
-            self.map[0x1A00 + (key - 1)] = value
+            self.map[0x1400 + (key - 1)] = value
         for key, value in self.tx.items():
-            self.map[0x1600 + (key - 1)] = value
+            self.map[0x1800 + (key - 1)] = value
+
+    def __getitem__(self, key: Union[int, str]):
+        if isinstance(key, int):
+            if 0x1600 <= key <= 0x1600 + 511:
+                key = 0x1800 + (key - 0x1600)
+            elif 0x1A00 <= key <= 0x1A00 + 511:
+                key = 0x1400 + (key - 0x1A00)
+        return super().__getitem__(key)
 
 
 class RPDO(PdoBase):

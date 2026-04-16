@@ -3,7 +3,9 @@ import logging
 import time
 
 from canopen.node import RemoteNode
+from canopen.pdo import PdoMap
 from canopen.sdo import SdoCommunicationError
+
 
 logger = logging.getLogger(__name__)
 
@@ -212,8 +214,8 @@ class BaseNode402(RemoteNode):
     def __init__(self, node_id, object_dictionary):
         super(BaseNode402, self).__init__(node_id, object_dictionary)
         self.tpdo_values = {}  # { index: value from last received TPDO }
-        self.tpdo_pointers = {}  # { index: pdo.PdoMap instance }
-        self.rpdo_pointers = {}  # { index: pdo.PdoMap instance }
+        self.tpdo_pointers: dict[int, PdoMap] = {}
+        self.rpdo_pointers: dict[int, PdoMap] = {}
 
     def setup_402_state_machine(self, read_pdos=True):
         """Configure the state machine by searching for a TPDO that has the StatusWord mapped.
@@ -453,11 +455,10 @@ class BaseNode402(RemoteNode):
         bits = OperationMode.SUPPORTED[mode]
         return self._op_mode_support & bits == bits
 
-    def on_TPDOs_update_callback(self, mapobject):
+    def on_TPDOs_update_callback(self, mapobject: PdoMap):
         """Cache updated values from a TPDO received from this node.
 
         :param mapobject: The received PDO message.
-        :type mapobject: canopen.pdo.PdoMap
         """
         for obj in mapobject:
             self.tpdo_values[obj.index] = obj.raw

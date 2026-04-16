@@ -7,7 +7,7 @@ assumed current state.
 """
 
 from canopen.objectdictionary import ObjectDictionary
-from canopen.profiles.p402 import State402, BaseNode402
+from canopen.profiles.p402 import BaseNode402, State402
 
 
 if __name__ == '__main__':

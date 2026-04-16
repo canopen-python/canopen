@@ -1,4 +1,5 @@
 """Additional utility functions for canopen."""
+
 from typing import Optional, Union
 
 

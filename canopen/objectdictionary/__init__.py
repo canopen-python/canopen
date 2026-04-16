@@ -1,57 +1,75 @@
 """
 Object Dictionary module
 """
+
 from __future__ import annotations
 
-import struct
-from typing import Dict, Iterator, List, Optional, TextIO, Union
-from collections.abc import MutableMapping, Mapping
 import logging
+import struct
+from collections.abc import Iterator, Mapping, MutableMapping
+from typing import Optional, TextIO, Union
 
 from canopen.objectdictionary.datatypes import *
-from canopen.objectdictionary.datatypes_24bit import Integer24, Unsigned24
+from canopen.objectdictionary.datatypes import IntegerN, UnsignedN
 from canopen.utils import pretty_index
+
 
 logger = logging.getLogger(__name__)
 
 
-def export_od(od, dest: Union[str, TextIO, None] = None, doc_type: Optional[str] = None):
-    """ Export :class: ObjectDictionary to a file.
+def export_od(
+    od: ObjectDictionary,
+    dest: Union[str, TextIO, None] = None,
+    doc_type: Optional[str] = None
+) -> None:
+    """Export an object dictionary.
 
     :param od:
-        :class: ObjectDictionary object to be exported
+        The object dictionary to be exported.
     :param dest:
-        export destination. filename, or file-like object or None.
-        if None, the document is returned as string
-    :param doc_type: type of document to export.
-       If a filename is given for dest, this default to the file extension.
-       Otherwise, this defaults to "eds"
-    :rtype: str or None
+        The export destination as a filename, a file-like object, or ``None``.
+        If ``None``, the document is written to :data:`sys.stdout`.
+    :param doc_type:
+       The type of document to export.
+       If *dest* is a file-like object or ``None``,
+       *doc_type* must be explicitly provided.
+       If *dest* is a filename and its extension is ``.eds`` or ``.dcf``,
+       *doc_type* defaults to that extension (the preceeding dot excluded);
+       else, it defaults to ``eds``.
+    :raises ValueError:
+        When exporting to an unknown format.
     """
+    supported_doctypes = {"eds", "dcf"}
+    if doc_type and doc_type not in supported_doctypes:
+        supported = ", ".join(supported_doctypes)
+        raise ValueError(
+            f"Cannot export to the {doc_type!r} format; "
+            f"supported formats: {supported}"
+        )
 
-    doctypes = {"eds", "dcf"}
-    if isinstance(dest, str):
-        if doc_type is None:
-            for t in doctypes:
-                if dest.endswith(f".{t}"):
-                    doc_type = t
-                    break
+    opened_here = False
+    try:
+        if isinstance(dest, str):
+            if doc_type is None:
+                for t in supported_doctypes:
+                    if dest.endswith(f".{t}"):
+                        doc_type = t
+                        break
+                else:
+                    doc_type = "eds"
+            dest = open(dest, 'w')
+            opened_here = True
 
-        if doc_type is None:
-            doc_type = "eds"
-        dest = open(dest, 'w')
-    assert doc_type in doctypes
-
-    if doc_type == "eds":
-        from canopen.objectdictionary import eds
-        return eds.export_eds(od, dest)
-    elif doc_type == "dcf":
-        from canopen.objectdictionary import eds
-        return eds.export_dcf(od, dest)
-
-    # If dest is opened in this fn, it should be closed
-    if type(dest) is str:
-        dest.close()
+        if doc_type == "eds":
+            from canopen.objectdictionary import eds
+            return eds.export_eds(od, dest)
+        elif doc_type == "dcf":
+            from canopen.objectdictionary import eds
+            return eds.export_dcf(od, dest)
+    finally:
+        # If dest is opened in this fn, it should be closed
+        if opened_here:
+            dest.close()
 
 
 def import_od(
@@ -61,10 +79,14 @@ def import_od(
     """Parse an EDS, DCF, or EPF file.
 
     :param source:
-        Path to object dictionary file or a file like object or an EPF XML tree.
-
-    :return:
-        An Object Dictionary instance.
+        The path to object dictionary file, a file like object, or an EPF XML tree.
+    :param node_id:
+        For EDS and DCF files, the node ID to use.
+        For other formats, this parameter is ignored.
+    :raises ObjectDictionaryError:
+        For object dictionary errors and inconsistencies.
+    :raises ValueError:
+        When passed a file of an unknown format.
     """
     if source is None:
         return ObjectDictionary()
@@ -85,7 +107,12 @@ def import_od(
         from canopen.objectdictionary import epf
         return epf.import_epf(source)
     else:
-        raise NotImplementedError("No support for this format")
+        doc_type = suffix[1:]
+        allowed = ", ".join(["eds", "dcf", "epf"])
+        raise ValueError(
+            f"Cannot import from the {doc_type!r} format; "
+            f"supported formats: {allowed}"
+        )
 
 
 class ObjectDictionary(MutableMapping):
@@ -106,7 +133,9 @@ class ObjectDictionary(MutableMapping):
         self, index: Union[int, str]
     ) -> Union[ODArray, ODRecord, ODVariable]:
         """Get object from object dictionary by name or index."""
-        item = self.names.get(index) or self.indices.get(index)
+        item = self.names.get(index)
+        if item is None:
+            item = self.indices.get(index)
         if item is None:
             if isinstance(index, str) and '.' in index:
                 idx, sub = index.split('.', maxsplit=1)
@@ -282,17 +311,25 @@ class ODArray(Mapping):
 class ODVariable:
     """Simple variable."""
 
-    STRUCT_TYPES = {
+    STRUCT_TYPES: dict[int, struct.Struct] = {
+        # Use struct module to pack/unpack data where possible and use the
+        # custom IntegerN and UnsignedN classes for the special data types.
         BOOLEAN: struct.Struct("?"),
         INTEGER8: struct.Struct("b"),
         INTEGER16: struct.Struct("<h"),
-        INTEGER24: Integer24(),
+        INTEGER24: IntegerN(24),
         INTEGER32: struct.Struct("<l"),
+        INTEGER40: IntegerN(40),
+        INTEGER48: IntegerN(48),
+        INTEGER56: IntegerN(56),
         INTEGER64: struct.Struct("<q"),
         UNSIGNED8: struct.Struct("B"),
         UNSIGNED16: struct.Struct("<H"),
-        UNSIGNED24: Unsigned24(),
+        UNSIGNED24: UnsignedN(24),
         UNSIGNED32: struct.Struct("<L"),
+        UNSIGNED40: UnsignedN(40),
+        UNSIGNED48: UnsignedN(48),
+        UNSIGNED56: UnsignedN(56),
         UNSIGNED64: struct.Struct("<Q"),
         REAL32: struct.Struct("<f"),
         REAL64: struct.Struct("<d")
@@ -330,9 +367,9 @@ class ODVariable:
         #: Description of variable
         self.description: str = ""
         #: Dictionary of value descriptions
-        self.value_descriptions: Dict[int, str] = {}
+        self.value_descriptions: dict[int, str] = {}
         #: Dictionary of bitfield definitions
-        self.bit_definitions: Dict[str, List[int]] = {}
+        self.bit_definitions: dict[str, list[int]] = {}
         #: Storage location of index
         self.storage_location = None
         #: Can this variable be mapped to a PDO
@@ -384,12 +421,21 @@ class ODVariable:
         """
         self.bit_definitions[name] = bits
 
+    @property
+    def fixed_size(self) -> bool:
+        """Indicate whether the amount of needed data is known in advance."""
+        # Only for types which we parse using a structure.
+        return self.data_type in self.STRUCT_TYPES
+
     def decode_raw(self, data: bytes) -> Union[int, float, str, bytes, bytearray]:
         if self.data_type == VISIBLE_STRING:
-            return data.rstrip(b"\x00").decode("ascii", errors="ignore")
+            # Strip any trailing NUL characters from C-based systems
+            return data.decode("ascii", errors="ignore").rstrip("\x00")
         elif self.data_type == UNICODE_STRING:
-            # Is this correct?
-            return data.rstrip(b"\x00").decode("utf_16_le", errors="ignore")
+            # The CANopen standard does not specify the encoding. This
+            # library assumes UTF-16, being the most common two-byte encoding format.
+            # Strip any trailing NUL characters from C-based systems
+            return data.decode("utf_16_le", errors="ignore").rstrip("\x00")
         elif self.data_type in self.STRUCT_TYPES:
             try:
                 value, = self.STRUCT_TYPES[self.data_type].unpack(data)
@@ -407,8 +453,9 @@ class ODVariable:
         elif self.data_type == VISIBLE_STRING:
             return value.encode("ascii")
         elif self.data_type == UNICODE_STRING:
-            # Is this correct?
             return value.encode("utf_16_le")
+        elif self.data_type in (DOMAIN, OCTET_STRING):
+            return bytes(value)
         elif self.data_type in self.STRUCT_TYPES:
             if self.data_type in INTEGER_TYPES:
                 value = int(value)

@@ -1,10 +1,11 @@
 import os
 import unittest
+
 import canopen
 from canopen.objectdictionary.eds import _signed_int_from_hex
 from canopen.utils import pretty_index
 
-EDS_PATH = os.path.join(os.path.dirname(__file__), 'sample.eds')
+from .util import DATATYPES_EDS, SAMPLE_EDS, tmp_file
 
 
 class TestEDS(unittest.TestCase):
@@ -48,16 +49,59 @@ class TestEDS(unittest.TestCase):
     }
 
     def setUp(self):
-        self.od = canopen.import_od(EDS_PATH, 2)
+        self.od = canopen.import_od(SAMPLE_EDS, 2)
 
     def test_load_nonexisting_file(self):
         with self.assertRaises(IOError):
             canopen.import_od('/path/to/wrong_file.eds')
 
+    def test_load_unsupported_format(self):
+        with self.assertRaisesRegex(ValueError, "'py'"):
+            canopen.import_od(__file__)
+
     def test_load_file_object(self):
-        with open(EDS_PATH) as fp:
+        with open(SAMPLE_EDS) as fp:
             od = canopen.import_od(fp)
         self.assertTrue(len(od) > 0)
+
+    def test_load_implicit_nodeid(self):
+        # sample.eds has a DeviceComissioning section with NodeID set to 0x10.
+        od = canopen.import_od(SAMPLE_EDS)
+        self.assertEqual(od.node_id, 16)
+
+    def test_load_implicit_nodeid_fallback(self):
+        import io
+
+        # First, remove the NodeID option from DeviceComissioning.
+        with open(SAMPLE_EDS) as f:
+            lines = [L for L in f.readlines() if not L.startswith("NodeID=")]
+        with io.StringIO("".join(lines)) as buf:
+            buf.name = "mock.eds"
+            od = canopen.import_od(buf)
+            self.assertIsNone(od.node_id)
+
+        # Next, try an EDS file without a DeviceComissioning section.
+        od = canopen.import_od(DATATYPES_EDS)
+        self.assertIsNone(od.node_id)
+
+    def test_load_explicit_nodeid(self):
+        od = canopen.import_od(SAMPLE_EDS, node_id=3)
+        self.assertEqual(od.node_id, 3)
+
+    def test_load_baudrate(self):
+        od = canopen.import_od(SAMPLE_EDS)
+        self.assertEqual(od.bitrate, 500_000)
+
+    def test_load_baudrate_fallback(self):
+        import io
+
+        # Remove the Baudrate option.
+        with open(SAMPLE_EDS) as f:
+            lines = [L for L in f.readlines() if not L.startswith("Baudrate=")]
+        with io.StringIO("".join(lines)) as buf:
+            buf.name = "mock.eds"
+            od = canopen.import_od(buf)
+            self.assertIsNone(od.bitrate)
 
     def test_variable(self):
         var = self.od['Producer heartbeat time']
@@ -78,7 +122,7 @@ class TestEDS(unittest.TestCase):
     def test_record(self):
         record = self.od['Identity object']
         self.assertIsInstance(record, canopen.objectdictionary.ODRecord)
-        self.assertEqual(len(record), 5)
+        self.assertEqual(len(record), 4)
         self.assertEqual(record.index, 0x1018)
         self.assertEqual(record.name, 'Identity object')
         var = record['Vendor-ID']
@@ -179,73 +223,142 @@ class TestEDS(unittest.TestCase):
 |-------------|
 """.strip())
 
-    def test_export_eds(self):
-        import tempfile
-        from pathlib import Path
-        with tempfile.TemporaryDirectory() as tempdir:
-            for doctype in {"eds", "dcf"}:
-                tempfile = str(Path(tempdir, "test." + doctype))
-                with open(tempfile, "w+") as tempeds:
-                    print(f"exporting {doctype} to {tempeds.name}")
-                    canopen.export_od(self.od, tempeds, doc_type=doctype)
+    def test_export_eds_to_file(self):
+        for suffix in ".eds", ".dcf":
+            for implicit in True, False:
+                with tmp_file(suffix=suffix) as tmp:
+                    dest = tmp.name
+                    doctype = None if implicit else suffix[1:]
+                    with self.subTest(dest=dest, doctype=doctype):
+                        canopen.export_od(self.od, dest, doctype)
+                        self.verify_od(dest, doctype)
 
-                exported_od = canopen.import_od(tempfile)
+    def test_export_eds_to_file_unknown_extension(self):
+        import io
+        for suffix in ".txt", "":
+            with tmp_file(suffix=suffix) as tmp:
+                dest = tmp.name
+                with self.subTest(dest=dest, doctype=None):
+                    canopen.export_od(self.od, dest)
 
-                for index in exported_od:
-                    self.assertIn(exported_od[index].name, self.od)
-                    self.assertIn(index, self.od)
+                    # The import_od() API has some shortcomings compared to the
+                    # export_od() API, namely that it does not take a doctype
+                    # parameter. This means it has to be able to deduce the
+                    # doctype from its 'source' parameter. In this case, this
+                    # is not possible, since we're using an unknown extension,
+                    # so we have to do a couple of tricks in order to make this
+                    # work.
+                    with open(dest, "r") as source:
+                        data = source.read()
+                    with io.StringIO() as buf:
+                        buf.write(data)
+                        buf.seek(io.SEEK_SET)
+                        buf.name = "mock.eds"
+                        self.verify_od(buf, "eds")
 
-                for index in self.od:
-                    if index < 0x0008:
-                        # ignore dummies
-                        continue
-                    self.assertIn(self.od[index].name, exported_od)
-                    self.assertIn(index, exported_od)
+    def test_export_eds_unknown_doctype(self):
+        import io
+        filelike_object = io.StringIO()
+        self.addCleanup(filelike_object.close)
+        for dest in "filename", None, filelike_object:
+            with self.subTest(dest=dest):
+                with self.assertRaisesRegex(ValueError, "'unknown'"):
+                    canopen.export_od(self.od, dest, doc_type="unknown")
+                # Make sure no files are created is a filename is supplied.
+                if isinstance(dest, str):
+                    with self.assertRaises(FileNotFoundError):
+                        os.stat(dest)
 
-                    actual_object = exported_od[index]
-                    expected_object = self.od[index]
-                    self.assertEqual(type(actual_object), type(expected_object))
-                    self.assertEqual(actual_object.name, expected_object.name)
+    def test_export_eds_to_filelike_object(self):
+        import io
+        for doctype in "eds", "dcf":
+            with io.StringIO() as dest:
+                with self.subTest(dest=dest, doctype=doctype):
+                    canopen.export_od(self.od, dest, doctype)
 
-                    if isinstance(actual_object, canopen.objectdictionary.ODVariable):
-                        expected_vars = [expected_object]
-                        actual_vars = [actual_object]
-                    else:
-                        expected_vars = [expected_object[idx] for idx in expected_object]
-                        actual_vars = [actual_object[idx] for idx in actual_object]
+                    # The import_od() API assumes the file-like object has a
+                    # well-behaved 'name' member.
+                    dest.name = f"mock.{doctype}"
+                    dest.seek(io.SEEK_SET)
+                    self.verify_od(dest, doctype)
 
-                    for prop in [
-                        "allowed_baudrates",
-                        "vendor_name",
-                        "vendor_number",
-                        "product_name",
-                        "product_number",
-                        "revision_number",
-                        "order_code",
-                        "simple_boot_up_master",
-                        "simple_boot_up_slave",
-                        "granularity",
-                        "dynamic_channels_supported",
-                        "group_messaging",
-                        "nr_of_RXPDO",
-                        "nr_of_TXPDO",
-                        "LSS_supported",
-                    ]:
-                        self.assertEqual(getattr(self.od.device_information, prop),
-                                         getattr(exported_od.device_information, prop),
-                                         f"prop {prop!r} mismatch on DeviceInfo")
+    def test_export_eds_to_stdout(self):
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()) as f:
+            ret = canopen.export_od(self.od, None, "eds")
+        self.assertIsNone(ret)
 
-                    for evar, avar in zip(expected_vars, actual_vars):
-                        self.assertEqual(getattr(avar, "data_type", None), getattr(evar, "data_type", None),
-                                         f" mismatch on {pretty_index(evar.index, evar.subindex)}")
-                        self.assertEqual(getattr(avar, "default_raw", None), getattr(evar, "default_raw", None),
-                                         f" mismatch on {pretty_index(evar.index, evar.subindex)}")
-                        self.assertEqual(getattr(avar, "min", None), getattr(evar, "min", None),
-                                         f" mismatch on {pretty_index(evar.index, evar.subindex)}")
-                        self.assertEqual(getattr(avar, "max", None), getattr(evar, "max", None),
-                                         f" mismatch on {pretty_index(evar.index, evar.subindex)}")
-                        if doctype == "dcf":
-                            self.assertEqual(getattr(avar, "value", None), getattr(evar, "value", None),
-                                             f" mismatch on {pretty_index(evar.index, evar.subindex)}")
+        dump = f.getvalue()
+        with io.StringIO(dump) as buf:
+            # The import_od() API assumes the TextIO object has a well-behaved
+            # 'name' member.
+            buf.name = "mock.eds"
+            self.verify_od(buf, "eds")
 
-                        self.assertEqual(self.od.comments, exported_od.comments)
+
+    def verify_od(self, source, doctype):
+        exported_od = canopen.import_od(source)
+
+        for index in exported_od:
+            self.assertIn(exported_od[index].name, self.od)
+            self.assertIn(index, self.od)
+
+        for index in self.od:
+            if index < 0x0008:
+                # ignore dummies
+                continue
+            self.assertIn(self.od[index].name, exported_od)
+            self.assertIn(index, exported_od)
+
+            actual_object = exported_od[index]
+            expected_object = self.od[index]
+            self.assertEqual(type(actual_object), type(expected_object))
+            self.assertEqual(actual_object.name, expected_object.name)
+
+            if isinstance(actual_object, canopen.objectdictionary.ODVariable):
+                expected_vars = [expected_object]
+                actual_vars = [actual_object]
+            else:
+                expected_vars = [expected_object[idx] for idx in expected_object]
+                actual_vars = [actual_object[idx] for idx in actual_object]
+
+            for prop in [
+                "allowed_baudrates",
+                "vendor_name",
+                "vendor_number",
+                "product_name",
+                "product_number",
+                "revision_number",
+                "order_code",
+                "simple_boot_up_master",
+                "simple_boot_up_slave",
+                "granularity",
+                "dynamic_channels_supported",
+                "group_messaging",
+                "nr_of_RXPDO",
+                "nr_of_TXPDO",
+                "LSS_supported",
+            ]:
+                self.assertEqual(getattr(self.od.device_information, prop),
+                                 getattr(exported_od.device_information, prop),
+                                 f"prop {prop!r} mismatch on DeviceInfo")
+
+            for evar, avar in zip(expected_vars, actual_vars):
+                self.assertEqual(getattr(avar, "data_type", None), getattr(evar, "data_type", None),
+                                 f" mismatch on {pretty_index(evar.index, evar.subindex)}")
+                self.assertEqual(getattr(avar, "default_raw", None), getattr(evar, "default_raw", None),
+                                 f" mismatch on {pretty_index(evar.index, evar.subindex)}")
+                self.assertEqual(getattr(avar, "min", None), getattr(evar, "min", None),
+                                 f" mismatch on {pretty_index(evar.index, evar.subindex)}")
+                self.assertEqual(getattr(avar, "max", None), getattr(evar, "max", None),
+                                 f" mismatch on {pretty_index(evar.index, evar.subindex)}")
+                if doctype == "dcf":
+                    self.assertEqual(getattr(avar, "value", None), getattr(evar, "value", None),
+                                     f" mismatch on {pretty_index(evar.index, evar.subindex)}")
+
+                self.assertEqual(self.od.comments, exported_od.comments)
+
+
+if __name__ == "__main__":
+    unittest.main()

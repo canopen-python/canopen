@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import binascii
-from typing import Iterator, Optional, Union
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from typing import Optional, Union
 
+import canopen.network
 from canopen import objectdictionary
 from canopen import variable
 from canopen.utils import pretty_index
@@ -43,7 +44,7 @@ class SdoBase(Mapping):
         """
         self.rx_cobid = rx_cobid
         self.tx_cobid = tx_cobid
-        self.network = None
+        self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
         self.od = od
 
     def __getitem__(
@@ -105,10 +106,12 @@ class SdoRecord(Mapping):
         return SdoVariable(self.sdo_node, self.od[subindex])
 
     def __iter__(self) -> Iterator[int]:
-        return iter(self.od)
+        # Skip the "highest subindex" entry, which is not part of the data
+        return filter(None, iter(self.od))
 
     def __len__(self) -> int:
-        return len(self.od)
+        # Skip the "highest subindex" entry, which is not part of the data
+        return len(self.od) - int(0 in self.od)
 
     def __contains__(self, subindex: Union[int, str]) -> bool:
         return subindex in self.od
@@ -127,6 +130,7 @@ class SdoArray(Mapping):
         return SdoVariable(self.sdo_node, self.od[subindex])
 
     def __iter__(self) -> Iterator[int]:
+        # Skip the "highest subindex" entry, which is not part of the data
         return iter(range(1, len(self) + 1))
 
     def __len__(self) -> int:
@@ -144,7 +148,18 @@ class SdoVariable(variable.Variable):
         variable.Variable.__init__(self, od)
 
     def get_data(self) -> bytes:
-        return self.sdo_node.upload(self.od.index, self.od.subindex)
+        data = self.sdo_node.upload(self.od.index, self.od.subindex)
+        response_size = len(data)
+
+        # If size is available through variable in OD, then use the smaller of the two sizes.
+        # Some devices send U32/I32 even if variable is smaller in OD
+        if self.od.fixed_size:
+            # Get the size in bytes for this variable
+            var_size = len(self.od) // 8
+            if response_size is None or var_size < response_size:
+                # Truncate the data to specified size
+                data = data[:var_size]
+        return data
 
     def set_data(self, data: bytes):
         force_segment = self.od.data_type == objectdictionary.DOMAIN

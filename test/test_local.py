@@ -1,12 +1,9 @@
-import os
-import unittest
-import canopen
-import logging
 import time
+import unittest
 
-# logging.basicConfig(level=logging.DEBUG)
+import canopen
 
-EDS_PATH = os.path.join(os.path.dirname(__file__), 'sample.eds')
+from .util import SAMPLE_EDS
 
 
 class TestSDO(unittest.TestCase):
@@ -17,16 +14,18 @@ class TestSDO(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.network1 = canopen.Network()
-        cls.network1.connect("test", bustype="virtual")
-        cls.remote_node = cls.network1.add_node(2, EDS_PATH)
+        cls.network1.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
+        cls.network1.connect("test", interface="virtual")
+        cls.remote_node = cls.network1.add_node(2, SAMPLE_EDS)
 
         cls.network2 = canopen.Network()
-        cls.network2.connect("test", bustype="virtual")
-        cls.local_node = cls.network2.create_node(2, EDS_PATH)
+        cls.network2.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
+        cls.network2.connect("test", interface="virtual")
+        cls.local_node = cls.network2.create_node(2, SAMPLE_EDS)
 
-        cls.remote_node2 = cls.network1.add_node(3, EDS_PATH)
+        cls.remote_node2 = cls.network1.add_node(3, SAMPLE_EDS)
 
-        cls.local_node2 = cls.network2.create_node(3, EDS_PATH)
+        cls.local_node2 = cls.network2.create_node(3, SAMPLE_EDS)
 
     @classmethod
     def tearDownClass(cls):
@@ -63,6 +62,13 @@ class TestSDO(unittest.TestCase):
         sampling_rate = self.remote_node.sdo["Sensor Sampling Rate (Hz)"].raw
         self.assertAlmostEqual(sampling_rate, 5.2, places=2)
 
+    def test_upload_zero_length(self):
+        self.local_node.sdo["Manufacturer device name"].raw = b""
+        with self.assertRaises(canopen.SdoAbortedError) as error:
+            self.remote_node.sdo["Manufacturer device name"].data
+        # Should be No data available
+        self.assertEqual(error.exception.code, 0x0800_0024)
+
     def test_segmented_upload(self):
         self.local_node.sdo["Manufacturer device name"].raw = "Some cool device"
         device_name = self.remote_node.sdo["Manufacturer device name"].data
@@ -91,7 +97,7 @@ class TestSDO(unittest.TestCase):
     def test_slave_send_heartbeat(self):
         # Setting the heartbeat time should trigger heartbeating
         # to start
-        self.remote_node.sdo["Producer heartbeat time"].raw = 1000
+        self.remote_node.sdo["Producer heartbeat time"].raw = 100
         state = self.remote_node.nmt.wait_for_heartbeat()
         self.local_node.nmt.stop_heartbeat()
         # The NMT master will change the state INITIALISING (0)
@@ -100,7 +106,7 @@ class TestSDO(unittest.TestCase):
 
     def test_nmt_state_initializing_to_preoper(self):
         # Initialize the heartbeat timer
-        self.local_node.sdo["Producer heartbeat time"].raw = 1000
+        self.local_node.sdo["Producer heartbeat time"].raw = 100
         self.local_node.nmt.stop_heartbeat()
         # This transition shall start the heartbeating
         self.local_node.nmt.state = 'INITIALISING'
@@ -110,11 +116,11 @@ class TestSDO(unittest.TestCase):
         self.assertEqual(state, 'PRE-OPERATIONAL')
 
     def test_receive_abort_request(self):
-        self.remote_node.sdo.abort(0x05040003)
+        self.remote_node.sdo.abort(0x0504_0003)  # Invalid sequence number
         # Line below is just so that we are sure the client have received the abort
         # before we do the check
         time.sleep(0.1)
-        self.assertEqual(self.local_node.sdo.last_received_error, 0x05040003)
+        self.assertEqual(self.local_node.sdo.last_received_error, 0x0504_0003)
 
     def test_start_remote_node(self):
         self.remote_node.nmt.state = 'OPERATIONAL'
@@ -172,68 +178,6 @@ class TestSDO(unittest.TestCase):
         self.assertEqual(self._kwargs["data"], b"\x03\x04")
 
 
-class TestNMT(unittest.TestCase):
-    """
-    Test NMT slave.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        cls.network1 = canopen.Network()
-        cls.network1.connect("test", bustype="virtual")
-        cls.remote_node = cls.network1.add_node(2, EDS_PATH)
-
-        cls.network2 = canopen.Network()
-        cls.network2.connect("test", bustype="virtual")
-        cls.local_node = cls.network2.create_node(2, EDS_PATH)
-
-        cls.remote_node2 = cls.network1.add_node(3, EDS_PATH)
-
-        cls.local_node2 = cls.network2.create_node(3, EDS_PATH)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.network1.disconnect()
-        cls.network2.disconnect()
-
-    def test_start_two_remote_nodes(self):
-        self.remote_node.nmt.state = 'OPERATIONAL'
-        # Line below is just so that we are sure the client have received the command
-        # before we do the check
-        time.sleep(0.1)
-        slave_state = self.local_node.nmt.state
-        self.assertEqual(slave_state, 'OPERATIONAL')
-
-        self.remote_node2.nmt.state = 'OPERATIONAL'
-        # Line below is just so that we are sure the client have received the command
-        # before we do the check
-        time.sleep(0.1)
-        slave_state = self.local_node2.nmt.state
-        self.assertEqual(slave_state, 'OPERATIONAL')
-
-    def test_stop_two_remote_nodes_using_broadcast(self):
-        # This is a NMT broadcast "Stop remote node"
-        # ie. set the node in STOPPED state
-        self.network1.send_message(0, [2, 0])
-
-        # Line below is just so that we are sure the slaves have received the command
-        # before we do the check
-        time.sleep(0.1)
-        slave_state = self.local_node.nmt.state
-        self.assertEqual(slave_state, 'STOPPED')
-        slave_state = self.local_node2.nmt.state
-        self.assertEqual(slave_state, 'STOPPED')
-
-    def test_heartbeat(self):
-        # self.assertEqual(self.remote_node.nmt.state, 'INITIALISING')
-        # self.assertEqual(self.local_node.nmt.state, 'INITIALISING')
-        self.local_node.nmt.state = 'OPERATIONAL'
-        self.local_node.sdo[0x1017].raw = 100
-        time.sleep(0.2)
-        self.assertEqual(self.remote_node.nmt.state, 'OPERATIONAL')
-
-        self.local_node.nmt.stop_heartbeat()
-
 class TestPDO(unittest.TestCase):
     """
     Test PDO slave.
@@ -242,12 +186,14 @@ class TestPDO(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.network1 = canopen.Network()
-        cls.network1.connect("test", bustype="virtual")
-        cls.remote_node = cls.network1.add_node(2, EDS_PATH)
+        cls.network1.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
+        cls.network1.connect("test", interface="virtual")
+        cls.remote_node = cls.network1.add_node(2, SAMPLE_EDS)
 
         cls.network2 = canopen.Network()
-        cls.network2.connect("test", bustype="virtual")
-        cls.local_node = cls.network2.create_node(2, EDS_PATH)
+        cls.network2.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
+        cls.network2.connect("test", interface="virtual")
+        cls.local_node = cls.network2.create_node(2, SAMPLE_EDS)
 
     @classmethod
     def tearDownClass(cls):

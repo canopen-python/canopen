@@ -54,6 +54,10 @@ You can access the objects using either index/subindex or names::
 API
 ---
 
+.. autofunction:: canopen.export_od
+
+.. autofunction:: canopen.import_od
+
 .. autoclass:: canopen.ObjectDictionary
    :members:
 

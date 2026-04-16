@@ -1,6 +1,58 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
+requires = ["setuptools>=77", "wheel", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "canopen"
+authors = [
+    {name = "Christian Sandberg", email = "christiansandberg@me.com"},
+    {name = "André Colomb", email = "src@andre.colomb.de"},
+    {name = "André Filipe Silva", email = "afsilva.work@gmail.com"},
+]
+description = "CANopen stack implementation"
+readme = "README.rst"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE.txt"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "python-can >= 3.0.0",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+db_export = [
+    "canmatrix ~= 1.0",
+]
+
+[project.urls]
+documentation = "https://canopen.readthedocs.io/en/stable/"
+repository = "https://github.com/canopen-python/canopen"
+
+[tool.setuptools.packages.find]
+include = ["canopen", "canopen.*"]
+
 [tool.setuptools_scm]
-write_to = "canopen/_version.py"
+version_file = "canopen/_version.py"
+
+[tool.pytest.ini_options]
+testpaths = [
+    "test",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.mypy]
+python_version = "3.9"
+exclude = [
+    "^examples*",
+    "^test*",
+    "^setup.py*",
+]

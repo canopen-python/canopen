@@ -1,8 +1,13 @@
-import struct
+from __future__ import annotations
+
 import logging
+import struct
 import threading
 import time
-from typing import Callable, List, Optional
+from typing import Callable, Optional
+
+import canopen.network
+
 
 # Error code, error register, vendor specific data
 EMCY_STRUCT = struct.Struct("<HB5s")
@@ -14,9 +19,9 @@ class EmcyConsumer:
 
     def __init__(self):
         #: Log of all received EMCYs for this node
-        self.log: List["EmcyError"] = []
+        self.log: list[EmcyError] = []
         #: Only active EMCYs. Will be cleared on Error Reset
-        self.active: List["EmcyError"] = []
+        self.active: list[EmcyError] = []
         self.callbacks = []
         self.emcy_received = threading.Condition()
 
@@ -36,7 +41,7 @@ class EmcyConsumer:
         for callback in self.callbacks:
             callback(entry)
 
-    def add_callback(self, callback: Callable[["EmcyError"], None]):
+    def add_callback(self, callback: Callable[[EmcyError], None]):
         """Get notified on EMCY messages from this node.
 
         :param callback:
@@ -52,7 +57,7 @@ class EmcyConsumer:
 
     def wait(
         self, emcy_code: Optional[int] = None, timeout: float = 10
-    ) -> "EmcyError":
+    ) -> EmcyError:
         """Wait for a new EMCY to arrive.
 
         :param emcy_code: EMCY code to wait for
@@ -82,7 +87,7 @@ class EmcyConsumer:
 class EmcyProducer:
 
     def __init__(self, cob_id: int):
-        self.network = None
+        self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
         self.cob_id = cob_id
 
     def send(self, code: int, register: int = 0, data: bytes = b""):

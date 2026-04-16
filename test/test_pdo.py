@@ -107,8 +107,7 @@ class TestPDO(unittest.TestCase):
         self.assertEqual(len(pdo), sum(1 for _ in pdo))
 
     def test_bit_offsets(self):
-        node = canopen.Node(1, SAMPLE_EDS)
-        pdo = node.pdo.tx[1]
+        pdo = self.node.pdo.tx[2]
         pdo.add_variable('UNSIGNED8 value', length=4)  # byte-aligned, partial byte length
         pdo.add_variable('INTEGER8 value')  # non-byte-aligned, one whole byte length
         pdo.add_variable('UNSIGNED32 value', length=24)  # non-aligned, partial last byte

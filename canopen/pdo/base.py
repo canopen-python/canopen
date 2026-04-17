@@ -40,23 +40,32 @@ class PdoBase(Mapping):
         return iter(self.map)
 
     def __getitem__(self, key: Union[int, str]):
-        if isinstance(key, int):
-            if key == 0:
-                raise KeyError("PDO index zero requested for 1-based sequence")
-            if (
-                0 < key <= 512  # By PDO Index
-                or 0x1600 <= key <= 0x17FF  # By RPDO ID (512)
-                or 0x1A00 <= key <= 0x1BFF  # By TPDO ID (512)
-            ):
-                return self.map[key]
-        for pdo_map in self.map.values():
-            try:
-                return pdo_map[key]
-            except KeyError:
-                # ignore if one specific PDO does not have the key and try the next one
-                continue
+    if isinstance(key, int):
+        if key == 0:
+            raise KeyError("PDO index zero requested for 1-based sequence")
+        if 0 < key <= 512:
+            # Sequential 1-based index, direct lookup
+            return self.map[key]
+        elif 0x1400 <= key <= 0x15FF:
+            # RPDO communication parameter records (CiA 301)
+            return self.map[(key - 0x1400) + 1]
+        elif 0x1600 <= key <= 0x17FF:
+            # RPDO mapping parameter records (CiA 301)
+            return self.map[(key - 0x1600) + 1]
+        elif 0x1800 <= key <= 0x19FF:
+            # TPDO communication parameter records (CiA 301)
+            return self.map[(key - 0x1800) + 1]
+        elif 0x1A00 <= key <= 0x1BFF:
+            # TPDO mapping parameter records (CiA 301)
+            return self.map[(key - 0x1A00) + 1]
         raise KeyError(f"PDO: {key} was not found in any map")
-
+    for pdo_map in self.map.values():
+        try:
+            return pdo_map[key]
+        except KeyError:
+            continue
+    raise KeyError(f"PDO: {key} was not found in any map")
+    
     def __len__(self):
         return len(self.map)
 

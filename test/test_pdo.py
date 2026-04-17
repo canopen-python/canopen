@@ -38,8 +38,18 @@ class TestPDO(unittest.TestCase):
         self.assertEqual(pdo['INTEGER32 value'].raw, 0x01020304)
         self.assertEqual(pdo['BOOLEAN value'].raw, False)
         self.assertEqual(pdo['BOOLEAN value 2'].raw, True)
-
-    def test_pdo_getitem(self):
+def test_pdo_access_by_index(network):
+    node = network[1]
+    # Should work by sequential index
+    assert node.rpdo[1] is not None
+    # Should also work by CiA 301 mapping record index
+    assert node.rpdo[0x1600] is node.rpdo[1]
+    # And by communication record index (the flaw in PR #613)
+    assert node.rpdo[0x1400] is node.rpdo[1]
+    # Same for TPDO
+    assert node.tpdo[0x1A00] is node.tpdo[1]
+    assert node.tpdo[0x1800] is node.tpdo[1]
+        def test_pdo_getitem(self):
         node = self.node
         self.assertEqual(node.tpdo[1]['INTEGER16 value'].raw, -3)
         self.assertEqual(node.tpdo[1]['UNSIGNED8 value'].raw, 0xf)

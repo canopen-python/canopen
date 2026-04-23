@@ -229,7 +229,7 @@ class PdoMap:
         self._task = None
 
     def __repr__(self) -> str:
-        cob = f"0x{self.cob_id:X}" if self.cob_id is not None else "Unassigned"
+        cob = f"0x{self.cob_id:X}" if self.cob_id else "Unassigned"
         return f"<{type(self).__qualname__} {self.name!r} at COB-ID {cob}>"
 
     def __getitem_by_index(self, value):
@@ -493,7 +493,7 @@ class PdoMap:
         associated with read() or save(), if the local PDO setup is
         known to match what's stored on the node.
         """
-        if self.enabled and self.cob_id is not None:
+        if self.enabled and self.cob_id:
             logger.info("Subscribing to enabled PDO 0x%X on the network", self.cob_id)
             self.pdo_node.network.subscribe(self.cob_id, self.on_message)
 
@@ -541,7 +541,7 @@ class PdoMap:
 
     def transmit(self) -> None:
         """Transmit the message once."""
-        if self.cob_id is None:
+        if not self.cob_id:
             raise ValueError("A valid COB-ID has not been configured")
         self.pdo_node.network.send_message(self.cob_id, self.data)
 
@@ -562,7 +562,7 @@ class PdoMap:
 
         if not self.period:
             raise ValueError("A valid transmission period has not been given")
-        if self.cob_id is None:
+        if not self.cob_id:
             raise ValueError("A valid COB-ID has not been configured")
         logger.info("Starting %s with a period of %s seconds", self.name, self.period)
 
@@ -584,7 +584,7 @@ class PdoMap:
         """Send a remote request for the transmit PDO.
         Silently ignore if not allowed.
         """
-        if self.enabled and self.rtr_allowed and self.cob_id is not None:
+        if self.enabled and self.rtr_allowed and self.cob_id:
             self.pdo_node.network.send_message(self.cob_id, bytes(), remote=True)
 
     def wait_for_reception(self, timeout: float = 10) -> float:

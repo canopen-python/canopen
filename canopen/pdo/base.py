@@ -551,7 +551,9 @@ class PdoMap:
         :param period:
             Transmission period in seconds.  Can be omitted if :attr:`period` has been set
             on the object before.
-        :raises ValueError: When neither the argument nor the :attr:`period` is given.
+
+        :raises ValueError:
+            When neither the argument nor the :attr:`period` is given, or no COB-ID assigned.
         """
         # Stop an already running transmission if we have one, otherwise we
         # overwrite the reference and can lose our handle to shut it down

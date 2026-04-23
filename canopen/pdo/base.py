@@ -540,7 +540,10 @@ class PdoMap:
         return var
 
     def transmit(self) -> None:
-        """Transmit the message once."""
+        """Transmit the message once.
+
+        :raises ValueError: When no COB-ID was assigned.
+        """
         if not self.cob_id:
             raise ValueError("A valid COB-ID has not been configured")
         self.pdo_node.network.send_message(self.cob_id, self.data)

@@ -496,19 +496,19 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
     def mandatory_indices(x):
         return x in {0x1000, 0x1001, 0x1018}
 
-    def manufacturer_idices(x):
-        return x in range(0x2000, 0x6000)
+    def manufacturer_indices(x):
+        return 0x2000 <= x < 0x6000
 
     def optional_indices(x):
         return all((
             x > 0x1001,
             not mandatory_indices(x),
-            not manufacturer_idices(x),
+            not manufacturer_indices(x),
         ))
 
     supported_mantatory_indices = list(filter(mandatory_indices, od))
     supported_optional_indices = list(filter(optional_indices, od))
-    supported_manufacturer_indices = list(filter(manufacturer_idices, od))
+    supported_manufacturer_indices = list(filter(manufacturer_indices, od))
 
     def add_list(section, list):
         eds.add_section(section)

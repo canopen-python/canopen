@@ -35,6 +35,8 @@ class RemoteNode(BaseNode):
         load_od: bool = False,
     ):
         super(RemoteNode, self).__init__(node_id, object_dictionary)
+        assert self.id is not None, "node_id must be specified"
+        self.id: int
 
         #: Enable WORKAROUND for reversed PDO mapping entries
         self.curtis_hack = False

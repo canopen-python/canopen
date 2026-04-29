@@ -1,4 +1,4 @@
-from typing import TextIO, Union
+from typing import Optional, TextIO, Union
 
 import canopen.network
 from canopen.objectdictionary import ObjectDictionary, import_od
@@ -25,7 +25,7 @@ class BaseNode:
             object_dictionary = import_od(object_dictionary, node_id)
         self.object_dictionary = object_dictionary
 
-        self.id = node_id or self.object_dictionary.node_id
+        self.id: Optional[int] = node_id or self.object_dictionary.node_id
 
     def has_network(self) -> bool:
         """Check whether the node has been associated to a network."""

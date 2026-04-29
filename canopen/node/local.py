@@ -24,6 +24,8 @@ class LocalNode(BaseNode):
         object_dictionary: Union[ObjectDictionary, str],
     ):
         super(LocalNode, self).__init__(node_id, object_dictionary)
+        assert self.id is not None, "node_id must be specified"
+        self.id: int
 
         self.data_store: dict[int, dict[int, bytes]] = {}
         self._read_callbacks = []

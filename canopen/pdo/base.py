@@ -592,7 +592,7 @@ class PdoMap:
         if self.enabled and self.rtr_allowed and self.cob_id:
             self.pdo_node.network.send_message(self.cob_id, bytes(), remote=True)
 
-    def wait_for_reception(self, timeout: float = 10) -> float:
+    def wait_for_reception(self, timeout: float = 10) -> Optional[float]:
         """Wait for the next transmit PDO.
 
         :param float timeout: Max time to wait in seconds.
@@ -620,6 +620,8 @@ class PdoVariable(variable.Variable):
 
         :return: PdoVariable value as :class:`bytes`.
         """
+        assert self.offset is not None, "PdoVariable offset not set"
+        assert self.pdo_parent is not None, "PdoVariable has no parent map"
         byte_offset, bit_offset = divmod(self.offset, 8)
 
         if bit_offset or self.length % 8:
@@ -647,6 +649,8 @@ class PdoVariable(variable.Variable):
 
         :param data: Value for the PDO variable in the PDO message.
         """
+        assert self.offset is not None, "PdoVariable offset not set"
+        assert self.pdo_parent is not None, "PdoVariable has no parent map"
         byte_offset, bit_offset = divmod(self.offset, 8)
         logger.debug("Updating %s to %s in %s",
                      self.name, binascii.hexlify(data), self.pdo_parent.name)

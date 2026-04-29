@@ -45,10 +45,12 @@ class TestLssMaster(unittest.TestCase):
 
     def _send_and_respond(self, response):
         """Return a send_message side_effect that always injects the given response."""
+
         def side_effect(cob_id, data):
             self.sent_messages.append((cob_id, bytes(data)))
             if data[0] in ListMessageNeedResponse:
                 self.lss.on_message_received(LssMaster.LSS_RX_COBID, response, 0.0)
+
         return side_effect
 
     def _send_no_response(self, cob_id, data):
@@ -224,8 +226,7 @@ class TestLssMaster(unittest.TestCase):
         response[0] = CS_SWITCH_STATE_SELECTIVE_RESPONSE
         self.network.send_message.side_effect = self._send_and_respond(response)
 
-        result = self.lss.send_switch_state_selective(
-            0x1111, 0x2222, 0x3333, 0x4444)
+        result = self.lss.send_switch_state_selective(0x1111, 0x2222, 0x3333, 0x4444)
         self.assertTrue(result)
 
         self.assertEqual(len(self.sent_messages), 4)
@@ -239,8 +240,7 @@ class TestLssMaster(unittest.TestCase):
         response[0] = 0x00
         self.network.send_message.side_effect = self._send_and_respond(response)
 
-        result = self.lss.send_switch_state_selective(
-            0x1111, 0x2222, 0x3333, 0x4444)
+        result = self.lss.send_switch_state_selective(0x1111, 0x2222, 0x3333, 0x4444)
         self.assertFalse(result)
 
     # ---- timeout / error handling ----
@@ -301,8 +301,7 @@ class TestLssMaster(unittest.TestCase):
         response[0] = CS_SWITCH_STATE_SELECTIVE_RESPONSE
         self.network.send_message.side_effect = self._send_and_respond(response)
 
-        self.lss.send_switch_state_selective(
-            0xDEADBEEF, 0xCAFEBABE, 0x12345678, 0x9ABCDEF0)
+        self.lss.send_switch_state_selective(0xDEADBEEF, 0xCAFEBABE, 0x12345678, 0x9ABCDEF0)
 
         data = self.sent_messages[0][1]
         packed = struct.unpack_from('<I', data, 1)[0]

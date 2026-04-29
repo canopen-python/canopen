@@ -72,28 +72,21 @@ class TestState402(unittest.TestCase):
             # All states except OPERATION ENABLED should have a path
             if state != 'OPERATION ENABLED':
                 self.assertIsNotNone(result, f"No indirect path from {state}")
-                self.assertIn(result, State402.SW_MASK,
-                              f"Indirect state {result} is not a known state")
+                self.assertIn(
+                    result, State402.SW_MASK, f"Indirect state {result} is not a known state"
+                )
 
     def test_next_state_indirect_specific_paths(self):
         self.assertEqual(
-            State402.next_state_indirect('SWITCH ON DISABLED'),
-            'READY TO SWITCH ON')
+            State402.next_state_indirect('SWITCH ON DISABLED'), 'READY TO SWITCH ON'
+        )
+        self.assertEqual(State402.next_state_indirect('READY TO SWITCH ON'), 'SWITCHED ON')
+        self.assertEqual(State402.next_state_indirect('SWITCHED ON'), 'OPERATION ENABLED')
+        self.assertEqual(State402.next_state_indirect('FAULT'), 'SWITCH ON DISABLED')
+        self.assertEqual(State402.next_state_indirect('FAULT REACTION ACTIVE'), 'FAULT')
         self.assertEqual(
-            State402.next_state_indirect('READY TO SWITCH ON'),
-            'SWITCHED ON')
-        self.assertEqual(
-            State402.next_state_indirect('SWITCHED ON'),
-            'OPERATION ENABLED')
-        self.assertEqual(
-            State402.next_state_indirect('FAULT'),
-            'SWITCH ON DISABLED')
-        self.assertEqual(
-            State402.next_state_indirect('FAULT REACTION ACTIVE'),
-            'FAULT')
-        self.assertEqual(
-            State402.next_state_indirect('QUICK STOP ACTIVE'),
-            'SWITCH ON DISABLED')
+            State402.next_state_indirect('QUICK STOP ACTIVE'), 'SWITCH ON DISABLED'
+        )
 
     def test_next_state_indirect_unknown_state(self):
         self.assertIsNone(State402.next_state_indirect('NONEXISTENT'))
@@ -101,10 +94,8 @@ class TestState402(unittest.TestCase):
     def test_transition_table_keys_are_valid_states(self):
         known = set(State402.SW_MASK.keys()) | {'START', 'DISABLE VOLTAGE'}
         for from_state, to_state in State402.TRANSITIONTABLE:
-            self.assertIn(from_state, known,
-                          f"Unknown from-state: {from_state}")
-            self.assertIn(to_state, known,
-                          f"Unknown to-state: {to_state}")
+            self.assertIn(from_state, known, f"Unknown from-state: {from_state}")
+            self.assertIn(to_state, known, f"Unknown to-state: {to_state}")
 
 
 class TestBaseNode402State(unittest.TestCase):
@@ -161,9 +152,7 @@ class TestBaseNode402NextState(unittest.TestCase):
     def test_direct_transition(self):
         """When a direct transition exists, _next_state returns the target."""
         self._set_state('SWITCH ON DISABLED')
-        self.assertEqual(
-            self.node._next_state('READY TO SWITCH ON'),
-            'READY TO SWITCH ON')
+        self.assertEqual(self.node._next_state('READY TO SWITCH ON'), 'READY TO SWITCH ON')
 
     def test_indirect_transition(self):
         """When no direct path, _next_state returns the indirect next step."""
@@ -198,11 +187,14 @@ class TestBaseNode402NextState(unittest.TestCase):
             path.append(next_s)
             self._set_state(next_s)
             current = self.node.state
-        self.assertEqual(path, [
-            'READY TO SWITCH ON',
-            'SWITCHED ON',
-            'OPERATION ENABLED',
-        ])
+        self.assertEqual(
+            path,
+            [
+                'READY TO SWITCH ON',
+                'SWITCHED ON',
+                'OPERATION ENABLED',
+            ],
+        )
 
     def test_path_from_fault_to_operation_enabled(self):
         """Walk from FAULT to OPERATION ENABLED."""
@@ -215,12 +207,15 @@ class TestBaseNode402NextState(unittest.TestCase):
             path.append(next_s)
             self._set_state(next_s)
             current = self.node.state
-        self.assertEqual(path, [
-            'SWITCH ON DISABLED',
-            'READY TO SWITCH ON',
-            'SWITCHED ON',
-            'OPERATION ENABLED',
-        ])
+        self.assertEqual(
+            path,
+            [
+                'SWITCH ON DISABLED',
+                'READY TO SWITCH ON',
+                'SWITCHED ON',
+                'OPERATION ENABLED',
+            ],
+        )
 
 
 class TestBaseNode402HomingStatus(unittest.TestCase):

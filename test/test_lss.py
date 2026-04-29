@@ -54,7 +54,7 @@ class TestLssMaster(unittest.TestCase):
         return side_effect
 
     def _send_no_response(self, cob_id, data):
-        """A send_message side_effect that records but sends no response."""
+        """Record but do not send a response."""
         self.sent_messages.append((cob_id, bytes(data)))
 
     # ---- switch state global ----

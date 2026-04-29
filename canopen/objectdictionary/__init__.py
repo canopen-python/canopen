@@ -69,7 +69,7 @@ def export_od(
     finally:
         # If dest is opened in this fn, it should be closed
         if opened_here:
-            dest.close()
+            dest.close()  # type: ignore[union-attr]
 
 
 def import_od(
@@ -92,7 +92,7 @@ def import_od(
         return ObjectDictionary()
     if hasattr(source, "read"):
         # File like object
-        filename = source.name
+        filename = source.name  # type: ignore[union-attr]
     elif hasattr(source, "tag"):
         # XML tree, probably from an EPF file
         filename = "od.epf"
@@ -139,7 +139,10 @@ class ObjectDictionary(MutableMapping):
         if item is None:
             if isinstance(index, str) and '.' in index:
                 idx, sub = index.split('.', maxsplit=1)
-                return self[idx][sub]
+                parent = self[idx]
+                if not isinstance(parent, (ODRecord, ODArray)):
+                    raise KeyError(f"{pretty_index(index)} was not found in Object Dictionary")
+                return parent[sub]
             raise KeyError(f"{pretty_index(index)} was not found in Object Dictionary")
         return item
 
@@ -188,6 +191,7 @@ class ObjectDictionary(MutableMapping):
             return obj
         elif isinstance(obj, (ODRecord, ODArray)):
             return obj.get(subindex)
+        return None
 
 
 class ODRecord(MutableMapping):
@@ -259,7 +263,7 @@ class ODArray(Mapping):
 
     def __init__(self, name: str, index: int):
         #: The :class:`~canopen.ObjectDictionary` owning the record.
-        self.parent = None
+        self.parent: Optional[ObjectDictionary] = None
         #: 16-bit address of the array
         self.index = index
         #: Name of array
@@ -339,7 +343,7 @@ class ODVariable:
         #: The :class:`~canopen.ObjectDictionary`,
         #: :class:`~canopen.objectdictionary.ODRecord` or
         #: :class:`~canopen.objectdictionary.ODArray` owning the variable
-        self.parent = None
+        self.parent: Union[ObjectDictionary, ODRecord, ODArray, None] = None
         #: 16-bit address of the object in the dictionary
         self.index = index
         #: 8-bit sub-index of the object in the dictionary
@@ -451,19 +455,19 @@ class ODVariable:
         if isinstance(value, (bytes, bytearray)):
             return value
         elif self.data_type == VISIBLE_STRING:
-            return value.encode("ascii")
+            return value.encode("ascii")  # type: ignore[union-attr]
         elif self.data_type == UNICODE_STRING:
-            return value.encode("utf_16_le")
+            return value.encode("utf_16_le")  # type: ignore[union-attr]
         elif self.data_type in (DOMAIN, OCTET_STRING):
-            return bytes(value)
+            return bytes(value)  # type: ignore[arg-type]
         elif self.data_type in self.STRUCT_TYPES:
             if self.data_type in INTEGER_TYPES:
                 value = int(value)
             if self.data_type in NUMBER_TYPES:
-                if self.min is not None and value < self.min:
+                if self.min is not None and value < self.min:  # type: ignore[operator]
                     logger.warning(
                         "Value %d is less than min value %d", value, self.min)
-                if self.max is not None and value > self.max:
+                if self.max is not None and value > self.max:  # type: ignore[operator]
                     logger.warning(
                         "Value %d is greater than max value %d",
                         value, self.max)
@@ -477,16 +481,15 @@ class ODVariable:
             raise TypeError(
                 f"Do not know how to encode {value!r} to data type 0x{self.data_type:X}")
 
-    def decode_phys(self, value: int) -> Union[int, bool, float, str, bytes]:
+    def decode_phys(self, value: int) -> Union[int, float]:
         if self.data_type in INTEGER_TYPES:
-            value *= self.factor
+            return value * self.factor
         return value
 
     def encode_phys(self, value: Union[int, bool, float, str, bytes]) -> int:
         if self.data_type in INTEGER_TYPES:
-            value /= self.factor
-            value = int(round(value))
-        return value
+            value = int(round(value / self.factor))  # type: ignore[operator]
+        return value  # type: ignore[return-value]
 
     def decode_desc(self, value: int) -> str:
         if not self.value_descriptions:

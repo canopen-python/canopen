@@ -48,6 +48,9 @@ class TestSDOVariables(unittest.TestCase):
         for var in array.values():
             self.assertIsInstance(var, canopen.sdo.SdoVariable)
 
+    def test_get_variable_not_found(self):
+        self.assertIsNone(self.sdo_node.get_variable(0x9999))
+
 
 class TestSDO(unittest.TestCase):
     """

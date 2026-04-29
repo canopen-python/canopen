@@ -77,7 +77,7 @@ class Variable:
         """
         value = self.od.decode_raw(self.data)
         text = f"Value of {self.name!r} ({pretty_index(self.index, self.subindex)}) is {value!r}"
-        if value in self.od.value_descriptions:
+        if isinstance(value, int) and value in self.od.value_descriptions:
             text += f" ({self.od.value_descriptions[value]})"
         logger.debug(text)
         return value
@@ -97,7 +97,7 @@ class Variable:
         either a :class:`float` or an :class:`int`.
         Non integers will be passed as is.
         """
-        value = self.od.decode_phys(self.raw)
+        value = self.od.decode_phys(self.raw)  # type: ignore[arg-type]
         if self.od.unit:
             logger.debug("Physical value is %s %s", value, self.od.unit)
         return value
@@ -109,13 +109,13 @@ class Variable:
     @property
     def desc(self) -> str:
         """Converts to and from a description of the value as a string."""
-        value = self.od.decode_desc(self.raw)
+        value = self.od.decode_desc(self.raw)  # type: ignore[arg-type]
         logger.debug("Description is '%s'", value)
         return value
 
     @desc.setter
     def desc(self, desc: str):
-        self.raw = self.od.encode_desc(desc)
+        self.raw = self.od.encode_desc(desc)  # type: ignore[assignment]
 
     @property
     def bits(self) -> "Bits":
@@ -142,6 +142,7 @@ class Variable:
             return self.phys
         elif fmt == "desc":
             return self.desc
+        raise ValueError(f"Invalid format '{fmt}'")
 
     def write(
         self, value: Union[int, bool, float, str, bytes], fmt: str = "raw"
@@ -161,13 +162,14 @@ class Variable:
         elif fmt == "phys":
             self.phys = value
         elif fmt == "desc":
-            self.desc = value
+            self.desc = value  # type: ignore[assignment]
 
 
 class Bits(Mapping):
 
     def __init__(self, variable: Variable):
         self.variable = variable
+        self.raw: Union[int, bool, float, str, bytes] = 0
         self.read()
 
     @staticmethod
@@ -181,11 +183,11 @@ class Bits(Mapping):
         return bits
 
     def __getitem__(self, key) -> int:
-        return self.variable.od.decode_bits(self.raw, self._get_bits(key))
+        return self.variable.od.decode_bits(self.raw, self._get_bits(key))  # type: ignore[arg-type]
 
     def __setitem__(self, key, value: int):
         self.raw = self.variable.od.encode_bits(
-            self.raw, self._get_bits(key), value)
+            self.raw, self._get_bits(key), value)  # type: ignore[arg-type]
         self.write()
 
     def __iter__(self):

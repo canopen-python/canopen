@@ -79,6 +79,7 @@ class SdoBase(Mapping):
             return obj
         elif isinstance(obj, (SdoRecord, SdoArray)):
             return obj.get(subindex)
+        return None
 
     def upload(self, index: int, subindex: int) -> bytes:
         raise NotImplementedError()
@@ -134,7 +135,7 @@ class SdoArray(Mapping):
         return iter(range(1, len(self) + 1))
 
     def __len__(self) -> int:
-        return self[0].raw
+        return self[0].raw  # type: ignore[return-value]
 
     def __contains__(self, subindex: int) -> bool:
         return 0 <= subindex <= len(self)

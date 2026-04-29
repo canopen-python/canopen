@@ -136,7 +136,7 @@ class Network(MutableMapping):
         node: Union[int, RemoteNode, LocalNode],
         object_dictionary: Union[str, ObjectDictionary, None] = None,
         upload_eds: bool = False,
-    ) -> RemoteNode:
+    ) -> Union[RemoteNode, LocalNode]:
         """Add a remote node to the network.
 
         :param node:
@@ -156,13 +156,14 @@ class Network(MutableMapping):
             if upload_eds:
                 logger.info("Trying to read EDS from node %d", node)
                 object_dictionary = import_from_node(node, self)
-            node = RemoteNode(node, object_dictionary)
+            node = RemoteNode(node, object_dictionary)  # type: ignore[arg-type]
+        assert node.id is not None
         self[node.id] = node
         return node
 
     def create_node(
         self,
-        node: int,
+        node: Union[int, LocalNode],
         object_dictionary: Union[str, ObjectDictionary, None] = None,
     ) -> LocalNode:
         """Create a local node in the network.
@@ -178,7 +179,8 @@ class Network(MutableMapping):
             The Node object that was added.
         """
         if isinstance(node, int):
-            node = LocalNode(node, object_dictionary)
+            node = LocalNode(node, object_dictionary)  # type: ignore[arg-type]
+        assert node.id is not None
         self[node.id] = node
         return node
 

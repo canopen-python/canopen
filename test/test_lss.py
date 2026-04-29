@@ -1,3 +1,4 @@
+import re
 import struct
 import unittest
 from unittest.mock import MagicMock
@@ -75,15 +76,13 @@ class TestLssMaster(unittest.TestCase):
     def test_configure_node_id_error(self):
         response = b'\x11\x01\x00\x00\x00\x00\x00\x00'
         self.network.send_message.side_effect = self._send_and_respond(response)
-
-        with self.assertRaises(LssError):
+        with self.assertRaisesRegex(LssError, re.compile('error.*1', re.I)):
             self.lss.configure_node_id(200)
 
     def test_configure_node_id_wrong_cs(self):
         response = b'\xFF\x00\x00\x00\x00\x00\x00\x00'
         self.network.send_message.side_effect = self._send_and_respond(response)
-
-        with self.assertRaises(LssError):
+        with self.assertRaisesRegex(LssError, re.compile('not for.*request', re.I)):
             self.lss.configure_node_id(5)
 
     # ---- configure bit timing ----
@@ -114,8 +113,7 @@ class TestLssMaster(unittest.TestCase):
     def test_store_configuration_error(self):
         response = b'\x17\x01\x00\x00\x00\x00\x00\x00'
         self.network.send_message.side_effect = self._send_and_respond(response)
-
-        with self.assertRaises(LssError):
+        with self.assertRaisesRegex(LssError, re.compile('error.*1', re.I)):
             self.lss.store_configuration()
 
     # ---- inquire node ID ----
@@ -129,8 +127,7 @@ class TestLssMaster(unittest.TestCase):
     def test_inquire_node_id_wrong_cs(self):
         response = b'\xFF\x2A\x00\x00\x00\x00\x00\x00'
         self.network.send_message.side_effect = self._send_and_respond(response)
-
-        with self.assertRaises(LssError):
+        with self.assertRaisesRegex(LssError, re.compile('not for.*request', re.I)):
             self.lss.inquire_node_id()
 
     # ---- inquire LSS address ----
@@ -162,8 +159,7 @@ class TestLssMaster(unittest.TestCase):
     def test_inquire_lss_address_wrong_cs(self):
         response = b'\xFF\x00\x00\x00\x00\x00\x00\x00'
         self.network.send_message.side_effect = self._send_and_respond(response)
-
-        with self.assertRaises(LssError):
+        with self.assertRaisesRegex(LssError, re.compile('not for.*request', re.I)):
             self.lss.inquire_lss_address(CS_INQUIRE_VENDOR_ID)
 
     # ---- switch state selective ----
@@ -190,9 +186,8 @@ class TestLssMaster(unittest.TestCase):
 
     def test_no_response_timeout(self):
         self.network.send_message.side_effect = self._send_no_response
-        with self.assertRaises(LssError) as ctx:
+        with self.assertRaisesRegex(LssError, re.compile('no LSS response', re.I)):
             self.lss.inquire_node_id()
-        self.assertIn("No LSS response", str(ctx.exception))
 
     def test_unexpected_messages_cleared(self):
         """Stale messages in queue should be cleared before sending."""

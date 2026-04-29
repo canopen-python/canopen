@@ -48,6 +48,12 @@ class TestSDOVariables(unittest.TestCase):
         for var in array.values():
             self.assertIsInstance(var, canopen.sdo.SdoVariable)
 
+    def test_array_contains_non_int(self):
+        """SdoArray.__contains__ should handle non-int types gracefully."""
+        array = self.sdo_node[0x1003]
+        self.assertNotIn("not an int", array)
+        self.assertNotIn(None, array)
+
 
 class TestSDO(unittest.TestCase):
     """

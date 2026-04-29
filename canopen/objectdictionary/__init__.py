@@ -160,7 +160,7 @@ class ObjectDictionary(MutableMapping):
     def __len__(self) -> int:
         return len(self.indices)
 
-    def __contains__(self, index: Union[int, str]):
+    def __contains__(self, index: object) -> bool:
         return index in self.names or index in self.indices
 
     def add_object(self, obj: Union[ODArray, ODRecord, ODVariable]) -> None:
@@ -234,10 +234,12 @@ class ODRecord(MutableMapping):
     def __iter__(self) -> Iterator[int]:
         return iter(sorted(self.subindices))
 
-    def __contains__(self, subindex: Union[int, str]) -> bool:
+    def __contains__(self, subindex: object) -> bool:
         return subindex in self.names or subindex in self.subindices
 
-    def __eq__(self, other: ODRecord) -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ODRecord):
+            return NotImplemented
         return self.index == other.index
 
     def add_member(self, variable: ODVariable) -> None:
@@ -298,7 +300,9 @@ class ODArray(Mapping):
     def __iter__(self) -> Iterator[int]:
         return iter(sorted(self.subindices))
 
-    def __eq__(self, other: ODArray) -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ODArray):
+            return NotImplemented
         return self.index == other.index
 
     def add_member(self, variable: ODVariable) -> None:
@@ -387,7 +391,9 @@ class ODVariable:
             return f"{self.parent.name}.{self.name}"
         return self.name
 
-    def __eq__(self, other: ODVariable) -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ODVariable):
+            return NotImplemented
         return (self.index == other.index and
                 self.subindex == other.subindex)
 

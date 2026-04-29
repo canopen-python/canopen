@@ -141,7 +141,7 @@ class Network(MutableMapping):
         node: Union[int, RemoteNode, LocalNode],
         object_dictionary: Union[str, ObjectDictionary, None] = None,
         upload_eds: bool = False,
-    ) -> RemoteNode:
+    ) -> Union[RemoteNode, LocalNode]:
         """Add a remote node to the network.
 
         :param node:
@@ -167,7 +167,7 @@ class Network(MutableMapping):
 
     def create_node(
         self,
-        node: int,
+        node: Union[int, LocalNode],
         object_dictionary: Union[str, ObjectDictionary, None] = None,
     ) -> LocalNode:
         """Create a local node in the network.

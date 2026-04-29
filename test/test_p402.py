@@ -1,9 +1,9 @@
 import unittest
 from unittest.mock import MagicMock
 
-from canopen.objectdictionary import ObjectDictionary, ODVariable
-from canopen.objectdictionary.datatypes import UNSIGNED16, UNSIGNED32, INTEGER8
-from canopen.profiles.p402 import BaseNode402, State402, OperationMode, Homing
+from canopen.objectdictionary import ODVariable, ObjectDictionary
+from canopen.objectdictionary.datatypes import INTEGER8, UNSIGNED16, UNSIGNED32
+from canopen.profiles.p402 import BaseNode402, Homing, OperationMode, State402
 
 
 def _make_od():

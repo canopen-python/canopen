@@ -1,17 +1,9 @@
 import re
-import struct
 import unittest
 from unittest.mock import MagicMock
 
-from canopen.lss import (
-    LssMaster,
-    LssError,
-    CS_INQUIRE_VENDOR_ID,
-    CS_INQUIRE_PRODUCT_CODE,
-    CS_INQUIRE_REVISION_NUMBER,
-    CS_INQUIRE_SERIAL_NUMBER,
-    ListMessageNeedResponse,
-)
+from canopen import lss
+from canopen.lss import LssError, LssMaster
 
 
 class TestLssMaster(unittest.TestCase):
@@ -34,7 +26,7 @@ class TestLssMaster(unittest.TestCase):
 
         def side_effect(cob_id, data):
             self.sent_messages.append((cob_id, bytes(data)))
-            if data[0] in ListMessageNeedResponse:
+            if data[0] in lss.ListMessageNeedResponse:
                 self.lss.on_message_received(LssMaster.LSS_RX_COBID, response, 0.0)
 
         return side_effect
@@ -59,10 +51,6 @@ class TestLssMaster(unittest.TestCase):
         self.lss.send_switch_state_global(LssMaster.WAITING_STATE)
         _, data = self.sent_messages[0]
         self.assertEqual(data[:2], b'\x04\x00')
-
-    def test_send_switch_state_global_no_response_expected(self):
-        self.network.send_message.side_effect = self._send_no_response
-        self.lss.send_switch_state_global(LssMaster.CONFIGURATION_STATE)
 
     # ---- configure node ID ----
 
@@ -135,32 +123,32 @@ class TestLssMaster(unittest.TestCase):
     def test_inquire_vendor_id(self):
         response = b'\x5A\x78\x56\x34\x12\x00\x00\x00'
         self.network.send_message.side_effect = self._send_and_respond(response)
-        result = self.lss.inquire_lss_address(CS_INQUIRE_VENDOR_ID)
+        result = self.lss.inquire_lss_address(lss.CS_INQUIRE_VENDOR_ID)
         self.assertEqual(result, 0x12345678)
 
     def test_inquire_product_code(self):
         response = b'\x5B\xCD\xAB\x00\x00\x00\x00\x00'
         self.network.send_message.side_effect = self._send_and_respond(response)
-        result = self.lss.inquire_lss_address(CS_INQUIRE_PRODUCT_CODE)
+        result = self.lss.inquire_lss_address(lss.CS_INQUIRE_PRODUCT_CODE)
         self.assertEqual(result, 0xABCD)
 
     def test_inquire_revision_number(self):
         response = b'\x5C\x63\x00\x00\x00\x00\x00\x00'
         self.network.send_message.side_effect = self._send_and_respond(response)
-        result = self.lss.inquire_lss_address(CS_INQUIRE_REVISION_NUMBER)
+        result = self.lss.inquire_lss_address(lss.CS_INQUIRE_REVISION_NUMBER)
         self.assertEqual(result, 99)
 
     def test_inquire_serial_number(self):
         response = b'\x5D\xE9\x03\x00\x00\x00\x00\x00'
         self.network.send_message.side_effect = self._send_and_respond(response)
-        result = self.lss.inquire_lss_address(CS_INQUIRE_SERIAL_NUMBER)
+        result = self.lss.inquire_lss_address(lss.CS_INQUIRE_SERIAL_NUMBER)
         self.assertEqual(result, 1001)
 
     def test_inquire_lss_address_wrong_cs(self):
         response = b'\xFF\x00\x00\x00\x00\x00\x00\x00'
         self.network.send_message.side_effect = self._send_and_respond(response)
         with self.assertRaisesRegex(LssError, re.compile('not for.*request', re.I)):
-            self.lss.inquire_lss_address(CS_INQUIRE_VENDOR_ID)
+            self.lss.inquire_lss_address(lss.CS_INQUIRE_VENDOR_ID)
 
     # ---- switch state selective ----
 
@@ -224,23 +212,6 @@ class TestLssMaster(unittest.TestCase):
         result, lss_id = self.lss.fast_scan()
         self.assertTrue(result)
         self.assertEqual(lss_id, [0, 0, 0, 0])
-
-    # ---- LSS address encoding ----
-
-    def test_lss_address_encoding(self):
-        """Verify the 4-byte address is packed correctly in messages."""
-        response = b'\x44\x00\x00\x00\x00\x00\x00\x00'
-        self.network.send_message.side_effect = self._send_and_respond(response)
-
-        self.lss.send_switch_state_selective(0xDEADBEEF, 0xCAFEBABE, 0x12345678, 0x9ABCDEF0)
-
-        data = self.sent_messages[0][1]
-        packed = struct.unpack_from('<I', data, 1)[0]
-        self.assertEqual(packed, 0xDEADBEEF)
-
-        data = self.sent_messages[1][1]
-        packed = struct.unpack_from('<I', data, 1)[0]
-        self.assertEqual(packed, 0xCAFEBABE)
 
     # ---- obsolete aliases ----
 

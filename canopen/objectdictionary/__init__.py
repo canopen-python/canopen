@@ -188,6 +188,7 @@ class ObjectDictionary(MutableMapping):
             return obj
         elif isinstance(obj, (ODRecord, ODArray)):
             return obj.get(subindex)
+        return None
 
 
 class ODRecord(MutableMapping):

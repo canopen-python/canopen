@@ -210,6 +210,8 @@ class ODRecord(MutableMapping):
         self.storage_location: Optional[str] = None
         self.subindices: dict[int, ODVariable] = {}
         self.names: dict[str, ODVariable] = {}
+        #: Key-Value pairs not defined by the standard
+        self.custom_options: dict[str, str] = {}
 
     def __repr__(self) -> str:
         return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
@@ -271,6 +273,8 @@ class ODArray(Mapping):
         self.storage_location: Optional[str] = None
         self.subindices: dict[int, ODVariable] = {}
         self.names: dict[str, ODVariable] = {}
+        #: Key-Value pairs not defined by the standard
+        self.custom_options: dict[str, str] = {}
 
     def __repr__(self) -> str:
         return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
@@ -291,6 +295,8 @@ class ODArray(Mapping):
                          "bit_definitions", "storage_location"):
                 if attr in template.__dict__:
                     var.__dict__[attr] = template.__dict__[attr]
+            if "custom_options" in template.__dict__:
+                var.__dict__["custom_options"] = template.__dict__["custom_options"].copy()
         else:
             raise KeyError(f"Could not find subindex {pretty_index(None, subindex)}")
         return var
@@ -381,6 +387,8 @@ class ODVariable:
         self.storage_location: Optional[str] = None
         #: Can this variable be mapped to a PDO
         self.pdo_mappable = False
+        #: Key-Value pairs not defined by the standard
+        self.custom_options: dict[str, str] = {}
 
     def __repr__(self) -> str:
         subindex = self.subindex if isinstance(self.parent, (ODRecord, ODArray)) else None

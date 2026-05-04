@@ -131,7 +131,6 @@ def import_eds(source, node_id):
 
             if object_type in (VAR, DOMAIN):
                 var = build_variable(eds, section, node_id, index)
-                var.custom_options = _get_custom_options(eds, section)
                 od.add_object(var)
             elif object_type == ARR and eds.has_option(section, "CompactSubObj"):
                 arr = objectdictionary.ODArray(name, index)
@@ -257,15 +256,16 @@ def _revert_variable(var_type, value):
     else:
         return f"0x{value:02X}"
 
-_STANDARD_OPTIONS = ["ObjectType"      , "ParameterName" , "DataType"    , "AccessType"   ,
-                     "PDOMapping"      , "LowLimit"      , "HighLimit"   , "DefaultValue" ,
-                     "ParameterValue"  , "Factor"        , "Description" , "Unit"         ,
-                     "StorageLocation" , "CompactSubObj"                                  ]
+_STANDARD_OPTIONS = ["objecttype"      , "parametername" , "datatype"    , "accesstype"   ,
+                     "pdomapping"      , "lowlimit"      , "highlimit"   , "defaultvalue" ,
+                     "parametervalue"  , "factor"        , "description" , "unit"         ,
+                     "storagelocation" , "compactsubobj" , "nrofentries" , "subnumber"    ,
+                     "objflags"        , "denotation"                                     ]
 
 def _get_custom_options(eds, section):
     custom_options = {}
     for option, value in eds.items(section):
-        if option not in _STANDARD_OPTIONS:
+        if not (option.lower() in _STANDARD_OPTIONS or option.isdigit()) :
             custom_options[option] = value
     return custom_options
 
@@ -521,19 +521,19 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
     def mandatory_indices(x):
         return x in {0x1000, 0x1001, 0x1018}
 
-    def manufacturer_indices(x):
-        return 0x2000 <= x < 0x6000
+    def manufacturer_idices(x):
+        return x in range(0x2000, 0x6000)
 
     def optional_indices(x):
         return all((
             x > 0x1001,
             not mandatory_indices(x),
-            not manufacturer_indices(x),
+            not manufacturer_idices(x),
         ))
 
     supported_mantatory_indices = list(filter(mandatory_indices, od))
     supported_optional_indices = list(filter(optional_indices, od))
-    supported_manufacturer_indices = list(filter(manufacturer_indices, od))
+    supported_manufacturer_indices = list(filter(manufacturer_idices, od))
 
     def add_list(section, list):
         eds.add_section(section)

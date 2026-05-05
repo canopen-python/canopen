@@ -276,5 +276,23 @@ class TestArray(unittest.TestCase):
         self.assertEqual(array[3].name, "Test Variable_3")
 
 
+class TestEquality(unittest.TestCase):
+
+    def test_record_eq_wrong_type(self):
+        record = od.ODRecord("Test Record", 0x1001)
+        self.assertNotEqual(record, "not a record")
+        self.assertNotEqual(record, 42)
+
+    def test_array_eq_wrong_type(self):
+        array = od.ODArray("Test Array", 0x1002)
+        self.assertNotEqual(array, "not an array")
+        self.assertNotEqual(array, 42)
+
+    def test_variable_eq_wrong_type(self):
+        var = od.ODVariable("Test Variable", 0x1000, 0)
+        self.assertNotEqual(var, "not a variable")
+        self.assertNotEqual(var, 42)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -56,3 +56,8 @@ exclude = [
     "^test*",
     "^setup.py*",
 ]
+
+[tool.ruff.lint.isort]
+case-sensitive = true
+order-by-type = false
+lines-after-imports = 2

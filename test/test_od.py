@@ -260,6 +260,10 @@ class TestObjectDictionary(unittest.TestCase):
         self.assertIsInstance(item, od.ODArray)
         self.assertIs(item, array)
 
+    def test_get_variable_not_found(self):
+        test_od = od.ObjectDictionary()
+        self.assertIsNone(test_od.get_variable(0x9999))
+
 
 class TestArray(unittest.TestCase):
 

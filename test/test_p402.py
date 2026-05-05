@@ -203,7 +203,7 @@ class TestBaseNode402State(unittest.TestCase):
 
     def test_check_statusword_no_tpdo_pointers(self):
         """check_statusword returns cached statusword when no TPDO pointers."""
-        self._inject_statusword(0x0027)
+        self._inject_statusword(0x0027)  # OPERATION ENABLED
         result = self.node.check_statusword()
         self.assertEqual(result, 0x0027)
 
@@ -260,7 +260,7 @@ class TestBaseNode402StateTransition(unittest.TestCase):
 
     def test_transition_to_operation_enabled(self):
         """Walk from SWITCH ON DISABLED to OPERATION ENABLED via state setter."""
-        _inject_tpdo(self.node, 0x6041, 0x0040)
+        _inject_tpdo(self.node, 0x6041, 0x0040)  # SWITCH ON DISABLED
         self.node.state = "OPERATION ENABLED"
         self.assertEqual(self.node.state, "OPERATION ENABLED")
         self.assertEqual(
@@ -274,21 +274,21 @@ class TestBaseNode402StateTransition(unittest.TestCase):
 
     def test_transition_from_fault(self):
         """Walk from FAULT to SWITCH ON DISABLED via state setter."""
-        _inject_tpdo(self.node, 0x6041, 0x0008)
+        _inject_tpdo(self.node, 0x6041, 0x0008)  # FAULT
         self.node.state = "SWITCH ON DISABLED"
         self.assertEqual(self.node.state, "SWITCH ON DISABLED")
         self.assertEqual(self.cw_log, [State402.CW_SWITCH_ON_DISABLED])
 
     def test_transition_quick_stop(self):
         """Transition from OPERATION ENABLED to QUICK STOP ACTIVE."""
-        _inject_tpdo(self.node, 0x6041, 0x0027)
+        _inject_tpdo(self.node, 0x6041, 0x0027)  # OPERATION ENABLED
         self.node.state = "QUICK STOP ACTIVE"
         self.assertEqual(self.node.state, "QUICK STOP ACTIVE")
         self.assertEqual(self.cw_log, [State402.CW_QUICK_STOP])
 
     def test_transition_fault_to_operation_enabled(self):
         """Full path from FAULT through to OPERATION ENABLED."""
-        _inject_tpdo(self.node, 0x6041, 0x0008)
+        _inject_tpdo(self.node, 0x6041, 0x0008)  # FAULT
         self.node.state = "OPERATION ENABLED"
         self.assertEqual(self.node.state, "OPERATION ENABLED")
         self.assertEqual(
@@ -302,17 +302,17 @@ class TestBaseNode402StateTransition(unittest.TestCase):
         )
 
     def test_illegal_target_fault_raises(self):
-        _inject_tpdo(self.node, 0x6041, 0x0040)
+        _inject_tpdo(self.node, 0x6041, 0x0040)  # SWITCH ON DISABLED
         with self.assertRaises(ValueError):
             self.node.state = "FAULT"
 
     def test_illegal_target_not_ready_raises(self):
-        _inject_tpdo(self.node, 0x6041, 0x0040)
+        _inject_tpdo(self.node, 0x6041, 0x0040)  # SWITCH ON DISABLED
         with self.assertRaises(ValueError):
             self.node.state = "NOT READY TO SWITCH ON"
 
     def test_illegal_target_fault_reaction_raises(self):
-        _inject_tpdo(self.node, 0x6041, 0x0040)
+        _inject_tpdo(self.node, 0x6041, 0x0040)  # SWITCH ON DISABLED
         with self.assertRaises(ValueError):
             self.node.state = "FAULT REACTION ACTIVE"
 

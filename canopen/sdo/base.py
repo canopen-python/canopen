@@ -64,7 +64,7 @@ class SdoBase(Mapping):
     def __len__(self) -> int:
         return len(self.od)
 
-    def __contains__(self, key: Union[int, str]) -> bool:
+    def __contains__(self, key: object) -> bool:
         return key in self.od
 
     def get_variable(
@@ -114,7 +114,7 @@ class SdoRecord(Mapping):
         # Skip the "highest subindex" entry, which is not part of the data
         return len(self.od) - int(0 in self.od)
 
-    def __contains__(self, subindex: Union[int, str]) -> bool:
+    def __contains__(self, subindex: object) -> bool:
         return subindex in self.od
 
 
@@ -137,7 +137,9 @@ class SdoArray(Mapping):
     def __len__(self) -> int:
         return self[0].raw  # type: ignore[return-value]
 
-    def __contains__(self, subindex: int) -> bool:
+    def __contains__(self, subindex: object) -> bool:
+        if not isinstance(subindex, int):
+            return False
         return 0 <= subindex <= len(self)
 
 

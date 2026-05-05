@@ -163,7 +163,7 @@ class ObjectDictionary(MutableMapping):
     def __len__(self) -> int:
         return len(self.indices)
 
-    def __contains__(self, index: Union[int, str]):
+    def __contains__(self, index: object) -> bool:
         return index in self.names or index in self.indices
 
     def add_object(self, obj: Union[ODArray, ODRecord, ODVariable]) -> None:
@@ -211,8 +211,8 @@ class ODRecord(MutableMapping):
         self.name = name
         #: Storage location of index
         self.storage_location = None
-        self.subindices = {}
-        self.names = {}
+        self.subindices: dict[int, ODVariable] = {}
+        self.names: dict[str, ODVariable] = {}
 
     def __repr__(self) -> str:
         return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
@@ -238,10 +238,12 @@ class ODRecord(MutableMapping):
     def __iter__(self) -> Iterator[int]:
         return iter(sorted(self.subindices))
 
-    def __contains__(self, subindex: Union[int, str]) -> bool:
+    def __contains__(self, subindex: object) -> bool:
         return subindex in self.names or subindex in self.subindices
 
-    def __eq__(self, other: ODRecord) -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ODRecord):
+            return NotImplemented
         return self.index == other.index
 
     def add_member(self, variable: ODVariable) -> None:
@@ -270,8 +272,8 @@ class ODArray(Mapping):
         self.name = name
         #: Storage location of index
         self.storage_location = None
-        self.subindices = {}
-        self.names = {}
+        self.subindices: dict[int, ODVariable] = {}
+        self.names: dict[str, ODVariable] = {}
 
     def __repr__(self) -> str:
         return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
@@ -302,7 +304,9 @@ class ODArray(Mapping):
     def __iter__(self) -> Iterator[int]:
         return iter(sorted(self.subindices))
 
-    def __eq__(self, other: ODArray) -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ODArray):
+            return NotImplemented
         return self.index == other.index
 
     def add_member(self, variable: ODVariable) -> None:
@@ -391,7 +395,9 @@ class ODVariable:
             return f"{self.parent.name}.{self.name}"
         return self.name
 
-    def __eq__(self, other: ODVariable) -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ODVariable):
+            return NotImplemented
         return (self.index == other.index and
                 self.subindex == other.subindex)
 
@@ -417,7 +423,7 @@ class ODVariable:
         """
         self.value_descriptions[value] = descr
 
-    def add_bit_definition(self, name: str, bits: List[int]) -> None:
+    def add_bit_definition(self, name: str, bits: list[int]) -> None:
         """Associate bit(s) with a string description.
 
         :param name: Name of bit(s)
@@ -511,7 +517,7 @@ class ODVariable:
         raise ValueError(
             f"No value corresponds to '{desc}'. Valid values are: {valid_values}")
 
-    def decode_bits(self, value: int, bits: List[int]) -> int:
+    def decode_bits(self, value: int, bits: list[int]) -> int:
         try:
             bits = self.bit_definitions[bits]
         except (TypeError, KeyError):
@@ -521,7 +527,7 @@ class ODVariable:
             mask |= 1 << bit
         return (value & mask) >> min(bits)
 
-    def encode_bits(self, original_value: int, bits: List[int], bit_value: int):
+    def encode_bits(self, original_value: int, bits: list[int], bit_value: int):
         try:
             bits = self.bit_definitions[bits]
         except (TypeError, KeyError):

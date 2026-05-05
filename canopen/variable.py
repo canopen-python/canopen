@@ -135,6 +135,7 @@ class Variable:
 
         :returns:
             The value of the variable.
+        :raises ValueError: For unsupported fmt values.
         """
         if fmt == "raw":
             return self.raw

@@ -98,7 +98,7 @@ class PdoBase(Mapping):
         :rtype: canmatrix.canmatrix.CanMatrix
         """
         try:
-            from canmatrix import canmatrix
+            from canmatrix import canmatrix  # type:ignore # (typing still in progress)
             from canmatrix import formats
         except ImportError:
             raise NotImplementedError("This feature requires the 'canopen[db_export]' feature")

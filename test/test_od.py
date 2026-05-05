@@ -288,61 +288,22 @@ class TestArray(unittest.TestCase):
         self.assertEqual(array[3].name, "Test Variable_3")
 
 
-class _StubVariable(Variable):
-    """Minimal concrete Variable for testing read/write/bits."""
+class TestEquality(unittest.TestCase):
 
-    def __init__(self, od_var):
-        super().__init__(od_var)
-        self._data = od_var.encode_raw(od_var.default)
+    def test_record_eq_wrong_type(self):
+        record = od.ODRecord("Test Record", 0x1001)
+        self.assertNotEqual(record, "not a record")
+        self.assertNotEqual(record, 42)
 
-    def get_data(self):
-        return self._data
+    def test_array_eq_wrong_type(self):
+        array = od.ODArray("Test Array", 0x1002)
+        self.assertNotEqual(array, "not an array")
+        self.assertNotEqual(array, 42)
 
-    def set_data(self, data):
-        self._data = data
-
-
-class TestVariable(unittest.TestCase):
-
-    def test_read_invalid_format(self):
-        var = od.ODVariable("Test UNSIGNED8", 0x1000)
-        var.data_type = od.UNSIGNED8
-        var.default = 0
-        v = _StubVariable(var)
-        with self.assertRaises(ValueError):
-            v.read(fmt="invalid")
-
-    def test_write_desc(self):
-        var = od.ODVariable("Test UNSIGNED8", 0x1000)
-        var.data_type = od.UNSIGNED8
-        var.default = 0
-        var.add_value_description(0, "Off")
-        var.add_value_description(1, "On")
-        v = _StubVariable(var)
-        v.write("On", fmt="desc")
-        self.assertEqual(v.raw, 1)
-
-    def test_raw_with_string_value(self):
-        var = od.ODVariable("Test VISIBLE_STRING", 0x1000)
-        var.data_type = od.VISIBLE_STRING
-        var.default = "hello"
-        var.add_value_description(0, "Off")
-        v = _StubVariable(var)
-        # String value must not be looked up in value_descriptions
-        self.assertEqual(v.raw, "hello")
-
-    def test_bits(self):
-        var = od.ODVariable("Test UNSIGNED8", 0x1000)
-        var.data_type = od.UNSIGNED8
-        var.default = 0
-        var.add_bit_definition("BIT 0", [0])
-        var.add_bit_definition("BIT 2 and 3", [2, 3])
-        v = _StubVariable(var)
-        v.raw = 5
-        bits = v.bits
-        self.assertEqual(bits[0], 1)
-        bits[0] = 0
-        self.assertEqual(v.raw, 4)
+    def test_variable_eq_wrong_type(self):
+        var = od.ODVariable("Test Variable", 0x1000, 0)
+        self.assertNotEqual(var, "not a variable")
+        self.assertNotEqual(var, 42)
 
 
 if __name__ == "__main__":

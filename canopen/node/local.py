@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Union
 
 import canopen.network
@@ -26,8 +27,8 @@ class LocalNode(BaseNode):
         super(LocalNode, self).__init__(node_id, object_dictionary)
 
         self.data_store: dict[int, dict[int, bytes]] = {}
-        self._read_callbacks = []
-        self._write_callbacks = []
+        self._read_callbacks: list[Callable] = []
+        self._write_callbacks: list[Callable] = []
 
         self.sdo = SdoServer(0x600 + self.id, 0x580 + self.id, self)
         self.tpdo = TPDO(self)
@@ -62,10 +63,10 @@ class LocalNode(BaseNode):
         self.nmt.network = canopen.network._UNINITIALIZED_NETWORK
         self.emcy.network = canopen.network._UNINITIALIZED_NETWORK
 
-    def add_read_callback(self, callback):
+    def add_read_callback(self, callback: Callable):
         self._read_callbacks.append(callback)
 
-    def add_write_callback(self, callback):
+    def add_write_callback(self, callback: Callable):
         self._write_callbacks.append(callback)
 
     def get_data(

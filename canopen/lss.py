@@ -85,7 +85,7 @@ class LssMaster:
         self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
         self._node_id = 0
         self._data = None
-        self.responses = queue.Queue()
+        self.responses: queue.Queue[bytes] = queue.Queue()
 
     def send_switch_state_global(self, mode):
         """switch mode to CONFIGURATION_STATE or WAITING_STATE

@@ -63,10 +63,10 @@ class LocalNode(BaseNode):
         self.nmt.network = canopen.network._UNINITIALIZED_NETWORK
         self.emcy.network = canopen.network._UNINITIALIZED_NETWORK
 
-    def add_read_callback(self, callback: Callable) -> None:
+    def add_read_callback(self, callback: Callable):
         self._read_callbacks.append(callback)
 
-    def add_write_callback(self, callback: Callable) -> None:
+    def add_write_callback(self, callback: Callable):
         self._write_callbacks.append(callback)
 
     def get_data(

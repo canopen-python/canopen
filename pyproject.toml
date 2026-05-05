@@ -59,6 +59,10 @@ exclude = [
 
 [tool.ruff]
 line-length = 96
+[tool.ruff.lint.isort]
+case-sensitive = true
+order-by-type = false
+lines-after-imports = 2
 
 [tool.black]
 line-length = 96

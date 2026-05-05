@@ -54,6 +54,9 @@ class TestSDOVariables(unittest.TestCase):
         self.assertNotIn("not an int", array)
         self.assertNotIn(None, array)
 
+    def test_get_variable_not_found(self):
+        self.assertIsNone(self.sdo_node.get_variable(0x9999))
+
 
 class TestSDO(unittest.TestCase):
     """

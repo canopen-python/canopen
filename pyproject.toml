@@ -56,7 +56,3 @@ exclude = [
     "^test*",
     "^setup.py*",
 ]
-
-[[tool.mypy.overrides]]
-module = ["canmatrix.*"]
-ignore_missing_imports = true

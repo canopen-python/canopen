@@ -196,7 +196,7 @@ class TestAlternativeRepresentations(unittest.TestCase):
         self.assertIsInstance(var.encode_phys(42), int)
 
     def test_phys_factor_1000_rounds(self):
-        """Existing rounding behaviour with integer factor != 1 is preserved."""
+        """Integer factor > 1 uses float rounding behaviour, not truncating division."""
         var = od.ODVariable("Test INTEGER32", 0x1000)
         var.data_type = od.INTEGER32
         var.factor = 1000
@@ -204,7 +204,7 @@ class TestAlternativeRepresentations(unittest.TestCase):
         self.assertEqual(var.encode_phys(5555), 6)
 
     def test_phys_float_factor(self):
-        """Float factor still works via float division + round."""
+        """Float factor uses float division + round."""
         var = od.ODVariable("Test INTEGER16", 0x1000)
         var.data_type = od.INTEGER16
         var.factor = 0.5

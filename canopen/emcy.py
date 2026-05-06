@@ -39,7 +39,10 @@ class EmcyConsumer:
             self.emcy_received.notify_all()
 
         for callback in self.callbacks:
-            callback(entry)
+            try:
+                callback(entry)
+            except Exception:
+                logger.exception("Exception in EMCY callback")
 
     def add_callback(self, callback: Callable[[EmcyError], None]):
         """Get notified on EMCY messages from this node.

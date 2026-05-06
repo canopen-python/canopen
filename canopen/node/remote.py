@@ -19,7 +19,7 @@ class RemoteNode(BaseNode):
     """A CANopen remote node.
 
     :param node_id:
-        Node ID (set to None or 0 if specified by object dictionary)
+        Node ID (set to 0 if specified by object dictionary)
     :param object_dictionary:
         Object dictionary as either a path to a file, an ``ObjectDictionary``
         or a file like object.

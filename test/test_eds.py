@@ -111,7 +111,7 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(var.name, 'Producer heartbeat time')
         self.assertEqual(var.data_type, canopen.objectdictionary.UNSIGNED16)
         self.assertEqual(var.access_type, 'rw')
-        self.assertEqual(var.is_domain, False)
+        self.assertFalse(var.is_domain)
         self.assertEqual(var.default, 0)
         self.assertFalse(var.relative)
 
@@ -133,7 +133,7 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(var.subindex, 1)
         self.assertEqual(var.data_type, canopen.objectdictionary.UNSIGNED32)
         self.assertEqual(var.access_type, 'ro')
-        self.assertEqual(var.is_domain, False)
+        self.assertFalse(var.is_domain)
 
     def test_record_with_limits(self):
         int8 = self.od[0x3020]
@@ -168,7 +168,7 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(var.subindex, 5)
         self.assertEqual(var.data_type, canopen.objectdictionary.UNSIGNED32)
         self.assertEqual(var.access_type, 'ro')
-        self.assertEqual(var.is_domain, False)
+        self.assertFalse(var.is_domain)
 
     def test_explicit_name_subobj(self):
         name = self.od[0x3004].name
@@ -200,7 +200,7 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(var.name, 'Dummy0003')
         self.assertEqual(var.data_type, canopen.objectdictionary.INTEGER16)
         self.assertEqual(var.access_type, 'const')
-        self.assertEqual(var.is_domain, False)
+        self.assertFalse(var.is_domain)
         self.assertEqual(len(var), 16)
 
     def test_dummy_variable_undefined(self):
@@ -225,7 +225,7 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(var.name, 'DOMAIN object')
         self.assertEqual(var.data_type, canopen.objectdictionary.UNSIGNED32)
         self.assertEqual(var.access_type, 'rw')
-        self.assertEqual(var.is_domain, True)
+        self.assertTrue(var.is_domain)
 
     def test_read_domain_subobject(self):
         record = self.od[0x3064]
@@ -236,7 +236,7 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(var.name, 'DOMAIN sub-object')
         self.assertEqual(var.data_type, canopen.objectdictionary.UNSIGNED32)
         self.assertEqual(var.access_type, 'rw')
-        self.assertEqual(var.is_domain, True)
+        self.assertTrue(var.is_domain)
 
     def test_roundtrip_domain_objects(self):
         # ObjectType==DOMAIN survive an EDS export/import round-trip
@@ -246,10 +246,10 @@ class TestEDS(unittest.TestCase):
             dest.name = 'mock.eds'
             dest.seek(0)
             od2 = canopen.import_od(dest)
-        self.assertEqual(od2['Producer heartbeat time'].is_domain, False)
-        self.assertEqual(od2['Identity object']['Vendor-ID'].is_domain, False)
-        self.assertEqual(od2[0x3063].is_domain, True)
-        self.assertEqual(od2[0x3064][1].is_domain, True)
+        self.assertFalse(od2['Producer heartbeat time'].is_domain)
+        self.assertFalse(od2['Identity object']['Vendor-ID'].is_domain)
+        self.assertTrue(od2[0x3063].is_domain)
+        self.assertTrue(od2[0x3064][1].is_domain)
 
 
     def test_comments(self):

@@ -129,7 +129,7 @@ def import_eds(source, node_id):
                 storage_location = None
 
             if object_type in (objectcodes.VAR, objectcodes.DOMAIN):
-                var = build_variable(eds, section, node_id, index, is_domain=object_type==objectcodes.DOMAIN)
+                var = build_variable(eds, section, node_id, index, is_domain=object_type == objectcodes.DOMAIN)
                 od.add_object(var)
             elif object_type == objectcodes.ARRAY and eds.has_option(section, "CompactSubObj"):
                 arr = ODArray(name, index)
@@ -162,7 +162,7 @@ def import_eds(source, node_id):
                     object_type = int(eds.get(section, "ObjectType"), 0)
                 except NoOptionError:
                     object_type = objectcodes.VAR
-                var = build_variable(eds, section, node_id, index, subindex, is_domain=object_type==objectcodes.DOMAIN)
+                var = build_variable(eds, section, node_id, index, subindex, is_domain=object_type == objectcodes.DOMAIN)
                 entry.add_member(var)
 
         # Match [index]Name

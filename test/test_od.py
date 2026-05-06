@@ -211,6 +211,13 @@ class TestAlternativeRepresentations(unittest.TestCase):
         # 10 / 0.5 = 20
         self.assertEqual(var.encode_phys(10), 20)
 
+    def test_phys_float_factor_decodes_to_float(self):
+        """decode_phys with float factor ensures a float result."""
+        var = od.ODVariable("Test INTEGER32", 0x1000)
+        var.data_type = od.INTEGER32
+        var.factor = 1.0
+        self.assertIsInstance(var.decode_phys(42), float)
+
     def test_desc(self):
         var = od.ODVariable("Test UNSIGNED8", 0x1000)
         var.data_type = od.UNSIGNED8

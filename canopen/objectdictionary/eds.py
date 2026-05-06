@@ -129,7 +129,7 @@ def import_eds(source, node_id):
                 storage_location = None
 
             if object_type in (objectcodes.VAR, objectcodes.DOMAIN):
-                var = build_variable(eds, section, node_id, index)
+                var = build_variable(eds, section, node_id, index, is_domain=object_type == objectcodes.DOMAIN)
                 od.add_object(var)
             elif object_type == objectcodes.ARRAY and eds.has_option(section, "CompactSubObj"):
                 arr = ODArray(name, index)
@@ -158,7 +158,11 @@ def import_eds(source, node_id):
             subindex = int(match.group(2), 16)
             entry = od[index]
             if isinstance(entry, (ODRecord, ODArray)):
-                var = build_variable(eds, section, node_id, index, subindex)
+                try:
+                    object_type = int(eds.get(section, "ObjectType"), 0)
+                except NoOptionError:
+                    object_type = objectcodes.VAR
+                var = build_variable(eds, section, node_id, index, subindex, is_domain=object_type == objectcodes.DOMAIN)
                 entry.add_member(var)
 
         # Match [index]Name
@@ -252,13 +256,14 @@ def _revert_variable(var_type, value):
         return f"0x{value:02X}"
 
 
-def build_variable(eds, section, node_id, index, subindex=0):
+def build_variable(eds, section, node_id, index, subindex=0, is_domain=False):
     """Creates a object dictionary entry.
     :param eds: String stream of the eds file
     :param section:
     :param node_id: Node ID
     :param index: Index of the CANOpen object
-    :param subindex: Subindex of the CANOpen object (if presente, else 0)
+    :param subindex: Subindex of the CANOpen object (if present, else 0)
+    :param is_domain: variable represents a DOMAIN ObjectType (if present, else False)
     """
     name = eds.get(section, "ParameterName")
     var = ODVariable(name, index, subindex)
@@ -268,6 +273,7 @@ def build_variable(eds, section, node_id, index, subindex=0):
         var.storage_location = None
     var.data_type = int(eds.get(section, "DataType"), 0)
     var.access_type = eds.get(section, "AccessType").lower()
+    var.is_domain = is_domain
     if var.data_type > 0x1B:
         # The object dictionary editor from CANFestival creates an optional object if min max values are used
         # This optional object is then placed in the eds under the section [A0] (start point, iterates for more)
@@ -370,7 +376,8 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
             section = f"{var.index:04X}sub{var.subindex:X}"
 
         export_common(var, eds, section)
-        eds.set(section, "ObjectType", f"0x{objectcodes.VAR:X}")
+        object_type = objectcodes.DOMAIN if var.is_domain else objectcodes.VAR
+        eds.set(section, "ObjectType", f"0x{object_type:X}")
         if var.data_type:
             eds.set(section, "DataType", f"0x{var.data_type:04X}")
         if var.access_type:

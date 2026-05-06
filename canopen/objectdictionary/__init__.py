@@ -368,6 +368,8 @@ class ODVariable:
         self.data_type: Optional[int] = None
         #: Access type, should be "rw", "ro", "wo", or "const"
         self.access_type: str = "rw"
+        #: The variable represents a DOMAIN ObjectType
+        self.is_domain: bool = False
         #: Description of variable
         self.description: str = ""
         #: Dictionary of value descriptions

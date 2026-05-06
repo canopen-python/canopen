@@ -1017,3 +1017,30 @@ PDOMapping=0x0
 Factor=ERROR
 Description=
 Unit=
+
+[3063]
+ParameterName=DOMAIN object
+ObjectType=0x2
+DataType=0x0007
+AccessType=rw
+PDOMapping=0
+
+[3064]
+ParameterName=Record with DOMAIN sub-object
+SubNumber=0x2
+ObjectType=0x9
+
+[3064sub0]
+ParameterName=Highest subindex
+ObjectType=0x7
+DataType=0x0005
+AccessType=ro
+DefaultValue=0x01
+PDOMapping=0
+
+[3064sub1]
+ParameterName=DOMAIN sub-object
+ObjectType=0x2
+DataType=0x0007
+AccessType=rw
+PDOMapping=0

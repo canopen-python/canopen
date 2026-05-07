@@ -26,8 +26,8 @@ class BaseNode:
         self.object_dictionary = object_dictionary
 
         self.id = node_id or object_dictionary.node_id or 0
-        if not self.id or not 1 <= self.id <= 127:
-            raise ValueError("No valid Node ID provided, %r not in range 1..127")
+        if not 1 <= self.id <= 127:
+            raise ValueError(f"No valid Node ID provided, {self.id} not in range 1..127")
 
     def has_network(self) -> bool:
         """Check whether the node has been associated to a network."""

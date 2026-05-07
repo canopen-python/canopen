@@ -56,3 +56,10 @@ exclude = [
     "^test*",
     "^setup.py*",
 ]
+
+[tool.ruff]
+line-length = 96
+
+[tool.black]
+line-length = 96
+skip-string-normalization = true

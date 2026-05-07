@@ -206,7 +206,7 @@ class ODRecord(MutableMapping):
         #: Name of record
         self.name = name
         #: Storage location of index
-        self.storage_location = None
+        self.storage_location: Optional[str] = None
         self.subindices: dict[int, ODVariable] = {}
         self.names: dict[str, ODVariable] = {}
 
@@ -267,7 +267,7 @@ class ODArray(Mapping):
         #: Name of array
         self.name = name
         #: Storage location of index
-        self.storage_location = None
+        self.storage_location: Optional[str] = None
         self.subindices: dict[int, ODVariable] = {}
         self.names: dict[str, ODVariable] = {}
 
@@ -377,7 +377,7 @@ class ODVariable:
         #: Dictionary of bitfield definitions
         self.bit_definitions: dict[str, list[int]] = {}
         #: Storage location of index
-        self.storage_location = None
+        self.storage_location: Optional[str] = None
         #: Can this variable be mapped to a PDO
         self.pdo_mappable = False
 

@@ -41,7 +41,7 @@ def import_eds(source, node_id):
     od = ObjectDictionary()
 
     if eds.has_section("FileInfo"):
-        od.__edsFileInfo = {
+        od.__edsFileInfo = {  # type: ignore[attr-defined] # custom addition
             opt: eds.get("FileInfo", opt)
             for opt in eds.options("FileInfo")
         }
@@ -50,7 +50,7 @@ def import_eds(source, node_id):
         linecount = int(eds.get("Comments", "Lines"), 0)
         od.comments = '\n'.join([
             eds.get("Comments", f"Line{line}")
-            for line in range(1, linecount+1)
+            for line in range(1, linecount + 1)
         ])
 
     if not eds.has_section("DeviceInfo"):
@@ -129,7 +129,7 @@ def import_eds(source, node_id):
                 storage_location = None
 
             if object_type in (objectcodes.VAR, objectcodes.DOMAIN):
-                var = build_variable(eds, section, node_id, index, is_domain=object_type == objectcodes.DOMAIN)
+                var = build_variable(eds, section, node_id, object_type, index)
                 od.add_object(var)
             elif object_type == objectcodes.ARRAY and eds.has_option(section, "CompactSubObj"):
                 arr = ODArray(name, index)
@@ -137,7 +137,7 @@ def import_eds(source, node_id):
                     "Number of entries", index, 0)
                 last_subindex.data_type = datatypes.UNSIGNED8
                 arr.add_member(last_subindex)
-                arr.add_member(build_variable(eds, section, node_id, index, 1))
+                arr.add_member(build_variable(eds, section, node_id, object_type, index, 1))
                 arr.storage_location = storage_location
                 od.add_object(arr)
             elif object_type == objectcodes.ARRAY:
@@ -162,7 +162,7 @@ def import_eds(source, node_id):
                     object_type = int(eds.get(section, "ObjectType"), 0)
                 except NoOptionError:
                     object_type = objectcodes.VAR
-                var = build_variable(eds, section, node_id, index, subindex, is_domain=object_type == objectcodes.DOMAIN)
+                var = build_variable(eds, section, node_id, object_type, index, subindex)
                 entry.add_member(var)
 
         # Match [index]Name
@@ -214,7 +214,9 @@ def _calc_bit_length(data_type):
     elif data_type == datatypes.INTEGER64:
         return 64
     else:
-        raise ValueError(f"Invalid data_type '{data_type}', expecting a signed integer data_type.")
+        raise ValueError(
+            f"Invalid data_type '{data_type}', expecting a signed integer data_type."
+        )
 
 
 def _signed_int_from_hex(hex_str, bit_length):
@@ -256,8 +258,16 @@ def _revert_variable(var_type, value):
         return f"0x{value:02X}"
 
 
-def build_variable(eds, section, node_id, index, subindex=0, is_domain=False):
-    """Creates a object dictionary entry.
+def build_variable(
+    eds: RawConfigParser,
+    section: str,
+    node_id: int,
+    object_type: int,
+    index: int,
+    subindex: int = 0
+) -> ODVariable:
+    """Create a object dictionary entry.
+
     :param eds: String stream of the eds file
     :param section:
     :param node_id: Node ID
@@ -273,16 +283,19 @@ def build_variable(eds, section, node_id, index, subindex=0, is_domain=False):
         var.storage_location = None
     var.data_type = int(eds.get(section, "DataType"), 0)
     var.access_type = eds.get(section, "AccessType").lower()
-    var.is_domain = is_domain
+    var.is_domain = object_type == objectcodes.DOMAIN
     if var.data_type > 0x1B:
-        # The object dictionary editor from CANFestival creates an optional object if min max values are used
-        # This optional object is then placed in the eds under the section [A0] (start point, iterates for more)
-        # The eds.get function gives us 0x00A0 now convert to String without hex representation and upper case
-        # The sub2 part is then the section where the type parameter stands
+        # The object dictionary editor from CANFestival creates an optional object if min max
+        # values are used.  This optional object is then placed in the eds under the section
+        # [A0] (start point, iterates for more).  The eds.get function gives us 0x00A0 now
+        # convert to String without hex representation and upper case.  The sub2 part is then
+        # the section where the type parameter stands.
         try:
             var.data_type = int(eds.get(f"{var.data_type:X}sub1", "DefaultValue"), 0)
         except NoSectionError:
-            logger.warning("%s has an unknown or unsupported data type (0x%X)", name, var.data_type)
+            logger.warning(
+                "%s has an unknown or unsupported data type (0x%X)", name, var.data_type
+            )
             # Assume DOMAIN to force application to interpret the byte data
             var.data_type = datatypes.DOMAIN
 
@@ -311,16 +324,17 @@ def build_variable(eds, section, node_id, index, subindex=0, is_domain=False):
             var.default_raw = eds.get(section, "DefaultValue")
             if '$NODEID' in var.default_raw:
                 var.relative = True
-            var.default = _convert_variable(node_id, var.data_type, eds.get(section, "DefaultValue"))
+            var.default = _convert_variable(node_id, var.data_type, var.default_raw)
         except ValueError:
             pass
     if eds.has_option(section, "ParameterValue"):
         try:
             var.value_raw = eds.get(section, "ParameterValue")
-            var.value = _convert_variable(node_id, var.data_type, eds.get(section, "ParameterValue"))
+            var.value = _convert_variable(node_id, var.data_type, var.value_raw)
         except ValueError:
             pass
-    # Factor, Description and Unit are not standard according to the CANopen specifications, but they are implemented in the python canopen package, so we can at least try to use them
+    # Factor, Description and Unit are not standard according to the CANopen specifications, but
+    # they are implemented in the python canopen package, so we can at least try to use them
     if eds.has_option(section, "Factor"):
         try:
             var.factor = float(eds.get(section, "Factor"))

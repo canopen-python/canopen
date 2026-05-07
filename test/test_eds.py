@@ -148,6 +148,28 @@ class TestEDS(unittest.TestCase):
         int64 = self.od[0x3040]
         self.assertEqual(int64.min, -10)
         self.assertEqual(int64.max, +10)
+        # Verify all remaining SIGNED_TYPES are handled (INTEGER24/40/48/56)
+        for index in (0x3031, 0x3032, 0x3033, 0x3034):
+            var = self.od[index]
+            self.assertEqual(var.min, -1, f"min mismatch at 0x{index:04X}")
+            self.assertEqual(var.max, 0, f"max mismatch at 0x{index:04X}")
+
+    def test_invalid_limit_logs_warning(self):
+        import io
+        import logging
+
+        with open(SAMPLE_EDS) as f:
+            content = f.read()
+        invalid_eds = content.replace(
+            "LowLimit=0x02\nPDOMapping=0\n\n[3030]",
+            "LowLimit=INVALID\nPDOMapping=0\n\n[3030]",
+        )
+        with io.StringIO(invalid_eds) as buf:
+            buf.name = "mock.eds"
+            with self.assertLogs("canopen.objectdictionary.eds", level=logging.WARNING) as cm:
+                od = canopen.import_od(buf)
+        self.assertIsNone(od[0x3021].min)
+        self.assertTrue(any("LowLimit" in msg for msg in cm.output))
 
     def test_signed_int_from_hex(self):
         for data_type, test_cases in self.test_data.items():

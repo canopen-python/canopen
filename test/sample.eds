@@ -976,6 +976,42 @@ HighLimit=0xFFFFFFFF
 LowLimit=0x80000000
 PDOMapping=0
 
+[3031]
+ParameterName=INTEGER24 value range -1 to 0
+ObjectType=0x7
+DataType=0x10
+AccessType=rw
+HighLimit=0x000000
+LowLimit=0xFFFFFF
+PDOMapping=0
+
+[3032]
+ParameterName=INTEGER40 value range -1 to 0
+ObjectType=0x7
+DataType=0x12
+AccessType=rw
+HighLimit=0x0000000000
+LowLimit=0xFFFFFFFFFF
+PDOMapping=0
+
+[3033]
+ParameterName=INTEGER48 value range -1 to 0
+ObjectType=0x7
+DataType=0x13
+AccessType=rw
+HighLimit=0x000000000000
+LowLimit=0xFFFFFFFFFFFF
+PDOMapping=0
+
+[3034]
+ParameterName=INTEGER56 value range -1 to 0
+ObjectType=0x7
+DataType=0x14
+AccessType=rw
+HighLimit=0x00000000000000
+LowLimit=0xFFFFFFFFFFFFFF
+PDOMapping=0
+
 [3040]
 ParameterName=INTEGER64 value range -10 to +10
 ObjectType=0x7

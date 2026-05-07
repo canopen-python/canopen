@@ -204,19 +204,16 @@ def import_from_node(node_id: int, network: canopen.network.Network):
     return od
 
 
-def _calc_bit_length(data_type):
-    if data_type == datatypes.INTEGER8:
-        return 8
-    elif data_type == datatypes.INTEGER16:
-        return 16
-    elif data_type == datatypes.INTEGER32:
-        return 32
-    elif data_type == datatypes.INTEGER64:
-        return 64
-    else:
-        raise ValueError(
-            f"Invalid data_type '{data_type}', expecting a signed integer data_type."
-        )
+_SIGNED_BIT_LENGTHS = {
+    datatypes.INTEGER8: 8,
+    datatypes.INTEGER16: 16,
+    datatypes.INTEGER24: 24,
+    datatypes.INTEGER32: 32,
+    datatypes.INTEGER40: 40,
+    datatypes.INTEGER48: 48,
+    datatypes.INTEGER56: 56,
+    datatypes.INTEGER64: 64,
+}
 
 
 def _signed_int_from_hex(hex_str, bit_length):
@@ -305,20 +302,20 @@ def build_variable(
         try:
             min_string = eds.get(section, "LowLimit")
             if var.data_type in datatypes.SIGNED_TYPES:
-                var.min = _signed_int_from_hex(min_string, _calc_bit_length(var.data_type))
+                var.min = _signed_int_from_hex(min_string, _SIGNED_BIT_LENGTHS[var.data_type])
             else:
                 var.min = int(min_string, 0)
         except ValueError:
-            pass
+            logger.warning("Failed to parse LowLimit for %s: %r", name, min_string)
     if eds.has_option(section, "HighLimit"):
         try:
             max_string = eds.get(section, "HighLimit")
             if var.data_type in datatypes.SIGNED_TYPES:
-                var.max = _signed_int_from_hex(max_string, _calc_bit_length(var.data_type))
+                var.max = _signed_int_from_hex(max_string, _SIGNED_BIT_LENGTHS[var.data_type])
             else:
                 var.max = int(max_string, 0)
         except ValueError:
-            pass
+            logger.warning("Failed to parse HighLimit for %s: %r", name, max_string)
     if eds.has_option(section, "DefaultValue"):
         try:
             var.default_raw = eds.get(section, "DefaultValue")

@@ -41,7 +41,7 @@ def import_eds(source, node_id):
     od = ObjectDictionary()
 
     if eds.has_section("FileInfo"):
-        od.__edsFileInfo = {
+        od.__edsFileInfo = {  # type: ignore[attr-defined] # custom addition
             opt: eds.get("FileInfo", opt)
             for opt in eds.options("FileInfo")
         }

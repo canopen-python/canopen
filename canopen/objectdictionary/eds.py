@@ -129,7 +129,7 @@ def import_eds(source, node_id):
                 storage_location = None
 
             if object_type in (objectcodes.VAR, objectcodes.DOMAIN):
-                var = build_variable(eds, section, node_id, index, is_domain=object_type == objectcodes.DOMAIN)
+                var = build_variable(eds, section, node_id, object_type, index)
                 od.add_object(var)
             elif object_type == objectcodes.ARRAY and eds.has_option(section, "CompactSubObj"):
                 arr = ODArray(name, index)
@@ -137,7 +137,7 @@ def import_eds(source, node_id):
                     "Number of entries", index, 0)
                 last_subindex.data_type = datatypes.UNSIGNED8
                 arr.add_member(last_subindex)
-                arr.add_member(build_variable(eds, section, node_id, index, 1))
+                arr.add_member(build_variable(eds, section, node_id, object_type, index, 1))
                 arr.storage_location = storage_location
                 od.add_object(arr)
             elif object_type == objectcodes.ARRAY:
@@ -162,7 +162,7 @@ def import_eds(source, node_id):
                     object_type = int(eds.get(section, "ObjectType"), 0)
                 except NoOptionError:
                     object_type = objectcodes.VAR
-                var = build_variable(eds, section, node_id, index, subindex, is_domain=object_type == objectcodes.DOMAIN)
+                var = build_variable(eds, section, node_id, object_type, index, subindex)
                 entry.add_member(var)
 
         # Match [index]Name
@@ -256,8 +256,16 @@ def _revert_variable(var_type, value):
         return f"0x{value:02X}"
 
 
-def build_variable(eds, section, node_id, index, subindex=0, is_domain=False):
-    """Creates a object dictionary entry.
+def build_variable(
+    eds: RawConfigParser,
+    section: str,
+    node_id: int,
+    object_type: int,
+    index: int,
+    subindex: int = 0
+) -> ODVariable:
+    """Create a object dictionary entry.
+
     :param eds: String stream of the eds file
     :param section:
     :param node_id: Node ID
@@ -273,7 +281,7 @@ def build_variable(eds, section, node_id, index, subindex=0, is_domain=False):
         var.storage_location = None
     var.data_type = int(eds.get(section, "DataType"), 0)
     var.access_type = eds.get(section, "AccessType").lower()
-    var.is_domain = is_domain
+    var.is_domain = object_type == objectcodes.DOMAIN
     if var.data_type > 0x1B:
         # The object dictionary editor from CANFestival creates an optional object if min max values are used
         # This optional object is then placed in the eds under the section [A0] (start point, iterates for more)

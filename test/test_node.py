@@ -8,6 +8,25 @@ def count_subscribers(network: canopen.Network) -> int:
     return sum(len(n) for n in network.subscribers.values())
 
 
+class TestBaseNode(unittest.TestCase):
+
+    def test_valid_node_id(self):
+        node = canopen.node.base.BaseNode(1, canopen.ObjectDictionary())
+        self.assertEqual(node.id, 1)
+
+    def test_valid_node_id_from_od(self):
+        od = canopen.ObjectDictionary()
+        od.node_id = 2
+        node = canopen.node.base.BaseNode(0, od)
+        self.assertEqual(node.id, 2)
+
+    def test_invalid_node_id(self):
+        with self.assertRaises(ValueError):
+            _ = canopen.node.base.BaseNode(0, canopen.ObjectDictionary())
+        with self.assertRaises(ValueError):
+            _ = canopen.node.base.BaseNode(128, canopen.ObjectDictionary())
+
+
 class TestLocalNode(unittest.TestCase):
 
     @classmethod

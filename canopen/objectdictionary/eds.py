@@ -319,13 +319,13 @@ def build_variable(
             var.default_raw = eds.get(section, "DefaultValue")
             if '$NODEID' in var.default_raw:
                 var.relative = True
-            var.default = _convert_variable(node_id, var.data_type, eds.get(section, "DefaultValue"))
+            var.default = _convert_variable(node_id, var.data_type, var.default_raw)
         except ValueError:
             pass
     if eds.has_option(section, "ParameterValue"):
         try:
             var.value_raw = eds.get(section, "ParameterValue")
-            var.value = _convert_variable(node_id, var.data_type, eds.get(section, "ParameterValue"))
+            var.value = _convert_variable(node_id, var.data_type, var.value_raw)
         except ValueError:
             pass
     # Factor, Description and Unit are not standard according to the CANopen specifications, but they are implemented in the python canopen package, so we can at least try to use them

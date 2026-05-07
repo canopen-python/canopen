@@ -50,7 +50,7 @@ def import_eds(source, node_id):
         linecount = int(eds.get("Comments", "Lines"), 0)
         od.comments = '\n'.join([
             eds.get("Comments", f"Line{line}")
-            for line in range(1, linecount+1)
+            for line in range(1, linecount + 1)
         ])
 
     if not eds.has_section("DeviceInfo"):
@@ -214,7 +214,9 @@ def _calc_bit_length(data_type):
     elif data_type == datatypes.INTEGER64:
         return 64
     else:
-        raise ValueError(f"Invalid data_type '{data_type}', expecting a signed integer data_type.")
+        raise ValueError(
+            f"Invalid data_type '{data_type}', expecting a signed integer data_type."
+        )
 
 
 def _signed_int_from_hex(hex_str, bit_length):
@@ -283,14 +285,17 @@ def build_variable(
     var.access_type = eds.get(section, "AccessType").lower()
     var.is_domain = object_type == objectcodes.DOMAIN
     if var.data_type > 0x1B:
-        # The object dictionary editor from CANFestival creates an optional object if min max values are used
-        # This optional object is then placed in the eds under the section [A0] (start point, iterates for more)
-        # The eds.get function gives us 0x00A0 now convert to String without hex representation and upper case
-        # The sub2 part is then the section where the type parameter stands
+        # The object dictionary editor from CANFestival creates an optional object if min max
+        # values are used.  This optional object is then placed in the eds under the section
+        # [A0] (start point, iterates for more).  The eds.get function gives us 0x00A0 now
+        # convert to String without hex representation and upper case.  The sub2 part is then
+        # the section where the type parameter stands.
         try:
             var.data_type = int(eds.get(f"{var.data_type:X}sub1", "DefaultValue"), 0)
         except NoSectionError:
-            logger.warning("%s has an unknown or unsupported data type (0x%X)", name, var.data_type)
+            logger.warning(
+                "%s has an unknown or unsupported data type (0x%X)", name, var.data_type
+            )
             # Assume DOMAIN to force application to interpret the byte data
             var.data_type = datatypes.DOMAIN
 
@@ -328,7 +333,8 @@ def build_variable(
             var.value = _convert_variable(node_id, var.data_type, var.value_raw)
         except ValueError:
             pass
-    # Factor, Description and Unit are not standard according to the CANopen specifications, but they are implemented in the python canopen package, so we can at least try to use them
+    # Factor, Description and Unit are not standard according to the CANopen specifications, but
+    # they are implemented in the python canopen package, so we can at least try to use them
     if eds.has_option(section, "Factor"):
         try:
             var.factor = float(eds.get(section, "Factor"))

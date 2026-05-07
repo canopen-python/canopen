@@ -306,7 +306,7 @@ def build_variable(
             else:
                 var.min = int(min_string, 0)
         except ValueError:
-            logger.warning("Failed to parse LowLimit for %s: %r", name, min_string)
+            pass
     if eds.has_option(section, "HighLimit"):
         try:
             max_string = eds.get(section, "HighLimit")
@@ -315,7 +315,7 @@ def build_variable(
             else:
                 var.max = int(max_string, 0)
         except ValueError:
-            logger.warning("Failed to parse HighLimit for %s: %r", name, max_string)
+            pass
     if eds.has_option(section, "DefaultValue"):
         try:
             var.default_raw = eds.get(section, "DefaultValue")

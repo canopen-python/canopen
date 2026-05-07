@@ -135,6 +135,7 @@ class Variable:
 
         :returns:
             The value of the variable.
+        :raises ValueError: For unsupported fmt values.
         """
         if fmt == "raw":
             return self.raw
@@ -142,6 +143,7 @@ class Variable:
             return self.phys
         elif fmt == "desc":
             return self.desc
+        raise ValueError(f"Invalid format '{fmt}'")
 
     def write(
         self, value: Union[int, bool, float, str, bytes], fmt: str = "raw"

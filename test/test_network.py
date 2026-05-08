@@ -69,7 +69,8 @@ class TestNetwork(unittest.TestCase):
         def cleanup():
             # We must clear the fake exception installed below, since
             # .disconnect() implicitly calls .check() during test tear down.
-            self.network.notifier.exception = None
+            if self.network.notifier is not None:
+                self.network.notifier.exception = None
             self.network.disconnect()
 
         self.addCleanup(cleanup)
@@ -284,6 +285,34 @@ class TestNetwork(unittest.TestCase):
         msg = bus.recv(PERIOD)
         if msg is not None:
             self.assertIsNone(bus.recv(PERIOD))
+
+    def test_network_connect_does_not_recreate_notifier(self):
+        self.network.connect(interface="virtual")
+        self.addCleanup(self.network.disconnect)
+        notifier1 = self.network.notifier
+        self.assertIsNotNone(notifier1)
+        # Calling connect() again should reuse the existing notifier
+        self.network.connect(interface="virtual")
+        self.assertIs(self.network.notifier, notifier1)
+
+    def test_network_disconnect_releases_notifier(self):
+        self.network.connect(interface="virtual")
+        self.assertIsNotNone(self.network.notifier)
+        self.network.disconnect()
+        self.assertIsNone(self.network.notifier)
+
+    def test_network_disconnect_releases_notifier_on_exception(self):
+        self.network.connect(interface="virtual")
+
+        class Custom(Exception):
+            pass
+
+        self.network.notifier.exception = Custom("fake")
+        with self.assertRaises(Custom):
+            with self.assertLogs(level=logging.ERROR):
+                self.network.disconnect()
+        # Notifier must be released even when check() raises
+        self.assertIsNone(self.network.notifier)
 
 
 class TestScanner(unittest.TestCase):

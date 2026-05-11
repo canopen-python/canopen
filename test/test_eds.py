@@ -136,23 +136,21 @@ class TestEDS(unittest.TestCase):
         self.assertFalse(var.is_domain)
 
     def test_record_with_limits(self):
-        int8 = self.od[0x3020]
-        self.assertEqual(int8.min, 0)
-        self.assertEqual(int8.max, 127)
-        uint8 = self.od[0x3021]
-        self.assertEqual(uint8.min, 2)
-        self.assertEqual(uint8.max, 10)
-        int32 = self.od[0x3030]
-        self.assertEqual(int32.min, -2147483648)
-        self.assertEqual(int32.max, -1)
-        int64 = self.od[0x3040]
-        self.assertEqual(int64.min, -10)
-        self.assertEqual(int64.max, +10)
-        # Verify all remaining SIGNED_TYPES are handled (INTEGER24/40/48/56)
-        for index in (0x3031, 0x3032, 0x3033, 0x3034):
-            var = self.od[index]
-            self.assertEqual(var.min, -1, f"min mismatch at 0x{index:04X}")
-            self.assertEqual(var.max, 0, f"max mismatch at 0x{index:04X}")
+        cases = [
+            (0x3020, 0,            127),          # INTEGER8
+            (0x3021, 2,            10),           # UNSIGNED8
+            (0x3030, -2147483648,  -1),           # INTEGER32
+            (0x3031, -1,           0),            # INTEGER24
+            (0x3032, -1,           0),            # INTEGER40
+            (0x3033, -1,           0),            # INTEGER48
+            (0x3034, -1,           0),            # INTEGER56
+            (0x3040, -10,          +10),          # INTEGER64
+        ]
+        for index, expected_min, expected_max in cases:
+            with self.subTest(index=f"0x{index:04X}"):
+                var = self.od[index]
+                self.assertEqual(var.min, expected_min)
+                self.assertEqual(var.max, expected_max)
 
     def test_signed_int_from_hex(self):
         for data_type, test_cases in self.test_data.items():
@@ -160,6 +158,13 @@ class TestEDS(unittest.TestCase):
                 with self.subTest(data_type=data_type, test_case=test_case):
                     result = _signed_int_from_hex('0x' + test_case["hex_str"], test_case["bit_length"])
                     self.assertEqual(result, test_case["expected"])
+
+    def test_signed_int_from_hex_rejects_out_of_range(self):
+        # Value must fit in bit_length bits (unsigned representation).
+        with self.assertRaises(ValueError):
+            _signed_int_from_hex("0xFFFF", 8)   # 16-bit value into 8-bit field
+        with self.assertRaises(ValueError):
+            _signed_int_from_hex("-1", 8)       # negative inputs are never valid
 
     def test_array_compact_subobj(self):
         array = self.od[0x1003]

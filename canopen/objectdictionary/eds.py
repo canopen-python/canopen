@@ -204,26 +204,28 @@ def import_from_node(node_id: int, network: canopen.network.Network):
     return od
 
 
-_SIGNED_BIT_LENGTHS = {
-    datatypes.INTEGER8: 8,
-    datatypes.INTEGER16: 16,
-    datatypes.INTEGER24: 24,
-    datatypes.INTEGER32: 32,
-    datatypes.INTEGER40: 40,
-    datatypes.INTEGER48: 48,
-    datatypes.INTEGER56: 56,
-    datatypes.INTEGER64: 64,
-}
+def _calc_bit_length(data_type: int) -> int:
+    if data_type in datatypes.SIGNED_TYPES:
+        st = ODVariable.STRUCT_TYPES[data_type]
+        if isinstance(st, datatypes.IntegerN):
+            return st.width
+        return st.size * 8
+    else:
+        raise ValueError(
+            f"Invalid data_type '{data_type}', expecting a signed integer data_type."
+        )
 
 
 def _signed_int_from_hex(hex_str, bit_length):
     number = int(hex_str, 0)
+    if number < 0 or number >= (1 << bit_length):
+        raise ValueError(
+            f"Value {hex_str!r} is out of range for a {bit_length}-bit signed integer"
+        )
     max_value = (1 << (bit_length - 1)) - 1
-
     if number > max_value:
         return number - (1 << bit_length)
-    else:
-        return number
+    return number
 
 
 def _convert_variable(node_id, var_type, value):
@@ -242,6 +244,18 @@ def _convert_variable(node_id, var_type, value):
             return int(value, 0)
 
 
+def _int_to_hex(data_type: int, value: int) -> str:
+    """Format an integer as EDS hex string.
+
+    Signed types with a negative value are written as two's-complement hex
+    (e.g. INTEGER8 -1 → 0xFF) so the output is a valid EDS literal.
+    """
+    if data_type in datatypes.SIGNED_TYPES and value < 0:
+        bit_length = _calc_bit_length(data_type)
+        return f"0x{value + (1 << bit_length):0{bit_length // 4}X}"
+    return f"0x{value:02X}"
+
+
 def _revert_variable(var_type, value):
     if value is None:
         return None
@@ -252,7 +266,7 @@ def _revert_variable(var_type, value):
     elif var_type in datatypes.FLOAT_TYPES:
         return value
     else:
-        return f"0x{value:02X}"
+        return _int_to_hex(var_type, value)
 
 
 def build_variable(
@@ -302,20 +316,26 @@ def build_variable(
         try:
             min_string = eds.get(section, "LowLimit")
             if var.data_type in datatypes.SIGNED_TYPES:
-                var.min = _signed_int_from_hex(min_string, _SIGNED_BIT_LENGTHS[var.data_type])
+                var.min = _signed_int_from_hex(min_string, _calc_bit_length(var.data_type))
             else:
                 var.min = int(min_string, 0)
         except ValueError:
-            pass
+            logger.warning(
+                "Invalid LowLimit %r for %s (0x%X), ignoring",
+                eds.get(section, "LowLimit"), var.name, var.index,
+            )
     if eds.has_option(section, "HighLimit"):
         try:
             max_string = eds.get(section, "HighLimit")
             if var.data_type in datatypes.SIGNED_TYPES:
-                var.max = _signed_int_from_hex(max_string, _SIGNED_BIT_LENGTHS[var.data_type])
+                var.max = _signed_int_from_hex(max_string, _calc_bit_length(var.data_type))
             else:
                 var.max = int(max_string, 0)
         except ValueError:
-            pass
+            logger.warning(
+                "Invalid HighLimit %r for %s (0x%X), ignoring",
+                eds.get(section, "HighLimit"), var.name, var.index,
+            )
     if eds.has_option(section, "DefaultValue"):
         try:
             var.default_raw = eds.get(section, "DefaultValue")
@@ -323,30 +343,33 @@ def build_variable(
                 var.relative = True
             var.default = _convert_variable(node_id, var.data_type, var.default_raw)
         except ValueError:
-            pass
+            logger.warning(
+                "Invalid DefaultValue %r for %s (0x%X), ignoring",
+                var.default_raw, var.name, var.index,
+            )
     if eds.has_option(section, "ParameterValue"):
         try:
             var.value_raw = eds.get(section, "ParameterValue")
             var.value = _convert_variable(node_id, var.data_type, var.value_raw)
         except ValueError:
-            pass
+            logger.warning(
+                "Invalid ParameterValue %r for %s (0x%X), ignoring",
+                var.value_raw, var.name, var.index,
+            )
     # Factor, Description and Unit are not standard according to the CANopen specifications, but
     # they are implemented in the python canopen package, so we can at least try to use them
     if eds.has_option(section, "Factor"):
         try:
             var.factor = float(eds.get(section, "Factor"))
         except ValueError:
-            pass
+            logger.warning(
+                "Invalid Factor %r for %s (0x%X), ignoring",
+                eds.get(section, "Factor"), var.name, var.index,
+            )
     if eds.has_option(section, "Description"):
-        try:
-            var.description = eds.get(section, "Description")
-        except ValueError:
-            pass
+        var.description = eds.get(section, "Description")
     if eds.has_option(section, "Unit"):
-        try:
-            var.unit = eds.get(section, "Unit")
-        except ValueError:
-            pass
+        var.unit = eds.get(section, "Unit")
     return var
 
 
@@ -411,9 +434,9 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
         eds.set(section, "PDOMapping", hex(var.pdo_mappable))
 
         if getattr(var, 'min', None) is not None:
-            eds.set(section, "LowLimit", var.min)
+            eds.set(section, "LowLimit", _int_to_hex(var.data_type, var.min))
         if getattr(var, 'max', None) is not None:
-            eds.set(section, "HighLimit", var.max)
+            eds.set(section, "HighLimit", _int_to_hex(var.data_type, var.max))
 
         if getattr(var, 'description', '') != '':
             eds.set(section, "Description", var.description)

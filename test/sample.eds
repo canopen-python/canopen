@@ -967,6 +967,24 @@ HighLimit=0x0A
 LowLimit=0x02
 PDOMapping=0
 
+[3022]
+ParameterName=UNSIGNED16 decimal limits
+ObjectType=0x7
+DataType=0x06
+AccessType=rw
+LowLimit=100
+HighLimit=1000
+PDOMapping=0
+
+[3023]
+ParameterName=INTEGER16 decimal limits
+ObjectType=0x7
+DataType=0x03
+AccessType=rw
+LowLimit=-100
+HighLimit=100
+PDOMapping=0
+
 [3030]
 ParameterName=INTEGER32 only negative values
 ObjectType=0x7

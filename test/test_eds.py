@@ -137,14 +137,16 @@ class TestEDS(unittest.TestCase):
 
     def test_record_with_limits(self):
         cases = [
-            (0x3020, 0,            127),          # INTEGER8
-            (0x3021, 2,            10),           # UNSIGNED8
-            (0x3030, -2147483648,  -1),           # INTEGER32
-            (0x3031, -1,           0),            # INTEGER24
-            (0x3032, -1,           0),            # INTEGER40
-            (0x3033, -1,           0),            # INTEGER48
-            (0x3034, -1,           0),            # INTEGER56
-            (0x3040, -10,          +10),          # INTEGER64
+            (0x3020, 0,            127),          # INTEGER8   hex limits
+            (0x3021, 2,            10),           # UNSIGNED8  hex limits
+            (0x3022, 100,          1000),         # UNSIGNED16 decimal limits
+            (0x3023, -100,         100),          # INTEGER16  decimal limits
+            (0x3030, -2147483648,  -1),           # INTEGER32  hex limits
+            (0x3031, -1,           0),            # INTEGER24  hex limits
+            (0x3032, -1,           0),            # INTEGER40  hex limits
+            (0x3033, -1,           0),            # INTEGER48  hex limits
+            (0x3034, -1,           0),            # INTEGER56  hex limits
+            (0x3040, -10,          +10),          # INTEGER64  hex limits
         ]
         for index, expected_min, expected_max in cases:
             with self.subTest(index=f"0x{index:04X}"):
@@ -159,12 +161,17 @@ class TestEDS(unittest.TestCase):
                     result = _signed_int_from_hex('0x' + test_case["hex_str"], test_case["bit_length"])
                     self.assertEqual(result, test_case["expected"])
 
+    def test_signed_int_from_hex_accepts_decimal(self):
+        # Negative decimal values are valid EDS literals (CiA 306 allows both formats).
+        self.assertEqual(_signed_int_from_hex("-1", 8), -1)
+        self.assertEqual(_signed_int_from_hex("-128", 8), -128)
+        self.assertEqual(_signed_int_from_hex("-2147483648", 32), -2147483648)
+
     def test_signed_int_from_hex_rejects_out_of_range(self):
-        # Value must fit in bit_length bits (unsigned representation).
         with self.assertRaises(ValueError):
             _signed_int_from_hex("0xFFFF", 8)   # 16-bit value into 8-bit field
         with self.assertRaises(ValueError):
-            _signed_int_from_hex("-1", 8)       # negative inputs are never valid
+            _signed_int_from_hex("-129", 8)     # below minimum for 8-bit signed
 
     def test_array_compact_subobj(self):
         array = self.od[0x1003]

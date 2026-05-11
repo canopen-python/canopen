@@ -345,7 +345,7 @@ def build_variable(
         except ValueError:
             logger.warning(
                 "Invalid DefaultValue %r for %s (0x%X), ignoring",
-                var.default_raw, var.name, var.index,
+                eds.get(section, "DefaultValue"), var.name, var.index,
             )
     if eds.has_option(section, "ParameterValue"):
         try:
@@ -354,7 +354,7 @@ def build_variable(
         except ValueError:
             logger.warning(
                 "Invalid ParameterValue %r for %s (0x%X), ignoring",
-                var.value_raw, var.name, var.index,
+                eds.get(section, "ParameterValue"), var.name, var.index,
             )
     # Factor, Description and Unit are not standard according to the CANopen specifications, but
     # they are implemented in the python canopen package, so we can at least try to use them

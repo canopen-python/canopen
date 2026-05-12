@@ -4,6 +4,7 @@ Object Dictionary module
 
 from __future__ import annotations
 
+import copy
 import logging
 import struct
 from collections.abc import Iterator, Mapping, MutableMapping
@@ -286,10 +287,15 @@ class ODArray(Mapping):
             var = ODVariable(name, self.index, subindex)
             var.parent = self
             for attr in ("data_type", "unit", "factor", "min", "max", "default",
-                         "access_type", "description", "value_descriptions",
-                         "bit_definitions", "storage_location"):
+                         "access_type", "description", "storage_location"):
                 if attr in template.__dict__:
                     var.__dict__[attr] = template.__dict__[attr]
+            # Mutable containers must be copied independently to avoid shared-state
+            # mutations across generated subindex variables and the template.
+            if "value_descriptions" in template.__dict__:
+                var.value_descriptions = template.value_descriptions.copy()
+            if "bit_definitions" in template.__dict__:
+                var.bit_definitions = copy.deepcopy(template.bit_definitions)
         else:
             raise KeyError(f"Could not find subindex {pretty_index(None, subindex)}")
         return var

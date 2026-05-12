@@ -315,6 +315,37 @@ class TestArray(unittest.TestCase):
         self.assertEqual(array[2].name, "Test Variable 2")
         self.assertEqual(array[3].name, "Test Variable_3")
 
+    def _make_template_array(self):
+        array = od.ODArray("Test Array", 0x1000)
+        sub0 = od.ODVariable("Last subindex", 0x1000, 0)
+        sub0.data_type = od.UNSIGNED8
+        array.add_member(sub0)
+        template = od.ODVariable("Test Variable", 0x1000, 1)
+        template.data_type = od.UNSIGNED32
+        return array, template
+
+    def test_generated_subindex_value_descriptions_independent(self):
+        array, template = self._make_template_array()
+        template.add_value_description(1, "One")
+        array.add_member(template)
+        sub2 = array[2]
+        sub3 = array[3]
+        # Mutating one generated variable must not affect the other or the template
+        sub2.value_descriptions[2] = "Two"
+        self.assertNotIn(2, sub3.value_descriptions)
+        self.assertNotIn(2, template.value_descriptions)
+
+    def test_generated_subindex_bit_definitions_independent(self):
+        array, template = self._make_template_array()
+        template.add_bit_definition("FLAG", [0])
+        array.add_member(template)
+        sub2 = array[2]
+        sub3 = array[3]
+        # Mutating a list inside bit_definitions must not affect others
+        sub2.bit_definitions["FLAG"].append(1)
+        self.assertEqual(sub3.bit_definitions["FLAG"], [0])
+        self.assertEqual(template.bit_definitions["FLAG"], [0])
+
 
 class TestEquality(unittest.TestCase):
 

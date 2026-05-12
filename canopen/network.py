@@ -162,7 +162,6 @@ class Network(MutableMapping):
                 logger.info("Trying to read EDS from node %d", node)
                 object_dictionary = import_from_node(node, self)
             node = RemoteNode(node, object_dictionary)  # type: ignore[arg-type]
-        assert node.id is not None
         self[node.id] = node
         return node
 
@@ -185,7 +184,6 @@ class Network(MutableMapping):
         """
         if isinstance(node, int):
             node = LocalNode(node, object_dictionary)  # type: ignore[arg-type]
-        assert node.id is not None
         self[node.id] = node
         return node
 

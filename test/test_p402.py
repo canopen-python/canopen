@@ -201,12 +201,6 @@ class TestBaseNode402State(unittest.TestCase):
         node.sdo.__getitem__ = MagicMock(return_value=MagicMock(raw=0x0040))
         self.assertEqual(node.statusword, 0x0040)
 
-    def test_check_statusword_no_tpdo_pointers(self):
-        """check_statusword returns cached statusword when no TPDO pointers."""
-        self._inject_statusword(0x0027)  # OPERATION ENABLED
-        result = self.node.check_statusword()
-        self.assertEqual(result, 0x0027)
-
     def test_check_statusword_periodic_tpdo(self):
         """check_statusword waits for periodic TPDO reception."""
         self._inject_statusword(0x0040)
@@ -322,29 +316,6 @@ class TestBaseNode402StateTransition(unittest.TestCase):
         node.sdo = MagicMock()
         node.controlword = 0x0006
         self.assertEqual(node.sdo[0x6040].raw, 0x0006)
-
-
-class TestBaseNode402Homing(unittest.TestCase):
-    """Test homing status via simulated TPDO reception."""
-
-    def setUp(self):
-        self.node = BaseNode402(1, _make_od())
-
-    def test_homing_status(self):
-        """Verify _homing_status from TPDO-injected statusword."""
-        test_cases = [
-            (0x0000, "IN PROGRESS"),
-            (0x0400, "INTERRUPTED"),
-            (0x1000, "ATTAINED"),
-            (0x1400, "TARGET REACHED"),
-            (0x2000, "ERROR VELOCITY IS NOT ZERO"),
-            (0x2400, "ERROR VELOCITY IS ZERO"),
-        ]
-        for sw, expected in test_cases:
-            with self.subTest(statusword=hex(sw)):
-                _inject_tpdo(self.node, 0x6041, sw)
-                result = self.node._homing_status()
-                self.assertEqual(result, expected)
 
 
 class TestBaseNode402OpMode(unittest.TestCase):

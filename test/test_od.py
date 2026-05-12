@@ -265,7 +265,7 @@ class TestObjectDictionary(unittest.TestCase):
         test_od = od.ObjectDictionary()
         var = od.ODVariable("Test Variable", 0x1000)
         test_od.add_object(var)
-        with self.assertRaises(KeyError):
+        with self.assertRaises(TypeError):
             test_od["Test Variable.sub"]
 
     def test_get_variable_not_found(self):

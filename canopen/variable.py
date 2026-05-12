@@ -97,7 +97,7 @@ class Variable:
         either a :class:`float` or an :class:`int`.
         Non integers will be passed as is.
         """
-        value = self.od.decode_phys(self.raw)  # type: ignore[arg-type]
+        value = self.od.decode_phys(self.raw)
         if self.od.unit:
             logger.debug("Physical value is %s %s", value, self.od.unit)
         return value

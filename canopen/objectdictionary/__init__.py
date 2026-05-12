@@ -139,10 +139,7 @@ class ObjectDictionary(MutableMapping):
         if item is None:
             if isinstance(index, str) and '.' in index:
                 idx, sub = index.split('.', maxsplit=1)
-                parent = self[idx]
-                if not isinstance(parent, (ODRecord, ODArray)):
-                    raise KeyError(f"{pretty_index(index)} was not found in Object Dictionary")
-                return parent[sub]
+                return self[idx][sub]
             raise KeyError(f"{pretty_index(index)} was not found in Object Dictionary")
         return item
 
@@ -461,19 +458,22 @@ class ODVariable:
         if isinstance(value, (bytes, bytearray)):
             return value
         elif self.data_type == VISIBLE_STRING:
-            return value.encode("ascii")  # type: ignore[union-attr]
+            assert isinstance(value, str)
+            return value.encode("ascii")
         elif self.data_type == UNICODE_STRING:
-            return value.encode("utf_16_le")  # type: ignore[union-attr]
+            assert isinstance(value, str)
+            return value.encode("utf_16_le")
         elif self.data_type in (DOMAIN, OCTET_STRING):
             return bytes(value)  # type: ignore[arg-type]
         elif self.data_type in self.STRUCT_TYPES:
             if self.data_type in INTEGER_TYPES:
                 value = int(value)
             if self.data_type in NUMBER_TYPES:
-                if self.min is not None and value < self.min:  # type: ignore[operator]
+                assert isinstance(value, (int, float))
+                if self.min is not None and value < self.min:
                     logger.warning(
                         "Value %d is less than min value %d", value, self.min)
-                if self.max is not None and value > self.max:  # type: ignore[operator]
+                if self.max is not None and value > self.max:
                     logger.warning(
                         "Value %d is greater than max value %d",
                         value, self.max)
@@ -487,14 +487,16 @@ class ODVariable:
             raise TypeError(
                 f"Do not know how to encode {value!r} to data type 0x{self.data_type:X}")
 
-    def decode_phys(self, value: int) -> Union[int, float]:
+    def decode_phys(self, value: Union[int, bool, float, str, bytes]) -> Union[int, bool, float, str, bytes]:
         if self.data_type in INTEGER_TYPES:
+            assert isinstance(value, (int, float))
             return value * self.factor
         return value
 
     def encode_phys(self, value: Union[int, bool, float, str, bytes]) -> int:
         if self.data_type in INTEGER_TYPES:
-            value = int(round(value / self.factor))  # type: ignore[operator]
+            assert isinstance(value, (int, float))
+            value = int(round(value / self.factor))
         return value  # type: ignore[return-value]
 
     def decode_desc(self, value: int) -> str:

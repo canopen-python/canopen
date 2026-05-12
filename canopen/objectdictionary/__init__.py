@@ -553,7 +553,7 @@ class ODVariable:
         for bit in bits:
             mask |= 1 << bit
         temp &= ~mask
-        temp |= bit_value << min(bits)
+        temp |= (bit_value << min(bits)) & mask
         return temp
 
 

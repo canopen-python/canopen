@@ -188,6 +188,7 @@ class ObjectDictionary(MutableMapping):
             return obj
         elif isinstance(obj, (ODRecord, ODArray)):
             return obj.get(subindex)
+        return None
 
 
 class ODRecord(MutableMapping):
@@ -261,7 +262,7 @@ class ODArray(Mapping):
 
     def __init__(self, name: str, index: int):
         #: The :class:`~canopen.ObjectDictionary` owning the record.
-        self.parent = None
+        self.parent: Optional[ObjectDictionary] = None
         #: 16-bit address of the array
         self.index = index
         #: Name of array
@@ -343,7 +344,7 @@ class ODVariable:
         #: The :class:`~canopen.ObjectDictionary`,
         #: :class:`~canopen.objectdictionary.ODRecord` or
         #: :class:`~canopen.objectdictionary.ODArray` owning the variable
-        self.parent = None
+        self.parent: Union[ObjectDictionary, ODRecord, ODArray, None] = None
         #: 16-bit address of the object in the dictionary
         self.index = index
         #: 8-bit sub-index of the object in the dictionary

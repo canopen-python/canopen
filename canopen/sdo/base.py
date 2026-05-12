@@ -79,6 +79,7 @@ class SdoBase(Mapping):
             return obj
         elif isinstance(obj, (SdoRecord, SdoArray)):
             return obj.get(subindex)
+        return None
 
     def upload(self, index: int, subindex: int) -> bytes:
         raise NotImplementedError()

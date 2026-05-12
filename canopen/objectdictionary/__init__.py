@@ -207,7 +207,7 @@ class ODRecord(MutableMapping):
         #: Name of record
         self.name = name
         #: Storage location of index
-        self.storage_location = None
+        self.storage_location: Optional[str] = None
         self.subindices: dict[int, ODVariable] = {}
         self.names: dict[str, ODVariable] = {}
 
@@ -268,7 +268,7 @@ class ODArray(Mapping):
         #: Name of array
         self.name = name
         #: Storage location of index
-        self.storage_location = None
+        self.storage_location: Optional[str] = None
         self.subindices: dict[int, ODVariable] = {}
         self.names: dict[str, ODVariable] = {}
 
@@ -369,6 +369,8 @@ class ODVariable:
         self.data_type: Optional[int] = None
         #: Access type, should be "rw", "ro", "wo", or "const"
         self.access_type: str = "rw"
+        #: The variable represents a DOMAIN ObjectType
+        self.is_domain: bool = False
         #: Description of variable
         self.description: str = ""
         #: Dictionary of value descriptions
@@ -376,7 +378,7 @@ class ODVariable:
         #: Dictionary of bitfield definitions
         self.bit_definitions: dict[str, list[int]] = {}
         #: Storage location of index
-        self.storage_location = None
+        self.storage_location: Optional[str] = None
         #: Can this variable be mapped to a PDO
         self.pdo_mappable = False
 
@@ -496,7 +498,8 @@ class ODVariable:
     def encode_phys(self, value: Union[int, bool, float, str, bytes]) -> int:
         if self.data_type in INTEGER_TYPES:
             assert isinstance(value, (int, float))
-            value = int(round(value / self.factor))
+            if self.factor != 1:
+                value = round(value / self.factor)
         return value  # type: ignore[return-value]
 
     def decode_desc(self, value: int) -> str:

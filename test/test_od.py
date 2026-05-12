@@ -183,6 +183,42 @@ class TestAlternativeRepresentations(unittest.TestCase):
         self.assertAlmostEqual(var.decode_phys(128), 12.8)
         self.assertEqual(var.encode_phys(-0.1), -1)
 
+    def test_phys_factor_1_int64_roundtrip(self):
+        """int64 values must survive encode_phys when factor is 1."""
+        var = od.ODVariable("Test UNSIGNED64", 0x1000)
+        var.data_type = od.UNSIGNED64
+        value = 0x55554444AAAABBBB
+        self.assertEqual(var.encode_phys(value), value)
+
+    def test_phys_factor_1_preserves_int(self):
+        """encode_phys with factor=1 must not convert int to float."""
+        var = od.ODVariable("Test INTEGER32", 0x1000)
+        var.data_type = od.INTEGER32
+        self.assertIsInstance(var.encode_phys(42), int)
+
+    def test_phys_factor_1000_rounds(self):
+        """Integer factor > 1 uses float rounding behaviour, not truncating division."""
+        var = od.ODVariable("Test INTEGER32", 0x1000)
+        var.data_type = od.INTEGER32
+        var.factor = 1000
+        # 5555 / 1000 = 5.555 → round → 6
+        self.assertEqual(var.encode_phys(5555), 6)
+
+    def test_phys_float_factor(self):
+        """Float factor uses float division + round."""
+        var = od.ODVariable("Test INTEGER16", 0x1000)
+        var.data_type = od.INTEGER16
+        var.factor = 0.5
+        # 10 / 0.5 = 20
+        self.assertEqual(var.encode_phys(10), 20)
+
+    def test_phys_float_factor_decodes_to_float(self):
+        """decode_phys with float factor ensures a float result."""
+        var = od.ODVariable("Test INTEGER32", 0x1000)
+        var.data_type = od.INTEGER32
+        var.factor = 1.0
+        self.assertIsInstance(var.decode_phys(42), float)
+
     def test_desc(self):
         var = od.ODVariable("Test UNSIGNED8", 0x1000)
         var.data_type = od.UNSIGNED8

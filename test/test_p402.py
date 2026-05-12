@@ -108,12 +108,8 @@ class TestState402(unittest.TestCase):
         self.assertEqual(
             State402.next_state_indirect("SWITCH ON DISABLED"), "READY TO SWITCH ON"
         )
-        self.assertEqual(
-            State402.next_state_indirect("READY TO SWITCH ON"), "SWITCHED ON"
-        )
-        self.assertEqual(
-            State402.next_state_indirect("SWITCHED ON"), "OPERATION ENABLED"
-        )
+        self.assertEqual(State402.next_state_indirect("READY TO SWITCH ON"), "SWITCHED ON")
+        self.assertEqual(State402.next_state_indirect("SWITCHED ON"), "OPERATION ENABLED")
         self.assertEqual(State402.next_state_indirect("FAULT"), "SWITCH ON DISABLED")
         self.assertEqual(State402.next_state_indirect("FAULT REACTION ACTIVE"), "FAULT")
         self.assertEqual(

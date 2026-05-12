@@ -18,6 +18,21 @@ logger = logging.getLogger(__name__)
 
 
 class LocalNode(BaseNode):
+    """Local CANopen node implementing essential communication services.
+
+    This does not provide a full-fledged communication logic stack, but needs
+    additional application logic to wire up the various services, such as
+    triggering PDO transmissions according to their communication parameters.
+
+    Notable exceptions are a local data store for SDO server access, and using
+    the Heartbeat Producer Time parameter to control Heartbeat transmission.
+
+    :param node_id:
+        Node ID (set to 0 if specified by object dictionary)
+    :param object_dictionary:
+        Object dictionary as either a path to a file, an ``ObjectDictionary``
+        or a file like object.
+    """
 
     def __init__(
         self,

@@ -222,22 +222,22 @@ def _signed_int_from_hex(hex_str, bit_length):
     max_signed = (1 << (bit_length - 1)) - 1
     max_unsigned = (1 << bit_length) - 1
 
+    if number < min_signed:
+        raise ValueError(
+            f"Value {hex_str!r} is out of range for a {bit_length}-bit signed integer"
+        )
     if number < 0:
-        # Negative decimal literal (e.g. LowLimit=-32768)
-        if number < min_signed:
-            raise ValueError(
-                f"Value {hex_str!r} is out of range for a {bit_length}-bit signed integer"
-            )
+        # Negative literal (e.g. LowLimit=-32768 or -0x8000)
         return number
-    else:
+
+    if number > max_unsigned:
+        raise ValueError(
+            f"Value {hex_str!r} is out of range for a {bit_length}-bit signed integer"
+        )
+    if number > max_signed:
         # Unsigned hex literal, two's-complement (e.g. LowLimit=0xFFFF → -1 for INTEGER16)
-        if number > max_unsigned:
-            raise ValueError(
-                f"Value {hex_str!r} is out of range for a {bit_length}-bit signed integer"
-            )
-        if number > max_signed:
-            return number - (1 << bit_length)
-        return number
+        return number - (1 << bit_length)
+    return number
 
 
 def _convert_variable(node_id, var_type, value):

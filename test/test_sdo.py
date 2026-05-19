@@ -526,6 +526,26 @@ class TestSDO(unittest.TestCase):
             data = fp.read()
         self.assertEqual(data, 39 * 'the crazy fox jumps over the lazy dog\n')
 
+    def test_block_upload_wrong_seqno(self):
+        """Server sends wrong sequence number first; client must retransmit and recover."""
+        self.data = [
+            (TX, b'\xa4\x08\x10\x00\x7f\x00\x00\x00'),  # init block upload
+            (RX, b'\xc6\x08\x10\x00\x1a\x00\x00\x00'),  # server init resp, size=26
+            (TX, b'\xa3\x00\x00\x00\x00\x00\x00\x00'),  # start upload
+            (RX, b'\x02\x54\x69\x6e\x79\x20\x4e\x6f'),  # WRONG: seqno=2 instead of 1
+            (TX, b'\xa2\x00\x7f\x00\x00\x00\x00\x00'),  # retransmit request: ack_block ackseq=0
+            (RX, b'\x01\x54\x69\x6e\x79\x20\x4e\x6f'),  # seqno=1 "Tiny No"
+            (RX, b'\x02\x64\x65\x20\x2d\x20\x4d\x65'),  # seqno=2 "de - Me"
+            (RX, b'\x03\x67\x61\x20\x44\x6f\x6d\x61'),  # seqno=3 "ga Doma"
+            (RX, b'\x84\x69\x6e\x73\x20\x21\x00\x00'),  # seqno=4 NO_MORE_BLOCKS "ins !"
+            (TX, b'\xa2\x04\x7f\x00\x00\x00\x00\x00'),  # ack_block ackseq=4
+            (RX, b'\xc9\x40\xe1\x00\x00\x00\x00\x00'),  # end block upload
+            (TX, b'\xa1\x00\x00\x00\x00\x00\x00\x00'),  # end ack
+        ]
+        with self.network[2].sdo[0x1008].open('r', block_transfer=True) as fp:
+            data = fp.read()
+        self.assertEqual(data, 'Tiny Node - Mega Domains !')
+
     def test_writable_file(self):
         self.data = [
             (TX, b'\x20\x00\x20\x00\x00\x00\x00\x00'),
@@ -881,6 +901,96 @@ class TestSDOClientDatatypes(unittest.TestCase):
         self.assertEqual(
             data, b'\xb2\x01\x20\x02\x91\x12\x03\x19\x21\x70\xfe\xfd\xfc\xfb'
         )
+
+
+class TestSdoAbortedError(unittest.TestCase):
+    """Unit tests for SdoAbortedError construction and helpers."""
+
+    def test_init_with_int_code(self):
+        for code in canopen.SdoAbortedError.CODES:
+            exc = canopen.SdoAbortedError(code)
+            self.assertEqual(exc.code, code)
+
+    def test_str_known_code(self):
+        for code, description in canopen.SdoAbortedError.CODES.items():
+            exc = canopen.SdoAbortedError(code)
+            self.assertIn(description, str(exc))
+
+    def test_str_unknown_code(self):
+        exc = canopen.SdoAbortedError(0xDEADBEEF)
+        self.assertIn("0xDEADBEEF", str(exc))
+
+    def test_eq(self):
+        for code, description in canopen.SdoAbortedError.CODES.items():
+            # Test equality with another instance of the same code, and with the code and description directly
+            self.assertEqual(canopen.SdoAbortedError(code),
+                             canopen.SdoAbortedError(description))
+            self.assertEqual(canopen.SdoAbortedError(code),
+                             code)
+            self.assertEqual(canopen.SdoAbortedError(code),
+                             description)
+        
+        self.assertNotEqual(canopen.SdoAbortedError(0x06090011),
+                            canopen.SdoAbortedError(0x08000000))
+        
+        self.assertNotEqual(canopen.SdoAbortedError(0x06090011), "Value range of parameter exceeded")
+
+        with self.assertRaises(TypeError):
+            canopen.SdoAbortedError(code) == 0.5  # Unsupported type for comparison
+
+    def test_init_from_string(self):
+        for code, description in canopen.SdoAbortedError.CODES.items():
+            exc = canopen.SdoAbortedError(description)
+            self.assertEqual(exc.code, code)
+
+    def test_init_from_unknown_string(self):
+        with self.assertRaises(ValueError):
+            canopen.SdoAbortedError("This description does not exist")
+
+
+class TestSdoAbortedError(unittest.TestCase):
+    """Unit tests for SdoAbortedError construction and helpers."""
+
+    def test_init_with_int_code(self):
+        for code in canopen.SdoAbortedError.CODES:
+            exc = canopen.SdoAbortedError(code)
+            self.assertEqual(exc.code, code)
+
+    def test_str_known_code(self):
+        for code, description in canopen.SdoAbortedError.CODES.items():
+            exc = canopen.SdoAbortedError(code)
+            self.assertIn(description, str(exc))
+
+    def test_str_unknown_code(self):
+        exc = canopen.SdoAbortedError(0xDEADBEEF)
+        self.assertIn("0xDEADBEEF", str(exc))
+
+    def test_eq(self):
+        for code, description in canopen.SdoAbortedError.CODES.items():
+            # Test equality with another instance of the same code, and with the code and description directly
+            self.assertEqual(canopen.SdoAbortedError(code),
+                             canopen.SdoAbortedError(description))
+            self.assertEqual(canopen.SdoAbortedError(code),
+                             code)
+            self.assertEqual(canopen.SdoAbortedError(code),
+                             description)
+        
+        self.assertNotEqual(canopen.SdoAbortedError(0x06090011),
+                            canopen.SdoAbortedError(0x08000000))
+        
+        self.assertNotEqual(canopen.SdoAbortedError(0x06090011), "Value range of parameter exceeded")
+
+        with self.assertRaises(TypeError):
+            canopen.SdoAbortedError(code) == 0.5  # Unsupported type for comparison
+
+    def test_init_from_string(self):
+        for code, description in canopen.SdoAbortedError.CODES.items():
+            exc = canopen.SdoAbortedError(description)
+            self.assertEqual(exc.code, code)
+
+    def test_init_from_unknown_string(self):
+        with self.assertRaises(ValueError):
+            canopen.SdoAbortedError("This description does not exist")
 
 
 if __name__ == "__main__":

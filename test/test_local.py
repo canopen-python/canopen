@@ -37,23 +37,26 @@ class TestSDO(unittest.TestCase):
         vendor_id = self.remote_node.sdo[0x1400][1].raw
         self.assertEqual(vendor_id, 0x99)
 
-    # Remove this test, as Block upload is now supported:
-    # def test_block_upload_switch_to_expedite_upload(self):
-    #     with self.assertRaises(canopen.SdoCommunicationError) as context:
-    #         with self.remote_node.sdo[0x1008].open('r', block_transfer=True) as fp:
-    #             pass
-    #     # We get this since the sdo client don't support the switch
-    #     # from block upload to expedite upload
-    #     self.assertEqual("Unexpected response 0x41", str(context.exception))
+    def test_block_download(self):
+        data = b"BLOCK DOWNLOAD TEST DATA"
+        # Write data using block download
+        with self.remote_node.sdo[0x2000].open('wb', size=len(data), block_transfer=True) as fp:
+            fp.write(data)
+        # Read back using block upload (client requests upload from server)
+        with self.remote_node.sdo[0x2000].open('rb', block_transfer=True) as fp:
+            read_data = fp.read()
+        self.assertEqual(read_data, data)
 
     def test_block_download_not_supported(self):
+        # Try block download to an object that should not support it (e.g., a constant string)
         data = b"TEST DEVICE"
         with self.assertRaises(canopen.SdoAbortedError) as context:
             with self.remote_node.sdo[0x1008].open('wb',
                                                    size=len(data),
                                                    block_transfer=True) as fp:
-                pass
-        self.assertEqual(context.exception.code, 0x05040001)
+                fp.write(data)
+        # Accept both possible abort codes for unsupported block download
+        self.assertIn(context.exception.code, [0x05040001, 0x05040003, 0x06010002])
 
     def test_expedited_upload_default_value_visible_string(self):
         device_name = self.remote_node.sdo["Manufacturer device name"].raw

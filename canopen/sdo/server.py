@@ -35,7 +35,15 @@ class SdoServer(SdoBase):
     def on_request(self, can_id, data, timestamp):
         logger.debug('on_request')
         if self.sdo_block and self.sdo_block.state != BLOCK_STATE_NONE:
-            self.process_block(data)
+            try:
+                self.process_block(data)
+            except SdoAbortedError as exc:
+                self.sdo_block = None
+                self.abort(exc.code)
+            except Exception as exc:
+                self.sdo_block = None
+                self.abort()
+                logger.exception(exc)
             return
 
         command, = struct.unpack_from("B", data, 0)
@@ -137,6 +145,46 @@ class SdoServer(SdoBase):
         elif BLOCK_STATE_DOWNLOAD < self.sdo_block.state:
             # in download state
             logger.debug('BLOCK_STATE_DOWNLOAD')
+            if self.sdo_block.state == BLOCK_STATE_DL_DATA:
+                logger.debug('BLOCK_STATE_DL_DATA')
+                seqno = command & 0x7F
+                last_seg = bool(command & NO_MORE_BLOCKS)
+                # Accumulate data bytes (bytes 1-7 of each segment)
+                self.sdo_block.append_download_data(request[1:8])
+                self.sdo_block.last_seqno = seqno
+
+                if seqno >= self.sdo_block.req_blocksize or last_seg:
+                    # Send block acknowledgement
+                    response = bytearray(8)
+                    response[0] = RESPONSE_BLOCK_DOWNLOAD | BLOCK_TRANSFER_RESPONSE
+                    response[1] = seqno  # ackseq
+                    response[2] = self.sdo_block.req_blocksize  # new blksize
+                    self.send_response(response)
+                    self.sdo_block.seqno = 0
+
+                    if last_seg:
+                        self.sdo_block.update_state(BLOCK_STATE_DL_END)
+
+            elif self.sdo_block.state == BLOCK_STATE_DL_END:
+                logger.debug('BLOCK_STATE_DL_END')
+                if (command & REQUEST_BLOCK_DOWNLOAD) != REQUEST_BLOCK_DOWNLOAD:
+                    raise SdoBlockException("Unknown SDO command specified")
+                if (command & SUB_COMMAND_MASK) != END_BLOCK_TRANSFER:
+                    raise SdoBlockException("Unknown SDO command specified")
+
+                # n = bytes NOT used in last segment
+                n = (command >> 2) & 0x7
+                data = self.sdo_block.finalize_download(n)
+
+                self._node.set_data(self.sdo_block.index,
+                                    self.sdo_block.subindex,
+                                    data,
+                                    check_writable=True)
+
+                response = bytearray(8)
+                response[0] = RESPONSE_BLOCK_DOWNLOAD | END_BLOCK_TRANSFER
+                self.send_response(response)
+                self.sdo_block = None
         else:
             # in neither
             raise SdoBlockException("Data can not be transferred or stored to the application "
@@ -229,13 +277,22 @@ class SdoServer(SdoBase):
         logger.info("Received request aborted for 0x%04X:%02X with code 0x%X", index, subindex, code)
 
     def block_download(self, data):
-        # We currently don't support BLOCK DOWNLOAD
-        # Unpack the index and subindex in order to send appropriate abort
+        logger.debug('Enter server block download')
         command, index, subindex = SDO_STRUCT.unpack_from(data)
+
         self._index = index
         self._subindex = subindex
-        logger.error("Block download is not supported")
-        self.abort(ABORT_INVALID_COMMAND_SPECIFIER)
+
+        self.sdo_block = SdoBlock(self._node, data, is_download=True)
+
+        res_command = RESPONSE_BLOCK_DOWNLOAD | INITIATE_BLOCK_TRANSFER
+        res_command |= self.sdo_block.crc  # Echo CRC support back to client
+        response = bytearray(8)
+        SDO_STRUCT.pack_into(response, 0, res_command, index, subindex)
+        response[4] = self.sdo_block.req_blocksize  # Server-defined block size
+
+        self.sdo_block.update_state(BLOCK_STATE_DL_DATA)
+        self.send_response(response)
 
     def init_download(self, request):
         # TODO: Check if writable (now would fail on end of segmented downloads)
@@ -345,7 +402,7 @@ class SdoBlock():
     crc_value = 0
     last_seqno = 0
 
-    def __init__(self, node, request, docrc=False):
+    def __init__(self, node, request, docrc=False, is_download=False):
         """
         :param node:
             Node object owning the server
@@ -353,30 +410,48 @@ class SdoBlock():
             CAN message containing SDO request.
         :param docrc:
             If True, CRC is calculated and checked.
+        :param is_download:
+            If True, initialise for block download (server receives data).
+            If False (default), initialise for block upload (server sends data).
         """
         command, index, subindex = SDO_STRUCT.unpack_from(request)
         # only do crc if crccheck lib is available _and_ if requested
         _req_crc = (command & CRC_SUPPORTED) == CRC_SUPPORTED
 
-        if (command & SUB_COMMAND_MASK) == INITIATE_BLOCK_TRANSFER:
+        # For block download, bit 1 is the size indicator (s), not a sub-command
+        # bit. Only bit 0 carries the sub-command (0 = initiate). For block
+        # upload the s-bit is not used in the initiate command so SUB_COMMAND_MASK
+        # works there, but we must use a 1-bit mask here.
+        sub_cmd_mask = 0x1 if is_download else SUB_COMMAND_MASK
+        if (command & sub_cmd_mask) == INITIATE_BLOCK_TRANSFER:
             self.state = BLOCK_STATE_INIT
         else:
             raise SdoBlockException("Unknown SDO command specified")
 
         # TODO: CRC of data if requested
-        self.crc = CRC_SUPPORTED if (docrc & _req_crc)  else 0
+        self.crc = CRC_SUPPORTED if (docrc & _req_crc) else 0
         self._node = node
         self.index = index
         self.subindex = subindex
-        self.req_blocksize = request[4]
         self.seqno = 0
-        if not 1 <= self.req_blocksize <= 127:
-            raise SdoBlockException("Invalid block size")
 
-        self.data = self._node.get_data(index,
-                                        subindex,
-                                        check_readable=True)
-        self.size = len(self.data)
+        if is_download:
+            # Server defines the block size for download (client sends this many
+            # segments per block before waiting for an acknowledgement)
+            self.req_blocksize = 127
+            self._data_buffer = bytearray()
+            if command & BLOCK_SIZE_SPECIFIED:
+                self.size, = struct.unpack_from("<L", request, 4)
+            else:
+                self.size = None
+        else:
+            self.req_blocksize = request[4]
+            if not 1 <= self.req_blocksize <= 127:
+                raise SdoBlockException("Invalid block size")
+            self.data = self._node.get_data(index,
+                                            subindex,
+                                            check_readable=True)
+            self.size = len(self.data)
 
     def update_state(self, new_state):
         """
@@ -431,4 +506,26 @@ class SdoBlock():
             self.data_uploaded += 1
             return self.data[self.data_uploaded-1]
         return None
+
+    def append_download_data(self, segment):
+        """Append a 7-byte segment to the download data buffer.
+
+        :param segment:
+            Bytes 1-7 of the received block segment message (always 7 bytes).
+        """
+        self._data_buffer.extend(segment)
+
+    def finalize_download(self, n):
+        """Return the accumulated download data, trimming the last n unused bytes.
+
+        :param int n:
+            Number of bytes in the last segment that did not contain data
+            (as signalled by the client in the END_BLOCK_TRANSFER command).
+
+        :returns:
+            The complete received data as bytes.
+        """
+        if n > 0:
+            return bytes(self._data_buffer[:-n])
+        return bytes(self._data_buffer)
 

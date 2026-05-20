@@ -316,20 +316,21 @@ class ReadableStream(io.RawIOBase):
         self.pos += length
         return response[1:length + 1]
 
-    def readinto(self, b):
-        """
-        Read bytes into a pre-allocated, writable bytes-like object b,
-        and return the number of bytes read.
-        """
-        data = self.read(7)
-        b[:len(data)] = data
-        return len(data)
+    # For now not used, but if needed, a test is also required:
+    # def readinto(self, b):
+    #     """
+    #     Read bytes into a pre-allocated, writable bytes-like object b,
+    #     and return the number of bytes read.
+    #     """
+    #     data = self.read(7)
+    #     b[:len(data)] = data
+    #     return len(data)
 
-    def readable(self):
-        return True
+    # def readable(self):
+    #     return True
 
-    def tell(self):
-        return self.pos
+    # def tell(self):
+    #     return self.pos
 
 
 class WritableStream(io.RawIOBase):
@@ -366,6 +367,7 @@ class WritableStream(io.RawIOBase):
             response = sdo_client.request_response(request)
             res_command, = struct.unpack_from("B", response)
             if res_command != RESPONSE_DOWNLOAD:
+                self._done = True  # prevent close() from sending a stray close segment
                 self.sdo_client.abort(ABORT_INVALID_COMMAND_SPECIFIER)
                 raise SdoCommunicationError(
                     f"Unexpected response 0x{res_command:02X}")
@@ -420,6 +422,7 @@ class WritableStream(io.RawIOBase):
             response = self.sdo_client.request_response(request)
             res_command, = struct.unpack("B", response[0:1])
             if res_command & 0xE0 != RESPONSE_SEGMENT_DOWNLOAD:
+                self._done = True  # prevent close() from sending a stray close segment
                 self.sdo_client.abort(ABORT_INVALID_COMMAND_SPECIFIER)
                 raise SdoCommunicationError(
                     f"Unexpected response 0x{res_command:02X} "
@@ -613,14 +616,15 @@ class BlockUploadStream(io.RawIOBase):
     def tell(self):
         return self.pos
 
-    def readinto(self, b):
-        """
-        Read bytes into a pre-allocated, writable bytes-like object b,
-        and return the number of bytes read.
-        """
-        data = self.read(7)
-        b[:len(data)] = data
-        return len(data)
+    # For now not used, but if needed, a test is also required:
+    # def readinto(self, b):
+    #     """
+    #     Read bytes into a pre-allocated, writable bytes-like object b,
+    #     and return the number of bytes read.
+    #     """
+    #     data = self.read(7)
+    #     b[:len(data)] = data
+    #     return len(data)
 
     def readable(self):
         return True

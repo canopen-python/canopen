@@ -1,8 +1,11 @@
+import struct
+import time
 import unittest
-import binascii
 import canopen
 import canopen.objectdictionary.datatypes as dt
+from can import CanError
 from canopen.objectdictionary import ODVariable
+from canopen.sdo.constants import *
 
 from .util import DATATYPES_EDS, SAMPLE_EDS
 
@@ -57,6 +60,63 @@ class TestSDOVariables(unittest.TestCase):
     def test_get_variable_not_found(self):
         self.assertIsNone(self.sdo_node.get_variable(0x9999))
 
+    def test_sdo_base_len(self):
+        """SdoBase.__len__ returns the number of entries in the OD."""
+        self.assertGreater(len(self.sdo_node), 0)
+
+    def test_sdo_base_contains(self):
+        """SdoBase.__contains__ checks membership in the OD."""
+        self.assertIn(0x1008, self.sdo_node)
+        self.assertNotIn(0x9999, self.sdo_node)
+
+    def test_get_variable_sdo_variable(self):
+        """get_variable returns an SdoVariable when the entry is a plain variable."""
+        var = self.sdo_node.get_variable(0x1008)
+        self.assertIsInstance(var, canopen.sdo.SdoVariable)
+        self.assertIn("Manufacturer device name", var.name)
+
+    def test_get_variable_record_subindex(self):
+        """get_variable returns an SdoVariable for a subindex of a record."""
+        var = self.sdo_node.get_variable(0x1018, 1)
+        self.assertIsInstance(var, canopen.sdo.SdoVariable)
+        self.assertIn("Vendor-ID", var.name)
+
+    def test_sdo_record_repr(self):
+        """SdoRecord.__repr__ includes the OD index."""
+        r = repr(self.sdo_node[0x1018])
+        self.assertIsInstance(r, str)
+        self.assertIn("0x1018", r)
+
+    def test_sdo_array_repr(self):
+        """SdoArray.__repr__ returns a non-empty string."""
+        r = repr(self.sdo_node[0x1003])
+        self.assertIsInstance(r, str)
+        self.assertIn("0x1003", r)
+
+    def test_sdo_array_contains_int(self):
+        """SdoArray.__contains__ returns True for a valid integer subindex."""
+        array = self.sdo_node[0x1003]
+        self.assertIn(0, array) # Subindex 0 is the "highest subindex supported" entry
+        self.assertEqual(array[0].subindex, 0)
+        self.assertIn(1, array)
+        self.assertEqual(array[1].subindex, 1)
+        self.assertIn("Pre-defined error field_1", array[1].name)
+        self.assertIn(2, array)
+        self.assertEqual(array[2].subindex, 2)
+        # actually returns Pre-defined error field_1_2, probably due to comment in EDS: ; [1003sub2] left out for testing?
+        # self.assertIn("Pre-defined error field_3", array[2].name) 
+        self.assertIn(3, array)
+        self.assertEqual(array[3].subindex, 3)
+        self.assertIn("Pre-defined error field_3", array[3].name)
+        
+    def test_sdo_variable_readwriteable(self):
+        """SdoVariable.readable returns the od.readable property. Same for writable."""
+        var = self.sdo_node[0x1008]
+        self.assertIsInstance(var.readable, bool)
+        self.assertTrue(var.readable)
+        self.assertIsInstance(var.writable, bool)
+        self.assertFalse(var.writable)
+
 
 class TestSDO(unittest.TestCase):
     """
@@ -72,8 +132,6 @@ class TestSDO(unittest.TestCase):
         """
         next_data = self.data.pop(0)
         self.assertEqual(next_data[0], TX, "No transmission was expected")
-        # print("> %s:%s" % (hex(can_id),
-        #       binascii.hexlify(data)))
         self.assertSequenceEqual(data, next_data[1])
         self.assertEqual(can_id, 0x602)
         while self.data and self.data[0][0] == RX:
@@ -161,6 +219,86 @@ class TestSDO(unittest.TestCase):
         device_name = self.network[2].sdo[0x1008].raw
         self.assertEqual(device_name, "Tiny")
 
+    def test_segmented_upload_toggle_bit_mismatch(self):
+        """Server returns wrong toggle bit; client aborts and raises SdoCommunicationError."""
+        self.data = [
+            (TX, b'\x40\x08\x10\x00\x00\x00\x00\x00'),  # upload initiate 0x1008:00
+            (RX, b'\x41\x08\x10\x00\x0a\x00\x00\x00'),  # segmented, size=10
+            (TX, b'\x60\x00\x00\x00\x00\x00\x00\x00'),  # first segment request, toggle=0
+            (RX, b'\x10\x41\x42\x43\x44\x45\x46\x47'),  # server returns toggle=1 (wrong)
+            (TX, b'\x80\x00\x00\x00\x00\x00\x03\x05'),  # abort: TOGGLE_NOT_ALTERNATED
+        ]
+        with self.assertRaises(canopen.SdoCommunicationError) as cm:
+            _ = self.network[2].sdo[0x1008].raw
+        self.assertIn("Toggle bit mismatch", str(cm.exception))
+
+    def test_upload_initiate_unexpected_response(self):
+        """ReadableStream raises when server response command is not RESPONSE_UPLOAD."""
+        self.data = [
+            (TX, b'\x40\x18\x10\x01\x00\x00\x00\x00'),  # upload initiate 0x1018:01
+            (RX, b'\x20\x18\x10\x01\x00\x00\x00\x00'),  # bad: 0x20 & 0xE0 = 0x20 ≠ 0x40
+        ]
+        with self.assertRaises(canopen.SdoCommunicationError) as cm:
+            _ = self.network[2].sdo[0x1018][1].raw
+        self.assertIn("Unexpected response 0x20", str(cm.exception))
+
+    def test_upload_initiate_wrong_index(self):
+        """ReadableStream raises when server responds for a different index."""
+        self.data = [
+            (TX, b'\x40\x18\x10\x01\x00\x00\x00\x00'),  # upload initiate 0x1018:01
+            (RX, b'\x43\x00\x20\x00\x04\x00\x00\x00'),  # response for 0x2000:00 instead
+        ]
+        with self.assertRaises(canopen.SdoCommunicationError) as cm:
+            _ = self.network[2].sdo[0x1018][1].raw
+        self.assertIn("0x2000", str(cm.exception))
+
+    def test_segmented_upload_unexpected_segment_response(self):
+        """ReadableStream aborts and raises when segment response command is wrong."""
+        self.data = [
+            (TX, b'\x40\x08\x10\x00\x00\x00\x00\x00'),  # upload initiate 0x1008:00
+            (RX, b'\x41\x08\x10\x00\x0a\x00\x00\x00'),  # segmented, size=10
+            (TX, b'\x60\x00\x00\x00\x00\x00\x00\x00'),  # segment request, toggle=0
+            (RX, b'\x60\x00\x00\x00\x00\x00\x00\x00'),  # bad: 0x60 & 0xE0 = 0x60 ≠ 0x00
+            (TX, b'\x80\x00\x00\x00\x01\x00\x04\x05'),  # abort: INVALID_COMMAND_SPECIFIER
+        ]
+        with self.assertRaises(canopen.SdoCommunicationError) as cm:
+            _ = self.network[2].sdo[0x1008].raw
+        self.assertIn("Unexpected response 0x60", str(cm.exception))
+
+    def test_segmented_download_initiate_unexpected_response(self):
+        """WritableStream aborts and raises when download initiate response command is wrong."""
+        self.data = [
+            (TX, b'\x21\x00\x20\x00\x0a\x00\x00\x00'),  # segmented download 0x2000:00, size=10
+            (RX, b'\x40\x00\x20\x00\x00\x00\x00\x00'),  # bad: 0x40 ≠ RESPONSE_DOWNLOAD 0x60
+            (TX, b'\x80\x00\x00\x00\x01\x00\x04\x05'),  # abort: INVALID_COMMAND_SPECIFIER
+        ]
+        with self.assertRaises(canopen.SdoCommunicationError) as cm:
+            self.network[2].sdo[0x2000].raw = 'ABCDEFGHIJ'
+        self.assertIn("Unexpected response 0x40", str(cm.exception))
+
+    def test_expedited_download_unexpected_response(self):
+        """WritableStream aborts and raises when expedited download response command is wrong."""
+        self.data = [
+            (TX, b'\x2f\x00\x14\x02\xff\x00\x00\x00'),  # expedited download 0x1400:02
+            (RX, b'\x40\x00\x14\x02\x00\x00\x00\x00'),  # bad: 0x40 & 0xE0 = 0x40 ≠ 0x60
+            (TX, b'\x80\x00\x00\x00\x01\x00\x04\x05'),  # abort: INVALID_COMMAND_SPECIFIER
+        ]
+        with self.assertRaises(canopen.SdoCommunicationError):
+            self.network[2].sdo[0x1400][2].raw = 0xff
+
+    def test_segmented_download_write_unexpected_response(self):
+        """WritableStream aborts and raises when the segment download response command is wrong."""
+        self.data = [
+            (TX, b'\x21\x00\x20\x00\x0d\x00\x00\x00'),  # segmented download 0x2000:00, size=13
+            (RX, b'\x60\x00\x20\x00\x00\x00\x00\x00'),  # RESPONSE_DOWNLOAD OK
+            (TX, b'\x00\x41\x20\x6c\x6f\x6e\x67\x20'),  # first segment 'A long ', toggle=0
+            (RX, b'\x40\x00\x00\x00\x00\x00\x00\x00'),  # bad: 0x40 & 0xE0 = 0x40 ≠ 0x20
+            (TX, b'\x80\x00\x00\x00\x01\x00\x04\x05'),  # abort: INVALID_COMMAND_SPECIFIER
+        ]
+        with self.assertRaises(canopen.SdoCommunicationError) as cm:
+            self.network[2].sdo[0x2000].raw = 'A long string'
+        self.assertIn("expected 0x20", str(cm.exception))
+
     def test_segmented_download(self):
         self.data = [
             (TX, b'\x21\x00\x20\x00\x0d\x00\x00\x00'),
@@ -217,6 +355,159 @@ class TestSDO(unittest.TestCase):
             .open('wb', size=len(data), block_transfer=True) as fp
         ):
             fp.write(data)
+
+    def test_block_download_initiate_unexpected_response(self):
+        """BlockDownloadStream aborts and raises when block download initiate response is wrong."""
+        data = b'A really really long string...'  # 30 bytes
+        self.data = [
+            (TX, b'\xc6\x00\x20\x00\x1e\x00\x00\x00'),  # block download initiate, size=30
+            (RX, b'\x40\x00\x20\x00\x00\x00\x00\x00'),  # bad: 0x40 & 0xE0 = 0x40 ≠ 0xA0
+            (TX, b'\x80\x00\x00\x00\x01\x00\x04\x05'),  # abort: INVALID_COMMAND_SPECIFIER
+        ]
+        with self.assertRaises(canopen.SdoCommunicationError) as cm:
+            with self.network[2].sdo["Writable string"].open('wb', size=len(data), block_transfer=True) as fp:
+                fp.write(data)
+        self.assertIn("Unexpected response 0x40", str(cm.exception))
+
+    def test_block_upload_initiate_unexpected_response(self):
+        """BlockUploadStream aborts and raises when block upload initiate response is wrong."""
+        self.data = [
+            (TX, b'\xa4\x08\x10\x00\x7f\x00\x00\x00'),  # block upload initiate 0x1008:00
+            (RX, b'\x40\x08\x10\x00\x00\x00\x00\x00'),  # bad: 0x40 & 0xE0 = 0x40 ≠ 0xC0
+            (TX, b'\x80\x00\x00\x00\x01\x00\x04\x05'),  # abort: INVALID_COMMAND_SPECIFIER
+        ]
+        with self.assertRaises(canopen.SdoCommunicationError) as cm:
+            with self.network[2].sdo[0x1008].open('rb', block_transfer=True) as fp:
+                fp.read()
+        self.assertIn("Unexpected response 0x40", str(cm.exception))
+
+    def test_block_download_unsuccessful(self):
+        """BlockDownloadStream.close raises when server does not confirm end block transfer."""
+        data = b'A really really long string...'  # 30 bytes
+        self.data = [
+            (TX, b'\xc6\x00\x20\x00\x1e\x00\x00\x00'),
+            (RX, b'\xa4\x00\x20\x00\x7f\x00\x00\x00'),
+            (TX, b'\x01\x41\x20\x72\x65\x61\x6c\x6c'),
+            (TX, b'\x02\x79\x20\x72\x65\x61\x6c\x6c'),
+            (TX, b'\x03\x79\x20\x6c\x6f\x6e\x67\x20'),
+            (TX, b'\x04\x73\x74\x72\x69\x6e\x67\x2e'),
+            (TX, b'\x85\x2e\x2e\x00\x00\x00\x00\x00'),
+            (RX, b'\xa2\x05\x7f\x00\x00\x00\x00\x00'),
+            (TX, b'\xd5\x45\x69\x00\x00\x00\x00\x00'),
+            (RX, b'\xa0\x00\x00\x00\x00\x00\x00\x00'),  # bad: END_BLOCK_TRANSFER bit not set
+        ]
+        with self.assertRaises(canopen.SdoCommunicationError) as cm:
+            with self.network[2].sdo["Writable string"].open('wb', size=len(data), block_transfer=True) as fp:
+                fp.write(data)
+        self.assertIn("Block download unsuccessful", str(cm.exception))
+
+    def test_block_download_no_crc(self):
+        """Block download with request_crc_support=False omits CRC bytes."""
+        data = b'A really really long string...'  # 30 bytes
+        self.data = [
+            (TX, b'\xc2\x00\x20\x00\x1e\x00\x00\x00'),  # init: BLOCK_SIZE_SPECIFIED, no CRC_SUPPORTED
+            (RX, b'\xa0\x00\x20\x00\x7f\x00\x00\x00'),  # server resp: blksize=127, no CRC
+            (TX, b'\x01\x41\x20\x72\x65\x61\x6c\x6c'),
+            (TX, b'\x02\x79\x20\x72\x65\x61\x6c\x6c'),
+            (TX, b'\x03\x79\x20\x6c\x6f\x6e\x67\x20'),
+            (TX, b'\x04\x73\x74\x72\x69\x6e\x67\x2e'),
+            (TX, b'\x85\x2e\x2e\x00\x00\x00\x00\x00'),
+            (RX, b'\xa2\x05\x7f\x00\x00\x00\x00\x00'),
+            (TX, b'\xd5\x00\x00\x00\x00\x00\x00\x00'),  # end: no CRC bytes
+            (RX, b'\xa1\x00\x00\x00\x00\x00\x00\x00'),
+        ]
+        with self.network[2].sdo["Writable string"].open(
+                'wb', size=len(data), block_transfer=True, request_crc_support=False) as fp:
+            fp.write(data)
+
+    def test_block_download_block_ack_wrong_command(self):
+        """BlockDownloadStream._block_ack aborts when the ACK command byte is wrong."""
+        data = b'A really really long string...'  # 30 bytes
+        self.data = [
+            (TX, b'\xc6\x00\x20\x00\x1e\x00\x00\x00'),
+            (RX, b'\xa4\x00\x20\x00\x7f\x00\x00\x00'),
+            (TX, b'\x01\x41\x20\x72\x65\x61\x6c\x6c'),
+            (TX, b'\x02\x79\x20\x72\x65\x61\x6c\x6c'),
+            (TX, b'\x03\x79\x20\x6c\x6f\x6e\x67\x20'),
+            (TX, b'\x04\x73\x74\x72\x69\x6e\x67\x2e'),
+            (TX, b'\x85\x2e\x2e\x00\x00\x00\x00\x00'),
+            (RX, b'\x62\x05\x7f\x00\x00\x00\x00\x00'),  # bad: 0x62 & 0xE0 = 0x60 != RESPONSE_BLOCK_DOWNLOAD
+            (TX, b'\x80\x00\x00\x00\x01\x00\x04\x05'),  # abort INVALID_COMMAND_SPECIFIER
+            # close() runs in finally block and sends END_BLOCK_TRANSFER (CRC included, _done=True)
+            (TX, b'\xd5\x45\x69\x00\x00\x00\x00\x00'),
+            (RX, b'\xa1\x00\x00\x00\x00\x00\x00\x00'),
+        ]
+        with self.assertRaises(canopen.SdoCommunicationError) as cm:
+            with self.network[2].sdo["Writable string"].open(
+                    'wb', size=len(data), block_transfer=True) as fp:
+                fp.write(data)
+        self.assertIn("Unexpected response 0x62", str(cm.exception))
+
+    def test_block_download_block_ack_no_transfer_response(self):
+        """BlockDownloadStream._block_ack aborts when BLOCK_TRANSFER_RESPONSE bit is not set."""
+        data = b'A really really long string...'  # 30 bytes
+        self.data = [
+            (TX, b'\xc6\x00\x20\x00\x1e\x00\x00\x00'),
+            (RX, b'\xa4\x00\x20\x00\x7f\x00\x00\x00'),
+            (TX, b'\x01\x41\x20\x72\x65\x61\x6c\x6c'),
+            (TX, b'\x02\x79\x20\x72\x65\x61\x6c\x6c'),
+            (TX, b'\x03\x79\x20\x6c\x6f\x6e\x67\x20'),
+            (TX, b'\x04\x73\x74\x72\x69\x6e\x67\x2e'),
+            (TX, b'\x85\x2e\x2e\x00\x00\x00\x00\x00'),
+            (RX, b'\xa0\x05\x7f\x00\x00\x00\x00\x00'),  # bad: 0xA0 & 0x3 = 0 != BLOCK_TRANSFER_RESPONSE
+            (TX, b'\x80\x00\x00\x00\x01\x00\x04\x05'),  # abort INVALID_COMMAND_SPECIFIER
+            (TX, b'\xd5\x45\x69\x00\x00\x00\x00\x00'),  # close() END_BLOCK_TRANSFER (CRC)
+            (RX, b'\xa1\x00\x00\x00\x00\x00\x00\x00'),
+        ]
+        with self.assertRaises(canopen.SdoCommunicationError) as cm:
+            with self.network[2].sdo["Writable string"].open(
+                    'wb', size=len(data), block_transfer=True) as fp:
+                fp.write(data)
+        self.assertIn("block download response", str(cm.exception))
+
+    def test_block_download_wrong_index_response(self):
+        """BlockDownloadStream aborts when server responds with wrong index."""
+        data = b'A really really long string...'  # 30 bytes
+        self.data = [
+            (TX, b'\xc6\x00\x20\x00\x1e\x00\x00\x00'),   # init for 0x2000:00
+            (RX, b'\xa4\x08\x10\x00\x7f\x00\x00\x00'),   # server responds for 0x1008:00 (wrong)
+            (TX, b'\x80\x00\x00\x00\x00\x00\x00\x08'),   # abort GENERAL_ERROR
+        ]
+        with self.assertRaises(canopen.SdoCommunicationError) as cm:
+            with self.network[2].sdo["Writable string"].open(
+                    'wb', size=len(data), block_transfer=True) as fp:
+                fp.write(data)
+        self.assertIn("0x1008", str(cm.exception))
+
+    def test_block_upload_wrong_index_response(self):
+        """BlockUploadStream raises when server responds with wrong index (no abort sent)."""
+        self.data = [
+            (TX, b'\xa4\x08\x10\x00\x7f\x00\x00\x00'),   # initiate for 0x1008:00
+            (RX, b'\xc4\x00\x20\x00\x1a\x00\x00\x00'),   # server responds for 0x2000:00 (wrong)
+        ]
+        with self.assertRaises(canopen.SdoCommunicationError) as cm:
+            with self.network[2].sdo[0x1008].open('rb', block_transfer=True) as fp:
+                fp.read()
+        self.assertIn("0x2000", str(cm.exception))
+
+    def test_block_upload_end_unexpected_response(self):
+        """BlockUploadStream._end_upload aborts when end-of-block response has wrong command."""
+        self.data = [
+            (TX, b'\xa4\x08\x10\x00\x7f\x00\x00\x00'),
+            (RX, b'\xc6\x08\x10\x00\x1a\x00\x00\x00'),
+            (TX, b'\xa3\x00\x00\x00\x00\x00\x00\x00'),
+            (RX, b'\x01\x54\x69\x6e\x79\x20\x4e\x6f'),
+            (RX, b'\x02\x64\x65\x20\x2d\x20\x4d\x65'),
+            (RX, b'\x03\x67\x61\x20\x44\x6f\x6d\x61'),
+            (RX, b'\x84\x69\x6e\x73\x20\x21\x00\x00'),
+            (TX, b'\xa2\x04\x7f\x00\x00\x00\x00\x00'),
+            (RX, b'\x40\x40\xe1\x00\x00\x00\x00\x00'),   # bad: 0x40 & 0xE0 = 0x40 != RESPONSE_BLOCK_UPLOAD
+            (TX, b'\x80\x00\x00\x00\x01\x00\x04\x05'),   # abort INVALID_COMMAND_SPECIFIER
+        ]
+        with self.assertRaises(canopen.SdoCommunicationError) as cm:
+            with self.network[2].sdo[0x1008].open('r', block_transfer=True) as fp:
+                fp.read()
+        self.assertIn("Unexpected response 0x40", str(cm.exception))
 
     def test_segmented_download_zero_length(self):
         self.data = [
@@ -602,6 +893,58 @@ class TestSDO(unittest.TestCase):
         client = self.network[2].add_sdo(0x123456, 0x234567)
         self.assertIn(client, self.network[2].sdo_channels)
 
+    def test_send_request_retries_on_can_error(self):
+        """send_request retries after a CanError and succeeds on the next attempt."""
+        call_count = [0]
+
+        def send_with_one_failure(can_id, data, remote=False):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise CanError("Simulated buffer overflow")
+            self._send_message(can_id, data, remote)
+
+        self.network[2].sdo.MAX_RETRIES = 2
+        self.network.send_message = send_with_one_failure
+        self.data = [
+            (TX, b'\x40\x18\x10\x01\x00\x00\x00\x00'),
+            (RX, b'\x43\x18\x10\x01\x04\x00\x00\x00'),
+        ]
+        vendor_id = self.network[2].sdo[0x1018][1].raw
+        self.assertEqual(vendor_id, 4)
+        self.assertEqual(call_count[0], 2)
+
+    def test_send_request_raises_after_retries_exhausted(self):
+        """send_request raises CanError when all retries are exhausted."""
+        def always_fail(can_id, data, remote=False):
+            raise CanError("Simulated buffer overflow")
+
+        self.network[2].sdo.MAX_RETRIES = 1
+        self.network.send_message = always_fail
+        with self.assertRaises(CanError):
+            _ = self.network[2].sdo[0x1018][1].raw
+
+    def test_pause_before_send_delays_message(self):
+        """send_request does not send before PAUSE_BEFORE_SEND seconds have elapsed."""
+        pause = 0.05
+        self.network[2].sdo.PAUSE_BEFORE_SEND = pause
+        send_times = []
+
+        def timed_send(can_id, data, remote=False):
+            send_times.append(time.monotonic())
+            self._send_message(can_id, data, remote)
+
+        self.network.send_message = timed_send
+        self.data = [
+            (TX, b'\x40\x18\x10\x01\x00\x00\x00\x00'),
+            (RX, b'\x43\x18\x10\x01\x04\x00\x00\x00'),
+        ]
+        start = time.monotonic()
+        _ = self.network[2].sdo[0x1018][1].raw
+        self.assertTrue(send_times, "send_message was never called")
+        elapsed = send_times[0] - start
+        self.assertGreaterEqual(elapsed, pause,
+            f"Message sent too early: {elapsed:.4f}s < {pause}s pause")
+
 
 class TestSDOClientDatatypes(unittest.TestCase):
     """Test the SDO client uploads with the different data types in CANopen."""
@@ -970,6 +1313,78 @@ class TestSdoAbortedError(unittest.TestCase):
     def test_init_from_unknown_string(self):
         with self.assertRaises(ValueError):
             canopen.SdoAbortedError("This description does not exist")
+
+
+class TestSDOServer(unittest.TestCase):
+    """Test the SDO server (LocalNode) directly by injecting raw CAN messages."""
+
+    def setUp(self):
+        network = canopen.Network()
+        network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
+        self.responses = []
+        network.send_message = lambda cobid, data, remote=False: self.responses.append(bytes(data))
+        self.local_node = network.create_node(2, SAMPLE_EDS)
+
+    def test_expedited_download_no_size_specified(self):
+        """Expedited download without SIZE_SPECIFIED: server defaults to reading 4 bytes."""
+        # Command: REQUEST_DOWNLOAD (0x20) | EXPEDITED (0x02) — no SIZE_SPECIFIED
+        # Target: 0x1400:01 (COB-ID RPDO1, UNSIGNED32, rw)
+        request = bytearray(8)
+        index = 0x1400
+        subindex = 1
+        value = 0x201
+        SDO_STRUCT.pack_into(request, 0, REQUEST_DOWNLOAD | EXPEDITED, index, subindex)
+        struct.pack_into('<I', request, 4, value)  # value to write
+        self.local_node.sdo.on_request(0x602, request, 0.0)
+        # Server must reply with RESPONSE_DOWNLOAD for the same index/subindex
+        self.assertEqual(len(self.responses), 1)
+        command_r, index_r, subindex_r = SDO_STRUCT.unpack(self.responses[0][:4])  # Check that the first 4 bytes are a valid SDO header
+        self.assertEqual(command_r, RESPONSE_DOWNLOAD)
+        self.assertEqual(index_r, index)
+        self.assertEqual(subindex_r, subindex)
+        # Value must have been stored
+        self.assertEqual(self.local_node.sdo[index][subindex].raw, value)
+
+    def test_segmented_upload_toggle_bit_mismatch(self):
+        """Server aborts with TOGGLE_NOT_ALTERNATED when client sends wrong toggle on upload."""
+        # Initiate segmented upload for 0x1008:00 (Device Name, 'TEST DEVICE' = 11 bytes)
+        self.local_node.sdo.on_request(
+            0x602, b'\x40\x08\x10\x00\x00\x00\x00\x00', 0.0)
+        # Server should have responded with segmented initiate (not expedited)
+        self.assertEqual(len(self.responses), 1)
+        self.assertEqual(self.responses[0][0] & EXPEDITED, 0)
+
+        # Send segment request with wrong toggle bit (0x10 instead of 0x00)
+        self.local_node.sdo.on_request(
+            0x602, b'\x70\x00\x00\x00\x00\x00\x00\x00', 0.0)
+        # Server must respond with an abort
+        self.assertEqual(len(self.responses), 2)
+        cmd, = struct.unpack_from("B", self.responses[1])
+        self.assertEqual(cmd, RESPONSE_ABORTED)
+        code, = struct.unpack_from("<L", self.responses[1], 4)
+        self.assertEqual(code, ABORT_TOGGLE_NOT_ALTERNATED)
+
+    def test_segmented_download_toggle_bit_mismatch(self):
+        """Server aborts with TOGGLE_NOT_ALTERNATED when client repeats wrong toggle on download."""
+        # Initiate segmented download for 0x2000:00 (Writable string, 13 bytes)
+        self.local_node.sdo.on_request(
+            0x602, b'\x21\x00\x20\x00\x0d\x00\x00\x00', 0.0)
+        self.assertEqual(len(self.responses), 1)
+
+        # First segment correctly (toggle=0): 7 bytes of 'A long '
+        self.local_node.sdo.on_request(
+            0x602, b'\x00\x41\x20\x6c\x6f\x6e\x67\x20', 0.0)
+        self.assertEqual(len(self.responses), 2)
+
+        # Second segment with wrong toggle (0 again, should be 0x10)
+        self.local_node.sdo.on_request(
+            0x602, b'\x00\x73\x74\x72\x69\x6e\x67\x00', 0.0)
+        # Server must respond with an abort
+        self.assertEqual(len(self.responses), 3)
+        cmd, = struct.unpack_from("B", self.responses[2])
+        self.assertEqual(cmd, RESPONSE_ABORTED)
+        code, = struct.unpack_from("<L", self.responses[2], 4)
+        self.assertEqual(code, ABORT_TOGGLE_NOT_ALTERNATED)
 
 
 if __name__ == "__main__":

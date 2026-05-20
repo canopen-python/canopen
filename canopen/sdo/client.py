@@ -788,6 +788,8 @@ class BlockDownloadStream(io.RawIOBase):
         # Reset _seqno and update blksize
         self._seqno = 0
         self._blksize = blksize
+        # Reset _done so the last segment can be re-sent
+        self._done = False
         # We are retransmitting
         self._retransmitting = True
         # Resend the block

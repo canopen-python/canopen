@@ -193,6 +193,31 @@ class TestSDO(unittest.TestCase):
         ):
             fp.write(data)
 
+    def test_block_download_retransmit(self):
+        """Server acknowledges only 3 of 5 sequences; client must retransmit the rest."""
+        self.data = [
+            (TX, b'\xc6\x00\x20\x00\x23\x00\x00\x00'),  # init block download, size=35, CRC
+            (RX, b'\xa4\x00\x20\x00\x05\x00\x00\x00'),  # server init resp, blksize=5, CRC
+            (TX, b'\x01\x41\x42\x43\x44\x45\x46\x47'),  # seq 1: ABCDEFG
+            (TX, b'\x02\x48\x49\x4a\x4b\x4c\x4d\x4e'),  # seq 2: HIJKLMN
+            (TX, b'\x03\x4f\x50\x51\x52\x53\x54\x55'),  # seq 3: OPQRSTU
+            (TX, b'\x04\x56\x57\x58\x59\x5a\x31\x32'),  # seq 4: VWXYZ12
+            (TX, b'\x85\x33\x34\x35\x36\x37\x38\x39'),  # seq 5 (NO_MORE_BLOCKS): 3456789
+            (RX, b'\xa2\x03\x05\x00\x00\x00\x00\x00'),  # ack: only 3 received, blksize=5
+            (TX, b'\x01\x56\x57\x58\x59\x5a\x31\x32'),  # retransmit seq 1: VWXYZ12
+            (TX, b'\x82\x33\x34\x35\x36\x37\x38\x39'),  # retransmit seq 2 (NO_MORE_BLOCKS): 3456789
+            (RX, b'\xa2\x02\x05\x00\x00\x00\x00\x00'),  # ack: all 2 received, blksize=5
+            (TX, b'\xc1\x80\x00\x00\x00\x00\x00\x00'),  # end block transfer, CRC=0x0080
+            (RX, b'\xa1\x00\x00\x00\x00\x00\x00\x00'),  # server confirms end
+        ]
+        data = b'ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789'
+        with (
+            self.network[2]
+            .sdo["Writable string"]
+            .open('wb', size=len(data), block_transfer=True) as fp
+        ):
+            fp.write(data)
+
     def test_segmented_download_zero_length(self):
         self.data = [
             (TX, b'\x21\x00\x20\x00\x00\x00\x00\x00'),
@@ -219,7 +244,6 @@ class TestSDO(unittest.TestCase):
         with self.network[2].sdo[0x1008].open('r', block_transfer=True) as fp:
             data = fp.read()
         self.assertEqual(data, 'Tiny Node - Mega Domains !')
-
 
     def test_sdo_block_upload_retransmit(self):
         """Trigger a retransmit by only validating a block partially."""
@@ -901,51 +925,6 @@ class TestSDOClientDatatypes(unittest.TestCase):
         self.assertEqual(
             data, b'\xb2\x01\x20\x02\x91\x12\x03\x19\x21\x70\xfe\xfd\xfc\xfb'
         )
-
-
-class TestSdoAbortedError(unittest.TestCase):
-    """Unit tests for SdoAbortedError construction and helpers."""
-
-    def test_init_with_int_code(self):
-        for code in canopen.SdoAbortedError.CODES:
-            exc = canopen.SdoAbortedError(code)
-            self.assertEqual(exc.code, code)
-
-    def test_str_known_code(self):
-        for code, description in canopen.SdoAbortedError.CODES.items():
-            exc = canopen.SdoAbortedError(code)
-            self.assertIn(description, str(exc))
-
-    def test_str_unknown_code(self):
-        exc = canopen.SdoAbortedError(0xDEADBEEF)
-        self.assertIn("0xDEADBEEF", str(exc))
-
-    def test_eq(self):
-        for code, description in canopen.SdoAbortedError.CODES.items():
-            # Test equality with another instance of the same code, and with the code and description directly
-            self.assertEqual(canopen.SdoAbortedError(code),
-                             canopen.SdoAbortedError(description))
-            self.assertEqual(canopen.SdoAbortedError(code),
-                             code)
-            self.assertEqual(canopen.SdoAbortedError(code),
-                             description)
-        
-        self.assertNotEqual(canopen.SdoAbortedError(0x06090011),
-                            canopen.SdoAbortedError(0x08000000))
-        
-        self.assertNotEqual(canopen.SdoAbortedError(0x06090011), "Value range of parameter exceeded")
-
-        with self.assertRaises(TypeError):
-            canopen.SdoAbortedError(code) == 0.5  # Unsupported type for comparison
-
-    def test_init_from_string(self):
-        for code, description in canopen.SdoAbortedError.CODES.items():
-            exc = canopen.SdoAbortedError(description)
-            self.assertEqual(exc.code, code)
-
-    def test_init_from_unknown_string(self):
-        with self.assertRaises(ValueError):
-            canopen.SdoAbortedError("This description does not exist")
 
 
 class TestSdoAbortedError(unittest.TestCase):

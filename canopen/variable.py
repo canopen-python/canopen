@@ -77,8 +77,11 @@ class Variable:
         """
         value = self.od.decode_raw(self.data)
         text = f"Value of {self.name!r} ({pretty_index(self.index, self.subindex)}) is {value!r}"
-        if value in self.od.value_descriptions:
-            text += f" ({self.od.value_descriptions[value]})"
+        if (
+            isinstance(value, int)
+            and (desc := self.od.value_descriptions.get(value)) is not None
+        ):
+            text += f" ({desc})"
         logger.debug(text)
         return value
 

@@ -221,13 +221,23 @@ class TestAlternativeRepresentations(unittest.TestCase):
     def test_desc(self):
         var = od.ODVariable("Test UNSIGNED8", 0x1000)
         var.data_type = od.UNSIGNED8
+        with self.assertRaises(od.ObjectDictionaryError):
+            var.decode_desc(0)
+        with self.assertRaises(od.ObjectDictionaryError):
+            var.encode_desc("")
+
         var.add_value_description(0, "Value 0")
         var.add_value_description(1, "Value 1")
         var.add_value_description(3, "Value 3")
 
         self.assertEqual(var.decode_desc(0), "Value 0")
         self.assertEqual(var.decode_desc(3), "Value 3")
+        with self.assertRaises(od.ObjectDictionaryError):
+            var.decode_desc(2)
+
         self.assertEqual(var.encode_desc("Value 1"), 1)
+        with self.assertRaises(ValueError):
+            var.encode_desc("UNDEFINED")
 
     def test_bits(self):
         var = od.ODVariable("Test UNSIGNED8", 0x1000)

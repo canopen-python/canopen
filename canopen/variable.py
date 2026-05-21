@@ -155,7 +155,9 @@ class Variable:
         raise ValueError(f"Invalid format '{fmt}'")
 
     def write(
-        self, value: Union[int, bool, float, str, bytes], fmt: str = "raw"
+        self,
+        value: Union[int, bool, float, str, bytes],
+        fmt: str = "raw",
     ) -> None:
         """Alternative way of writing using a function instead of attributes.
 

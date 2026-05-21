@@ -500,11 +500,10 @@ class ODVariable:
     def decode_desc(self, value: int) -> str:
         if not self.value_descriptions:
             raise ObjectDictionaryError("No value descriptions exist")
-        elif value not in self.value_descriptions:
+        elif (desc := self.value_descriptions.get(value)) is None:
             raise ObjectDictionaryError(
                 f"No value description exists for {value}")
-        else:
-            return self.value_descriptions[value]
+        return desc
 
     def encode_desc(self, desc: str) -> int:
         if not self.value_descriptions:

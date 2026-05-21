@@ -111,8 +111,14 @@ class Variable:
 
     @property
     def desc(self) -> str:
-        """Converts to and from a description of the value as a string."""
-        value = self.od.decode_desc(self.raw)
+        """Convert to and from a description of the value as a string.
+
+        :raises TypeError: If the received raw data was anything but an integer value.
+        """
+        raw_int = self.raw
+        if not isinstance(raw_int, int):
+            raise TypeError("Description of values only supported for integer objects")
+        value = self.od.decode_desc(raw_int)
         logger.debug("Description is '%s'", value)
         return value
 
@@ -160,12 +166,15 @@ class Variable:
              - 'raw'
              - 'phys'
              - 'desc'
+        :raises TypeError: If the "desc" format was specified with anything but a string value.
         """
         if fmt == "raw":
             self.raw = value
         elif fmt == "phys":
             self.phys = value
         elif fmt == "desc":
+            if not isinstance(value, str):
+                raise TypeError("fmt=desc requires a string value")
             self.desc = value
 
 

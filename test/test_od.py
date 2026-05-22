@@ -171,6 +171,12 @@ class TestDataConversions(unittest.TestCase):
         self.assertEqual(var.decode_raw(b"zero terminated\x00"), b"zero terminated\x00")
         self.assertEqual(var.encode_raw(b"testing"), b"testing")
 
+    def test_unset_data_type(self):
+        var = od.ODVariable("Test unset", 0x1000)
+        # data_type intentionally left at default (unset)
+        with self.assertRaises(od.ObjectDictionaryError):
+            var.encode_raw(42)
+
 
 class TestAlternativeRepresentations(unittest.TestCase):
 

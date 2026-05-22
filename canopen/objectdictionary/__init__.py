@@ -366,7 +366,7 @@ class ODVariable:
         #: The value of this variable stored in the object dictionary
         self.value: Optional[int] = None
         #: Data type according to the standard as an :class:`int`
-        self.data_type: Optional[int] = None
+        self.data_type: int = 0
         #: Access type, should be "rw", "ro", "wo", or "const"
         self.access_type: str = "rw"
         #: The variable represents a DOMAIN ObjectType
@@ -480,7 +480,7 @@ class ODVariable:
                 return self.STRUCT_TYPES[self.data_type].pack(value)
             except struct.error:
                 raise ValueError("Value does not fit in specified type")
-        elif self.data_type is None:
+        elif not self.data_type:
             raise ObjectDictionaryError("Data type has not been specified")
         else:
             raise TypeError(

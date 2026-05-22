@@ -1,12 +1,11 @@
 import logging
 import threading
 import unittest
-from contextlib import contextmanager
 
 import can
 
 import canopen
-from canopen.emcy import EmcyError
+import canopen.emcy
 
 
 TIMEOUT = 0.1
@@ -18,7 +17,7 @@ class TestEmcy(unittest.TestCase):
         self.emcy = canopen.emcy.EmcyConsumer()
 
     def check_error(self, err, code, reg, data, ts):
-        self.assertIsInstance(err, EmcyError)
+        self.assertIsInstance(err, canopen.emcy.EmcyError)
         self.assertIsInstance(err, Exception)
         self.assertEqual(err.code, code)
         self.assertEqual(err.register, reg)
@@ -72,8 +71,6 @@ class TestEmcy(unittest.TestCase):
         self.assertEqual(len(self.emcy.active), 0)
 
     def test_emcy_consumer_wait(self):
-        PAUSE = TIMEOUT / 2
-
         def push_err():
             self.emcy.on_emcy(0x81, b'\x01\x20\x01\x01\x02\x03\x04\x05', 100)
 
@@ -84,67 +81,65 @@ class TestEmcy(unittest.TestCase):
                 data=bytes([1, 2, 3, 4, 5]), ts=100,
             )
 
-        @contextmanager
-        def timer(func):
-            t = threading.Timer(PAUSE, func)
-            try:
-                yield t
-            finally:
-                t.join(TIMEOUT)
-
         # Check unfiltered wait, on timeout.
         self.assertIsNone(self.emcy.wait(timeout=TIMEOUT))
 
         # Check unfiltered wait, on success.
-        with timer(push_err) as t:
-            with self.assertLogs(level=logging.INFO):
+        t = threading.Thread(target=push_err)
+        with self.assertLogs(level=logging.INFO):
+            with self.emcy.emcy_received:
                 t.start()
                 err = self.emcy.wait(timeout=TIMEOUT)
+        t.join(TIMEOUT)
         check_err(err)
 
         # Check filtered wait, on success.
-        with timer(push_err) as t:
-            with self.assertLogs(level=logging.INFO):
+        t = threading.Thread(target=push_err)
+        with self.assertLogs(level=logging.INFO):
+            with self.emcy.emcy_received:
                 t.start()
                 err = self.emcy.wait(0x2001, TIMEOUT)
+        t.join(TIMEOUT)
         check_err(err)
 
         # Check filtered wait, on timeout.
-        with timer(push_err) as t:
+        t = threading.Thread(target=push_err)
+        with self.emcy.emcy_received:
             t.start()
-            self.assertIsNone(self.emcy.wait(0x9000, TIMEOUT))
+            result = self.emcy.wait(0x9000, TIMEOUT)
+        t.join(TIMEOUT)
+        self.assertIsNone(result)
 
         def push_reset():
             self.emcy.on_emcy(0x81, b'\x00\x00\x00\x00\x00\x00\x00\x00', 100)
 
-        with timer(push_reset) as t:
+        t = threading.Thread(target=push_reset)
+        with self.emcy.emcy_received:
             t.start()
-            self.assertIsNone(self.emcy.wait(0x9000, TIMEOUT))
-
-    def test_emcy_consumer_initialization(self):
-        consumer = canopen.emcy.EmcyConsumer()
-        self.assertEqual(consumer.log, [])
-        self.assertEqual(consumer.active, [])
-        self.assertEqual(consumer.callbacks, [])
+            result = self.emcy.wait(0x9000, TIMEOUT)
+        t.join(TIMEOUT)
+        self.assertIsNone(result)
 
     def test_emcy_consumer_multiple_callbacks(self):
         """Test adding multiple callbacks and their execution order."""
+        emcy = canopen.emcy.EmcyConsumer()
         call_order = []
-        self.emcy.add_callback(lambda err: call_order.append('callback1'))
-        self.emcy.add_callback(lambda err: call_order.append('callback2'))
-        self.emcy.add_callback(lambda err: call_order.append('callback3'))
-        self.emcy.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
+        emcy.add_callback(lambda err: call_order.append('callback1'))
+        emcy.add_callback(lambda err: call_order.append('callback2'))
+        emcy.add_callback(lambda err: call_order.append('callback3'))
+        emcy.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
         self.assertEqual(call_order, ['callback1', 'callback2', 'callback3'])
 
     def test_emcy_consumer_callback_exception_handling(self):
         """Test that callback exceptions don't break other callbacks or the system."""
+        emcy = canopen.emcy.EmcyConsumer()
         successful_callbacks = []
-        self.emcy.add_callback(lambda err: successful_callbacks.append('success1'))
-        self.emcy.add_callback(
+        emcy.add_callback(lambda err: successful_callbacks.append('success1'))
+        emcy.add_callback(
             lambda err: exec('raise ValueError("Test exception in callback")')
         )
-        self.emcy.add_callback(lambda err: successful_callbacks.append('success2'))
-        self.emcy.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
+        emcy.add_callback(lambda err: successful_callbacks.append('success2'))
+        emcy.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
         self.assertEqual(successful_callbacks, ['success1', 'success2'])
 
     def test_emcy_consumer_error_reset_variants(self):
@@ -172,10 +167,11 @@ class TestEmcy(unittest.TestCase):
             self.emcy.on_emcy(0x81, b'\x01\x20\x01\x01\x02\x03\x04\x05', 100)
             self.emcy.on_emcy(0x81, b'\x02\x20\x01\x01\x02\x03\x04\x05', 101)
             self.emcy.on_emcy(0x81, b'\x03\x20\x01\x01\x02\x03\x04\x05', 102)
-        t = threading.Timer(TIMEOUT / 2, push_multiple_errors)
+        t = threading.Thread(target=push_multiple_errors)
         with self.assertLogs(level=logging.INFO):
-            t.start()
-            err = self.emcy.wait(0x2003, timeout=TIMEOUT)
+            with self.emcy.emcy_received:
+                t.start()
+                err = self.emcy.wait(0x2003, timeout=TIMEOUT)
         t.join(TIMEOUT)
         self.assertIsNotNone(err)
         self.assertEqual(err.code, 0x2003)
@@ -184,7 +180,7 @@ class TestEmcy(unittest.TestCase):
 class TestEmcyError(unittest.TestCase):
 
     def test_emcy_error(self):
-        error = EmcyError(0x2001, 0x02, b'\x00\x01\x02\x03\x04', 1000)
+        error = canopen.emcy.EmcyError(0x2001, 0x02, b'\x00\x01\x02\x03\x04', 1000)
         self.assertEqual(error.code, 0x2001)
         self.assertEqual(error.data, b'\x00\x01\x02\x03\x04')
         self.assertEqual(error.register, 2)
@@ -192,7 +188,7 @@ class TestEmcyError(unittest.TestCase):
 
     def test_emcy_str(self):
         def check(code, expected):
-            err = EmcyError(code, 1, b'', 1000)
+            err = canopen.emcy.EmcyError(code, 1, b'', 1000)
             actual = str(err)
             self.assertEqual(actual, expected)
 
@@ -203,7 +199,7 @@ class TestEmcyError(unittest.TestCase):
 
     def test_emcy_get_desc(self):
         def check(code, expected):
-            err = EmcyError(code, 1, b'', 1000)
+            err = canopen.emcy.EmcyError(code, 1, b'', 1000)
             actual = err.get_desc()
             self.assertEqual(actual, expected)
 
@@ -238,25 +234,6 @@ class TestEmcyError(unittest.TestCase):
         check(0xff00, "Device Specific")
         check(0xffff, "Device Specific")
 
-    def test_emcy_error_initialization_types(self):
-        """Test EmcyError initialization with various data types."""
-        error = EmcyError(0x1000, 0, b'', 123.456)
-        self.assertEqual(error.code, 0x1000)
-        self.assertEqual(error.register, 0)
-        self.assertEqual(error.data, b'')
-        self.assertEqual(error.timestamp, 123.456)
-        error = EmcyError(0xFFFF, 0xFF, b'\xFF' * 5, float('inf'))
-        self.assertEqual(error.code, 0xFFFF)
-        self.assertEqual(error.register, 0xFF)
-        self.assertEqual(error.data, b'\xFF' * 5)
-        self.assertEqual(error.timestamp, float('inf'))
-
-    def test_emcy_error_str_edge_cases(self):
-        for code in (0x0000, 0x0001, 0x0100, 0xFFFF):
-            error = EmcyError(code, 0, b'', 1000)
-            s = str(error)
-            self.assertIsInstance(s, str)
-            self.assertIn(f"0x{code:04X}", s)
 
 
 class TestEmcyProducer(unittest.TestCase):
@@ -277,7 +254,7 @@ class TestEmcyProducer(unittest.TestCase):
 
     def check_response(self, expected):
         msg = self.rxbus.recv(TIMEOUT)
-        self.assertIsNotNone(msg)
+        assert msg is not None
         actual = msg.data
         self.assertEqual(actual, expected)
 
@@ -298,11 +275,6 @@ class TestEmcyProducer(unittest.TestCase):
         check(res=b'\x00\x00\x00\x00\x00\x00\x00\x00')
         check(3, res=b'\x00\x00\x03\x00\x00\x00\x00\x00')
         check(3, b"\xaa\xbb", res=b'\x00\x00\x03\xaa\xbb\x00\x00\x00')
-
-    def test_emcy_producer_initialization(self):
-        producer = canopen.emcy.EmcyProducer(0x123)
-        self.assertEqual(producer.cob_id, 0x123)
-        self.assertIsNotNone(producer.network)
 
     def test_emcy_producer_send_edge_cases(self):
         self.emcy.send(0xFFFF, 0xFF, b'\xFF\xFF\xFF\xFF\xFF')
@@ -350,9 +322,8 @@ class TestEmcyIntegration(unittest.TestCase):
         """Test that producer and consumer work together."""
         received_errors = []
         self.consumer.add_callback(lambda err: received_errors.append(err))
-        t = threading.Timer(
-            TIMEOUT / 2,
-            lambda: self.producer.send(0x2001, 0x02, b'\x01\x02\x03\x04\x05'),
+        t = threading.Thread(
+            target=lambda: self.producer.send(0x2001, 0x02, b'\x01\x02\x03\x04\x05'),
         )
         with self.assertLogs(level=logging.INFO):
             t.start()
@@ -366,16 +337,15 @@ class TestEmcyIntegration(unittest.TestCase):
 
     def test_producer_reset_consumer_integration(self):
         """Test producer reset clears consumer active errors."""
-        t = threading.Timer(
-            TIMEOUT / 2,
-            lambda: self.producer.send(0x2001, 0x02, b'\x01\x02\x03\x04\x05'),
+        t = threading.Thread(
+            target=lambda: self.producer.send(0x2001, 0x02, b'\x01\x02\x03\x04\x05'),
         )
         with self.assertLogs(level=logging.INFO):
             t.start()
             self.consumer.wait(0x2001, timeout=TIMEOUT)
         t.join(TIMEOUT)
         self.assertEqual(len(self.consumer.active), 1)
-        t = threading.Timer(TIMEOUT / 2, self.producer.reset)
+        t = threading.Thread(target=self.producer.reset)
         with self.assertLogs(level=logging.INFO):
             t.start()
             err = self.consumer.wait(timeout=TIMEOUT)

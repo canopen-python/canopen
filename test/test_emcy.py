@@ -13,6 +13,7 @@ TIMEOUT = 0.1
 
 
 class TestEmcy(unittest.TestCase):
+
     def setUp(self):
         self.emcy = canopen.emcy.EmcyConsumer()
 
@@ -181,6 +182,7 @@ class TestEmcy(unittest.TestCase):
 
 
 class TestEmcyError(unittest.TestCase):
+
     def test_emcy_error(self):
         error = EmcyError(0x2001, 0x02, b'\x00\x01\x02\x03\x04', 1000)
         self.assertEqual(error.code, 0x2001)
@@ -258,6 +260,7 @@ class TestEmcyError(unittest.TestCase):
 
 
 class TestEmcyProducer(unittest.TestCase):
+
     def setUp(self):
         self.txbus = can.Bus(interface="virtual")
         self.rxbus = can.Bus(interface="virtual")

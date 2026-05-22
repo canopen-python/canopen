@@ -4,7 +4,7 @@ import copy
 import logging
 import re
 from configparser import NoOptionError, NoSectionError, RawConfigParser
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from canopen.objectdictionary import (
     ODArray,
@@ -204,7 +204,7 @@ def import_from_node(node_id: int, network: canopen.network.Network):
     return od
 
 
-def _calc_bit_length(data_type):
+def _calc_bit_length(data_type: int) -> int:
     if data_type == datatypes.INTEGER8:
         return 8
     elif data_type == datatypes.INTEGER16:
@@ -215,7 +215,7 @@ def _calc_bit_length(data_type):
         return 64
     else:
         raise ValueError(
-            f"Invalid data_type '{data_type}', expecting a signed integer data_type."
+            f"Invalid data_type 0x{data_type:04X}, expecting an integer data_type."
         )
 
 
@@ -229,7 +229,7 @@ def _signed_int_from_hex(hex_str, bit_length):
         return number
 
 
-def _convert_variable(node_id, var_type, value):
+def _convert_variable(node_id: int, var_type: int, value: Any) -> Any:
     if var_type in (datatypes.OCTET_STRING, datatypes.DOMAIN):
         return bytes.fromhex(value)
     elif var_type in (datatypes.VISIBLE_STRING, datatypes.UNICODE_STRING):
@@ -245,7 +245,7 @@ def _convert_variable(node_id, var_type, value):
             return int(value, 0)
 
 
-def _revert_variable(var_type, value):
+def _revert_variable(var_type: int, value: Any) -> Any:
     if value is None:
         return None
     if var_type in (datatypes.OCTET_STRING, datatypes.DOMAIN):

@@ -37,7 +37,7 @@ class TestVariable(unittest.TestCase):
         v = _StubVariable(var)
         v.write("On", fmt="desc")
         self.assertEqual(v.raw, 1)
-        self.assertEqual(v.desc, 1)
+        self.assertEqual(v.desc, "On")
         with self.assertRaises(TypeError):
             v.write(b"", fmt="desc")
 

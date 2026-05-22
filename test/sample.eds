@@ -1025,6 +1025,14 @@ DataType=0x0007
 AccessType=rw
 PDOMapping=0
 
+[3060]
+ParameterName=Object with ObjFlags
+ObjectType=0x7
+DataType=0x0007
+AccessType=rw
+PDOMapping=0
+ObjFlags=0x1
+
 [3064]
 ParameterName=Record with DOMAIN sub-object
 SubNumber=0x2
@@ -1041,6 +1049,27 @@ PDOMapping=0
 [3064sub1]
 ParameterName=DOMAIN sub-object
 ObjectType=0x2
+DataType=0x0007
+AccessType=rw
+PDOMapping=0
+
+[3065]
+ParameterName=Record with ObjFlags
+ObjectType=0x9
+ObjFlags=0x3
+SubNumber=0x2
+
+[3065sub0]
+ParameterName=Highest sub-index supported
+ObjectType=0x7
+DataType=0x0005
+AccessType=ro
+DefaultValue=0x01
+PDOMapping=0
+
+[3065sub1]
+ParameterName=Value
+ObjectType=0x7
 DataType=0x0007
 AccessType=rw
 PDOMapping=0

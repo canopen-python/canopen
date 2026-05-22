@@ -280,7 +280,10 @@ class ODArray(Mapping):
         return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
 
     def __getitem__(self, subindex: Union[int, str]) -> ODVariable:
-        var = self.names.get(subindex) or self.subindices.get(subindex)
+        var = (
+            self.names.get(subindex)  # type: ignore[arg-type]
+            or self.subindices.get(subindex)  # type: ignore[arg-type]
+        )
         if var is not None:
             # This subindex is defined
             pass

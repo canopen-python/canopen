@@ -77,8 +77,11 @@ class Variable:
         """
         value = self.od.decode_raw(self.data)
         text = f"Value of {self.name!r} ({pretty_index(self.index, self.subindex)}) is {value!r}"
-        if value in self.od.value_descriptions:
-            text += f" ({self.od.value_descriptions[value]})"
+        if (
+            isinstance(value, int)
+            and (desc := self.od.value_descriptions.get(value)) is not None
+        ):
+            text += f" ({desc})"
         logger.debug(text)
         return value
 
@@ -108,8 +111,14 @@ class Variable:
 
     @property
     def desc(self) -> str:
-        """Converts to and from a description of the value as a string."""
-        value = self.od.decode_desc(self.raw)
+        """Convert to and from a description of the value as a string.
+
+        :raises TypeError: If the received raw data was anything but an integer value.
+        """
+        raw_int = self.raw
+        if not isinstance(raw_int, int):
+            raise TypeError("Description of values only supported for integer objects")
+        value = self.od.decode_desc(raw_int)
         logger.debug("Description is '%s'", value)
         return value
 
@@ -146,7 +155,9 @@ class Variable:
         raise ValueError(f"Invalid format '{fmt}'")
 
     def write(
-        self, value: Union[int, bool, float, str, bytes], fmt: str = "raw"
+        self,
+        value: Union[int, bool, float, str, bytes],
+        fmt: str = "raw",
     ) -> None:
         """Alternative way of writing using a function instead of attributes.
 
@@ -157,12 +168,15 @@ class Variable:
              - 'raw'
              - 'phys'
              - 'desc'
+        :raises TypeError: If the "desc" format was specified with anything but a string value.
         """
         if fmt == "raw":
             self.raw = value
         elif fmt == "phys":
             self.phys = value
         elif fmt == "desc":
+            if not isinstance(value, str):
+                raise TypeError("fmt=desc requires a string value")
             self.desc = value
 
 

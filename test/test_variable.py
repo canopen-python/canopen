@@ -37,6 +37,9 @@ class TestVariable(unittest.TestCase):
         v = _StubVariable(var)
         v.write("On", fmt="desc")
         self.assertEqual(v.raw, 1)
+        self.assertEqual(v.desc, "On")
+        with self.assertRaises(TypeError):
+            v.write(b"", fmt="desc")
 
     def test_raw_with_string_value(self):
         var = od.ODVariable("Test VISIBLE_STRING", 0x1000)
@@ -44,8 +47,10 @@ class TestVariable(unittest.TestCase):
         var.default = "hello"
         var.add_value_description(0, "Off")
         v = _StubVariable(var)
-        # String value must not be looked up in value_descriptions
         self.assertEqual(v.raw, "hello")
+        # String value must not be looked up in value_descriptions
+        with self.assertRaises(TypeError):
+            _ = v.desc
 
     def test_bits(self):
         var = od.ODVariable("Test UNSIGNED8", 0x1000)

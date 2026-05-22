@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 import struct
-from collections.abc import Iterator, Mapping, MutableMapping
+from collections.abc import Collection, Iterator, Mapping, MutableMapping
 from typing import Optional, TextIO, Union
 
 from canopen.objectdictionary.datatypes import *
@@ -188,6 +188,7 @@ class ObjectDictionary(MutableMapping):
             return obj
         elif isinstance(obj, (ODRecord, ODArray)):
             return obj.get(subindex)
+        return None
 
 
 class ODRecord(MutableMapping):
@@ -261,7 +262,7 @@ class ODArray(Mapping):
 
     def __init__(self, name: str, index: int):
         #: The :class:`~canopen.ObjectDictionary` owning the record.
-        self.parent = None
+        self.parent: Optional[ObjectDictionary] = None
         #: 16-bit address of the array
         self.index = index
         #: Name of array
@@ -343,7 +344,7 @@ class ODVariable:
         #: The :class:`~canopen.ObjectDictionary`,
         #: :class:`~canopen.objectdictionary.ODRecord` or
         #: :class:`~canopen.objectdictionary.ODArray` owning the variable
-        self.parent = None
+        self.parent: Union[ObjectDictionary, ODRecord, ODArray, None] = None
         #: 16-bit address of the object in the dictionary
         self.index = index
         #: 8-bit sub-index of the object in the dictionary
@@ -365,7 +366,7 @@ class ODVariable:
         #: The value of this variable stored in the object dictionary
         self.value: Optional[int] = None
         #: Data type according to the standard as an :class:`int`
-        self.data_type: Optional[int] = None
+        self.data_type: int = 0
         #: Access type, should be "rw", "ro", "wo", or "const"
         self.access_type: str = "rw"
         #: The variable represents a DOMAIN ObjectType
@@ -479,7 +480,7 @@ class ODVariable:
                 return self.STRUCT_TYPES[self.data_type].pack(value)
             except struct.error:
                 raise ValueError("Value does not fit in specified type")
-        elif self.data_type is None:
+        elif not self.data_type:
             raise ObjectDictionaryError("Data type has not been specified")
         else:
             raise TypeError(
@@ -499,11 +500,10 @@ class ODVariable:
     def decode_desc(self, value: int) -> str:
         if not self.value_descriptions:
             raise ObjectDictionaryError("No value descriptions exist")
-        elif value not in self.value_descriptions:
+        elif (desc := self.value_descriptions.get(value)) is None:
             raise ObjectDictionaryError(
                 f"No value description exists for {value}")
-        else:
-            return self.value_descriptions[value]
+        return desc
 
     def encode_desc(self, desc: str) -> int:
         if not self.value_descriptions:
@@ -516,27 +516,44 @@ class ODVariable:
         raise ValueError(
             f"No value corresponds to '{desc}'. Valid values are: {valid_values}")
 
-    def decode_bits(self, value: int, bits: list[int]) -> int:
-        try:
+    def decode_bits(self, value: int, bits: Union[str, Collection[int]]) -> int:
+        """Isolate and right-shift the specified bits from a given integer.
+
+        :param value: Variable value holding the bits
+        :param bits: Registered lookup name or concrete list of bit offsets
+        :return: Extracted bits, right-shifted to cut off to lowest specified offset
+        :raises KeyError: For unknown lookup names
+        """
+        if isinstance(bits, str):
             bits = self.bit_definitions[bits]
-        except (TypeError, KeyError):
-            pass
         mask = 0
         for bit in bits:
             mask |= 1 << bit
         return (value & mask) >> min(bits)
 
-    def encode_bits(self, original_value: int, bits: list[int], bit_value: int):
-        try:
+    def encode_bits(
+        self, original_value: int, bits: Union[str, Collection[int]], bit_value: int
+    ) -> int:
+        """Replace the specified bits with the given (unshifted) pattern.
+
+        The bit offsets sequence may be non-contiguous, but the replacement pattern
+        must specify all bits including the "holes".  It is only shifted once, so the
+        LSB lands at the lowest specified bit offset.
+
+        :param original_value: Variable value holding the bits
+        :param bits: Registered lookup name or concrete list of bit offsets
+        :param bit_value: Source pattern to overwrite with
+        :return: Merged value with the bits replaced
+        :raises KeyError: For unknown lookup names
+        """
+        if isinstance(bits, str):
             bits = self.bit_definitions[bits]
-        except (TypeError, KeyError):
-            pass
         temp = original_value
         mask = 0
         for bit in bits:
             mask |= 1 << bit
         temp &= ~mask
-        temp |= bit_value << min(bits)
+        temp |= (bit_value << min(bits)) & mask
         return temp
 
 

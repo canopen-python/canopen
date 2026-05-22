@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Union
 
 from canopen import objectdictionary
@@ -77,8 +79,11 @@ class Variable:
         """
         value = self.od.decode_raw(self.data)
         text = f"Value of {self.name!r} ({pretty_index(self.index, self.subindex)}) is {value!r}"
-        if value in self.od.value_descriptions:
-            text += f" ({self.od.value_descriptions[value]})"
+        if (
+            isinstance(value, int)
+            and (desc := self.od.value_descriptions.get(value)) is not None
+        ):
+            text += f" ({desc})"
         logger.debug(text)
         return value
 
@@ -108,8 +113,14 @@ class Variable:
 
     @property
     def desc(self) -> str:
-        """Converts to and from a description of the value as a string."""
-        value = self.od.decode_desc(self.raw)
+        """Convert to and from a description of the value as a string.
+
+        :raises TypeError: If the received raw data was anything but an integer value.
+        """
+        raw_int = self.raw
+        if not isinstance(raw_int, int):
+            raise TypeError("Description of values only supported for integer objects")
+        value = self.od.decode_desc(raw_int)
         logger.debug("Description is '%s'", value)
         return value
 
@@ -118,7 +129,7 @@ class Variable:
         self.raw = self.od.encode_desc(desc)
 
     @property
-    def bits(self) -> "Bits":
+    def bits(self) -> Bits:
         """Access bits using integers, slices, or bit descriptions."""
         return Bits(self)
 
@@ -146,7 +157,9 @@ class Variable:
         raise ValueError(f"Invalid format '{fmt}'")
 
     def write(
-        self, value: Union[int, bool, float, str, bytes], fmt: str = "raw"
+        self,
+        value: Union[int, bool, float, str, bytes],
+        fmt: str = "raw",
     ) -> None:
         """Alternative way of writing using a function instead of attributes.
 
@@ -157,35 +170,41 @@ class Variable:
              - 'raw'
              - 'phys'
              - 'desc'
+        :raises TypeError: If the "desc" format was specified with anything but a string value.
         """
         if fmt == "raw":
             self.raw = value
         elif fmt == "phys":
             self.phys = value
         elif fmt == "desc":
+            if not isinstance(value, str):
+                raise TypeError("fmt=desc requires a string value")
             self.desc = value
 
 
 class Bits(Mapping):
 
     def __init__(self, variable: Variable):
+        assert variable.od.data_type in objectdictionary.datatypes.INTEGER_TYPES
         self.variable = variable
         self.read()
+        self.raw: int
 
     @staticmethod
-    def _get_bits(key):
+    def _get_bits(key: Union[slice, int, str, Collection[int]]) -> Union[str, Collection[int]]:
         if isinstance(key, slice):
-            bits = range(key.start, key.stop, key.step)
-        elif isinstance(key, int):
-            bits = [key]
-        else:
-            bits = key
-        return bits
+            if key.stop is None:
+                raise IndexError("Bits cannot be enumerated from open-ended slice")
+            else:
+                return range(key.start or 0, key.stop, key.step or 1)
+        if isinstance(key, int):
+            return [key]
+        return key
 
-    def __getitem__(self, key) -> int:
+    def __getitem__(self, key: Union[slice, int, str, Collection[int]]) -> int:
         return self.variable.od.decode_bits(self.raw, self._get_bits(key))
 
-    def __setitem__(self, key, value: int):
+    def __setitem__(self, key: Union[slice, int, str, Collection[int]], value: int):
         self.raw = self.variable.od.encode_bits(
             self.raw, self._get_bits(key), value)
         self.write()
@@ -197,7 +216,8 @@ class Bits(Mapping):
         return len(self.variable.od.bit_definitions)
 
     def read(self):
-        self.raw = self.variable.raw
+        assert isinstance(raw_int := self.variable.raw, int)
+        self.raw = raw_int
 
     def write(self):
         self.variable.raw = self.raw

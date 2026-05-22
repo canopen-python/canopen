@@ -107,7 +107,8 @@ class Network(MutableMapping):
         if self.bus is None:
             self.bus = can.Bus(*args, **kwargs)
         logger.info("Connected to '%s'", self.bus.channel_info)
-        self.notifier = can.Notifier(self.bus, self.listeners, self.NOTIFIER_CYCLE)
+        if self.notifier is None:
+            self.notifier = can.Notifier(self.bus, self.listeners, self.NOTIFIER_CYCLE)
         return self
 
     def disconnect(self) -> None:
@@ -123,7 +124,11 @@ class Network(MutableMapping):
         if self.bus is not None:
             self.bus.shutdown()
         self.bus = None
-        self.check()
+        try:
+            self.check()
+        finally:
+            # Release notifier after check
+            self.notifier = None
 
     def __enter__(self):
         return self
@@ -136,7 +141,7 @@ class Network(MutableMapping):
         node: Union[int, RemoteNode, LocalNode],
         object_dictionary: Union[str, ObjectDictionary, None] = None,
         upload_eds: bool = False,
-    ) -> RemoteNode:
+    ) -> Union[RemoteNode, LocalNode]:
         """Add a remote node to the network.
 
         :param node:
@@ -162,7 +167,7 @@ class Network(MutableMapping):
 
     def create_node(
         self,
-        node: int,
+        node: Union[int, LocalNode],
         object_dictionary: Union[str, ObjectDictionary, None] = None,
     ) -> LocalNode:
         """Create a local node in the network.

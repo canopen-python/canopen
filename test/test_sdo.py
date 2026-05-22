@@ -1,11 +1,25 @@
 import struct
 import time
 import unittest
+from unittest.mock import patch
 import canopen
 import canopen.objectdictionary.datatypes as dt
 from can import CanError
 from canopen.objectdictionary import ODVariable
-from canopen.sdo.constants import *
+from canopen.sdo.constants import (
+    ABORT_GENERAL_ERROR,
+    ABORT_INVALID_COMMAND_SPECIFIER,
+    ABORT_NOT_IN_OD,
+    ABORT_TOGGLE_NOT_ALTERNATED,
+    CRC_SUPPORTED,
+    EXPEDITED,
+    REQUEST_BLOCK_UPLOAD,
+    REQUEST_DOWNLOAD,
+    RESPONSE_ABORTED,
+    RESPONSE_DOWNLOAD,
+    SDO_STRUCT,
+    START_BLOCK_UPLOAD,
+)
 
 from .util import DATATYPES_EDS, SAMPLE_EDS
 
@@ -945,6 +959,130 @@ class TestSDO(unittest.TestCase):
         self.assertGreaterEqual(elapsed, pause,
             f"Message sent too early: {elapsed:.4f}s < {pause}s pause")
 
+    def test_read_response_empty_queue(self):
+        """read_response raises SdoCommunicationError when the response queue is empty."""
+        with self.assertRaises(canopen.SdoCommunicationError) as cm:
+            self.network[2].sdo.read_response()
+        self.assertIn("No SDO response received", str(cm.exception))
+
+    def test_readable_stream_readable(self):
+        """ReadableStream.readable() returns True."""
+        self.data = [
+            (TX, b'\x40\x18\x10\x01\x00\x00\x00\x00'),
+            (RX, b'\x43\x18\x10\x01\x04\x00\x00\x00'),
+        ]
+        with self.network[2].sdo[0x1018][1].open('rb', buffering=0) as fp:
+            self.assertTrue(fp.readable())
+
+    def test_readable_stream_tell(self):
+        """ReadableStream.tell() tracks position after each segment read."""
+        self.data = [
+            (TX, b'\x40\x08\x10\x00\x00\x00\x00\x00'),
+            (RX, b'\x41\x08\x10\x00\x0e\x00\x00\x00'),  # segmented, size=14
+            (TX, b'\x60\x00\x00\x00\x00\x00\x00\x00'),
+            (RX, b'\x00\x54\x69\x6e\x79\x20\x4e\x6f'),  # 7 bytes: "Tiny No", toggle=0
+            (TX, b'\x70\x00\x00\x00\x00\x00\x00\x00'),
+            (RX, b'\x11\x64\x65\x20\x2d\x20\x4d\x65'),  # 7 bytes: "de - Me", NO_MORE_DATA, toggle=1
+        ]
+        with self.network[2].sdo[0x1008].open('rb', buffering=0) as fp:
+            self.assertEqual(fp.tell(), 0)
+            fp.read(7)
+            self.assertEqual(fp.tell(), 7)
+            fp.read(7)
+            self.assertEqual(fp.tell(), 14)
+
+    def test_readable_stream_readinto(self):
+        """ReadableStream.readinto() fills a bytearray and returns the byte count."""
+        self.data = [
+            (TX, b'\x40\x18\x10\x01\x00\x00\x00\x00'),
+            (RX, b'\x43\x18\x10\x01\x04\x00\x00\x00'),  # expedited, 4 bytes: value=4
+        ]
+        buf = bytearray(8)
+        with self.network[2].sdo[0x1018][1].open('rb', buffering=0) as fp:
+            n = fp.readinto(buf)
+        self.assertEqual(n, 4)
+        self.assertEqual(buf[:4], b'\x04\x00\x00\x00')
+
+    def test_block_upload_stream_readable(self):
+        """BlockUploadStream.readable() returns True."""
+        self.data = [
+            (TX, b'\xa4\x08\x10\x00\x7f\x00\x00\x00'),
+            (RX, b'\xc6\x08\x10\x00\x1a\x00\x00\x00'),
+            (TX, b'\xa3\x00\x00\x00\x00\x00\x00\x00'),
+            (RX, b'\x01\x54\x69\x6e\x79\x20\x4e\x6f'),
+            (RX, b'\x02\x64\x65\x20\x2d\x20\x4d\x65'),
+            (RX, b'\x03\x67\x61\x20\x44\x6f\x6d\x61'),
+            (RX, b'\x84\x69\x6e\x73\x20\x21\x00\x00'),
+            (TX, b'\xa2\x04\x7f\x00\x00\x00\x00\x00'),
+            (RX, b'\xc9\x40\xe1\x00\x00\x00\x00\x00'),
+            (TX, b'\xa1\x00\x00\x00\x00\x00\x00\x00'),
+        ]
+        with self.network[2].sdo[0x1008].open('rb', block_transfer=True, buffering=0) as fp:
+            self.assertTrue(fp.readable())
+            fp.read()
+
+    def test_block_upload_stream_tell(self):
+        """BlockUploadStream.tell() tracks the byte position after reads."""
+        self.data = [
+            (TX, b'\xa4\x08\x10\x00\x7f\x00\x00\x00'),
+            (RX, b'\xc6\x08\x10\x00\x1a\x00\x00\x00'),
+            (TX, b'\xa3\x00\x00\x00\x00\x00\x00\x00'),
+            (RX, b'\x01\x54\x69\x6e\x79\x20\x4e\x6f'),
+            (RX, b'\x02\x64\x65\x20\x2d\x20\x4d\x65'),
+            (RX, b'\x03\x67\x61\x20\x44\x6f\x6d\x61'),
+            (RX, b'\x84\x69\x6e\x73\x20\x21\x00\x00'),
+            (TX, b'\xa2\x04\x7f\x00\x00\x00\x00\x00'),
+            (RX, b'\xc9\x40\xe1\x00\x00\x00\x00\x00'),
+            (TX, b'\xa1\x00\x00\x00\x00\x00\x00\x00'),
+        ]
+        with self.network[2].sdo[0x1008].open('rb', block_transfer=True, buffering=0) as fp:
+            self.assertEqual(fp.tell(), 0)
+            fp.read(7)  # reads first segment: 7 bytes
+            self.assertEqual(fp.tell(), 7)
+            fp.read()   # reads remaining 3 segments (7+7+5 = 19 bytes)
+            self.assertEqual(fp.tell(), 26)
+
+    def test_block_upload_stream_readinto(self):
+        """BlockUploadStream.readinto() fills a bytearray and returns the byte count."""
+        self.data = [
+            (TX, b'\xa4\x08\x10\x00\x7f\x00\x00\x00'),
+            (RX, b'\xc6\x08\x10\x00\x1a\x00\x00\x00'),
+            (TX, b'\xa3\x00\x00\x00\x00\x00\x00\x00'),
+            (RX, b'\x01\x54\x69\x6e\x79\x20\x4e\x6f'),
+            (RX, b'\x02\x64\x65\x20\x2d\x20\x4d\x65'),
+            (RX, b'\x03\x67\x61\x20\x44\x6f\x6d\x61'),
+            (RX, b'\x84\x69\x6e\x73\x20\x21\x00\x00'),
+            (TX, b'\xa2\x04\x7f\x00\x00\x00\x00\x00'),
+            (RX, b'\xc9\x40\xe1\x00\x00\x00\x00\x00'),
+            (TX, b'\xa1\x00\x00\x00\x00\x00\x00\x00'),
+        ]
+        buf = bytearray(8)
+        with self.network[2].sdo[0x1008].open('rb', block_transfer=True, buffering=0) as fp:
+            n = fp.readinto(buf)
+            # readinto reads one segment (up to 7 bytes); first segment is "Tiny No"
+            self.assertEqual(n, 7)
+            self.assertEqual(buf[:7], b'Tiny No')
+            fp.read()  # consume remaining segments so close() succeeds
+
+    def test_writable_stream_tell(self):
+        """WritableStream.tell() tracks position after each write."""
+        self.data = [
+            (TX, b'\x20\x00\x20\x00\x00\x00\x00\x00'),  # initiate, no SIZE_SPECIFIED
+            (RX, b'\x60\x00\x20\x00\x00\x00\x00\x00'),
+            (TX, b'\x00\x41\x20\x6c\x6f\x6e\x67\x20'),  # "A long ", toggle=0, 7 bytes
+            (RX, b'\x20\x00\x00\x00\x00\x00\x00\x00'),
+            (TX, b'\x12\x73\x74\x72\x69\x6e\x67\x00'),  # "string", toggle=1, 6 bytes
+            (RX, b'\x30\x00\x00\x00\x00\x00\x00\x00'),
+            (TX, b'\x0f\x00\x00\x00\x00\x00\x00\x00'),  # close() empty final segment
+            (RX, b'\x20\x00\x00\x00\x00\x00\x00\x00'),
+        ]
+        with self.network[2].sdo["Writable string"].open('wb', buffering=0) as fp:
+            self.assertEqual(fp.tell(), 0)
+            fp.write(b'A long ')
+            self.assertEqual(fp.tell(), 7)
+            fp.write(b'string')
+            self.assertEqual(fp.tell(), 13)
+
 
 class TestSDOClientDatatypes(unittest.TestCase):
     """Test the SDO client uploads with the different data types in CANopen."""
@@ -1302,8 +1440,7 @@ class TestSdoAbortedError(unittest.TestCase):
         
         self.assertNotEqual(canopen.SdoAbortedError(0x06090011), "Value range of parameter exceeded")
 
-        with self.assertRaises(TypeError):
-            canopen.SdoAbortedError(code) == 0.5  # Unsupported type for comparison
+        self.assertFalse(canopen.SdoAbortedError(code) == 0.5)  # Unsupported type for comparison
 
     def test_init_from_string(self):
         for code, description in canopen.SdoAbortedError.CODES.items():
@@ -1385,6 +1522,85 @@ class TestSDOServer(unittest.TestCase):
         self.assertEqual(cmd, RESPONSE_ABORTED)
         code, = struct.unpack_from("<L", self.responses[2], 4)
         self.assertEqual(code, ABORT_TOGGLE_NOT_ALTERNATED)
+
+    def test_on_request_key_error_aborts_not_in_od(self):
+        """KeyError raised by a handler is caught and server responds with ABORT_NOT_IN_OD."""
+        with patch.object(self.local_node, 'get_data', side_effect=KeyError(0x9999)):
+            self.local_node.sdo.on_request(
+                0x602, b'\x40\x18\x10\x01\x00\x00\x00\x00', 0.0)
+        self.assertEqual(len(self.responses), 1)
+        cmd, = struct.unpack_from("B", self.responses[0])
+        self.assertEqual(cmd, RESPONSE_ABORTED)
+        code, = struct.unpack_from("<L", self.responses[0], 4)
+        self.assertEqual(code, ABORT_NOT_IN_OD)
+
+    def test_on_request_generic_exception_aborts_general_error(self):
+        """An unexpected exception raised by a handler is caught and server aborts with ABORT_GENERAL_ERROR."""
+        with patch.object(self.local_node, 'get_data', side_effect=RuntimeError("unexpected")):
+            self.local_node.sdo.on_request(
+                0x602, b'\x40\x18\x10\x01\x00\x00\x00\x00', 0.0)
+        self.assertEqual(len(self.responses), 1)
+        cmd, = struct.unpack_from("B", self.responses[0])
+        self.assertEqual(cmd, RESPONSE_ABORTED)
+        code, = struct.unpack_from("<L", self.responses[0], 4)
+        self.assertEqual(code, ABORT_GENERAL_ERROR)
+
+    def test_abort_accepts_sdo_aborted_error_object(self):
+        """SdoServer.abort() unwraps an SdoAbortedError argument and uses its code."""
+        self.local_node.sdo._index = 0x1018
+        self.local_node.sdo._subindex = 0x01
+        self.local_node.sdo.abort(canopen.SdoAbortedError(ABORT_NOT_IN_OD))
+        self.assertEqual(len(self.responses), 1)
+        cmd, = struct.unpack_from("B", self.responses[0])
+        self.assertEqual(cmd, RESPONSE_ABORTED)
+        code, = struct.unpack_from("<L", self.responses[0], 4)
+        self.assertEqual(code, ABORT_NOT_IN_OD)
+
+    def _setup_block_upload_up_data_state(self):
+        """Drive the server into BLOCK_STATE_UP_DATA for 0x1008:00 ("TEST DEVICE", 11 bytes).
+
+        Pre-sets _index/_subindex so abort() can construct a valid response frame.
+        Returns the number of responses captured so far (3: initiate + 2 data segments).
+        """
+        self.local_node.sdo._index = 0x1008
+        self.local_node.sdo._subindex = 0x00
+        # Step 1: block upload initiate — REQUEST_BLOCK_UPLOAD | CRC_SUPPORTED, blocksize=127
+        request = bytearray(8)
+        SDO_STRUCT.pack_into(request, 0, REQUEST_BLOCK_UPLOAD | CRC_SUPPORTED, 0x1008, 0x00)
+        request[4] = 127
+        self.local_node.sdo.on_request(0x602, bytes(request), 0.0)
+        # Step 2: start block upload — server sends all data segments, state → BLOCK_STATE_UP_DATA
+        start_req = bytearray(8)
+        start_req[0] = REQUEST_BLOCK_UPLOAD | START_BLOCK_UPLOAD  # 0xA3
+        self.local_node.sdo.on_request(0x602, bytes(start_req), 0.0)
+        # 1 initiate response + 2 data segments (11 bytes / 7 = 2 blocks) = 3 total
+        return len(self.responses)
+
+    def test_process_block_up_data_missing_request_block_upload_raises(self):
+        """process_block in UP_DATA state raises when command lacks REQUEST_BLOCK_UPLOAD bits (line 120)."""
+        n = self._setup_block_upload_up_data_state()
+        self.assertEqual(n, 3)
+        # Block-ack command 0x00 has neither REQUEST_BLOCK_UPLOAD (0xA0) set
+        with self.assertRaises(canopen.SdoAbortedError):
+            self.local_node.sdo.on_request(0x602, b'\x00\x00\x7F\x00\x00\x00\x00\x00', 0.0)
+        self.assertEqual(len(self.responses), 4)
+        cmd, = struct.unpack_from("B", self.responses[3])
+        self.assertEqual(cmd, RESPONSE_ABORTED)
+        code, = struct.unpack_from("<L", self.responses[3], 4)
+        self.assertEqual(code, ABORT_INVALID_COMMAND_SPECIFIER)
+
+    def test_process_block_up_data_missing_block_transfer_response_raises(self):
+        """process_block in UP_DATA state raises when command lacks BLOCK_TRANSFER_RESPONSE bit (line 122)."""
+        n = self._setup_block_upload_up_data_state()
+        self.assertEqual(n, 3)
+        # Command 0xA0 has REQUEST_BLOCK_UPLOAD set but BLOCK_TRANSFER_RESPONSE (0x02) not set
+        with self.assertRaises(canopen.SdoAbortedError):
+            self.local_node.sdo.on_request(0x602, b'\xA0\x02\x7F\x00\x00\x00\x00\x00', 0.0)
+        self.assertEqual(len(self.responses), 4)
+        cmd, = struct.unpack_from("B", self.responses[3])
+        self.assertEqual(cmd, RESPONSE_ABORTED)
+        code, = struct.unpack_from("<L", self.responses[3], 4)
+        self.assertEqual(code, ABORT_INVALID_COMMAND_SPECIFIER)
 
 
 if __name__ == "__main__":

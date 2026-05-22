@@ -60,21 +60,21 @@ class SdoAbortedError(SdoError):
             text = text + ", " + self.CODES[self.code]
         return text
 
-    def __eq__(self, other:Union['SdoAbortedError', int, str]):
+    def __eq__(self, other: object) -> bool:
         """Compare two exception objects based on SDO abort code."""
         if isinstance(other, int):
             other = SdoAbortedError(other)
         elif isinstance(other, str):
             other = SdoAbortedError(other)
         elif not isinstance(other, SdoAbortedError):
-            raise TypeError(f"Cannot compare SdoAbortedError with {type(other)}")
+            return NotImplemented
         return self.code == other.code
 
     def from_string(self, text: str) -> int:
         code = list(SdoAbortedError.CODES.keys())[
             list(SdoAbortedError.CODES.values()).index(text)
         ]
-        return SdoAbortedError(code)
+        return code
 
 
 class SdoCommunicationError(SdoError):

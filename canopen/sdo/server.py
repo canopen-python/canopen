@@ -8,10 +8,6 @@ from canopen.sdo.exceptions import *
 logger = logging.getLogger(__name__)
 
 
-class SdoBlockException(SdoAbortedError):
-    """Dedicated SDO Block exception."""
-
-
 class SdoServer(SdoBase):
     """Creates an SDO server."""
 
@@ -102,9 +98,9 @@ class SdoServer(SdoBase):
                 logger.debug("BLOCK_STATE_UP_INIT_RESP")
                 # init response was sent, client required to send new request
                 if (command & REQUEST_BLOCK_UPLOAD) != REQUEST_BLOCK_UPLOAD:
-                    raise SdoBlockException("Unknown SDO command specified")  # pragma: no cover
+                    raise SdoAbortedError("Unknown SDO command specified")  # pragma: no cover
                 if (command & START_BLOCK_UPLOAD) != START_BLOCK_UPLOAD:
-                    raise SdoBlockException("Unknown SDO command specified")  # pragma: no cover
+                    raise SdoAbortedError("Unknown SDO command specified")  # pragma: no cover
 
                 # now start blasting data to client from server
                 self.sdo_block.update_state(BLOCK_STATE_UP_DATA)
@@ -117,9 +113,9 @@ class SdoServer(SdoBase):
                 logger.debug("BLOCK_STATE_UP_DATA")
                 command, ackseq, newblk = SDO_BLOCKACK_STRUCT.unpack_from(request)
                 if (command & REQUEST_BLOCK_UPLOAD) != REQUEST_BLOCK_UPLOAD:
-                    raise SdoBlockException("Unknown SDO command specified")
+                    raise SdoAbortedError("Unknown SDO command specified")
                 elif (command & BLOCK_TRANSFER_RESPONSE) != BLOCK_TRANSFER_RESPONSE:
-                    raise SdoBlockException("Unknown SDO command specified")
+                    raise SdoAbortedError("Unknown SDO command specified")
                 elif ackseq != self.sdo_block.last_seqno:
                     self.sdo_block.data_uploaded = self.sdo_block.data_successful_upload
                 else:
@@ -170,9 +166,9 @@ class SdoServer(SdoBase):
             elif self.sdo_block.state == BLOCK_STATE_DL_END:
                 logger.debug("BLOCK_STATE_DL_END")
                 if (command & REQUEST_BLOCK_DOWNLOAD) != REQUEST_BLOCK_DOWNLOAD:
-                    raise SdoBlockException("Unknown SDO command specified") # pragma: no cover
+                    raise SdoAbortedError("Unknown SDO command specified") # pragma: no cover
                 if (command & SUB_COMMAND_MASK) != END_BLOCK_TRANSFER:
-                    raise SdoBlockException("Unknown SDO command specified") # pragma: no cover
+                    raise SdoAbortedError("Unknown SDO command specified") # pragma: no cover
 
                 # n = bytes NOT used in last segment
                 n = (command >> 2) & 0x7
@@ -186,7 +182,7 @@ class SdoServer(SdoBase):
                 self.sdo_block = None
         else:
             # in neither
-            raise SdoBlockException(
+            raise SdoAbortedError(
                 "Data can not be transferred or stored to the application because of the present device state"
             ) # pragma: no cover
 
@@ -250,14 +246,14 @@ class SdoServer(SdoBase):
         :param request:
             CAN message containing SDO request.
         """
-        logging.debug("Enter server block upload")
+        logger.debug("Enter server block upload")
         self.sdo_block = _SdoBlock(self._node, request)
 
         res_command = RESPONSE_BLOCK_UPLOAD
         res_command |= BLOCK_SIZE_SPECIFIED
         res_command |= self.sdo_block.crc
         res_command |= INITIATE_BLOCK_TRANSFER
-        logging.debug("CMD: %02X", res_command)
+        logger.debug("CMD: %02X", res_command)
         response = bytearray(8)
 
         struct.pack_into(
@@ -269,7 +265,7 @@ class SdoServer(SdoBase):
             self.sdo_block.subindex,
             self.sdo_block.size,
         )
-        logging.debug("response %s", response)
+        logger.debug("response %s", response)
         self.sdo_block.update_state(BLOCK_STATE_UP_INIT_RESP)
         self.send_response(response)
 
@@ -413,6 +409,7 @@ class _SdoBlock:
             CAN message containing SDO request.
         :param docrc:
             If True, CRC is calculated and checked.
+            TODO: implement CRC for block transfters, now always false.
         :param is_download:
             If True, initialise for block download (server receives data).
             If False (default), initialise for block upload (server sends data).
@@ -430,7 +427,7 @@ class _SdoBlock:
             self.state = BLOCK_STATE_INIT
         else:
             # Realistically shouldnt happen since this is only called after receiving an initiate command, but check anyway
-            raise SdoBlockException("Unknown SDO command specified") # pragma: no cover
+            raise SdoAbortedError("Unknown SDO command specified") # pragma: no cover
 
         # TODO: CRC of data if requested
         self.crc = CRC_SUPPORTED if (docrc & _req_crc) else 0
@@ -451,7 +448,7 @@ class _SdoBlock:
         else:
             self.req_blocksize = request[4]
             if not 1 <= self.req_blocksize <= 127:
-                raise SdoBlockException("Invalid block size")
+                raise SdoAbortedError("Invalid block size")
             self.data = self._node.get_data(index, subindex, check_readable=True)
             self.size = len(self.data)
 
@@ -461,11 +458,11 @@ class _SdoBlock:
         updated only if the new state is higher than the current
         state. Otherwise an exception is raised.
         """
-        logging.debug("update_state %X -> %X", self.state, new_state)
+        logger.debug("update_state %X -> %X", self.state, new_state)
         if new_state >= self.state:
             self.state = new_state
         else:
-            raise SdoBlockException(
+            raise SdoAbortedError(
                 "Data can not be transferred or stored to the application because of the present device state"
             )
 
@@ -490,7 +487,7 @@ class _SdoBlock:
             response[0] = command
             for i in range(7):
                 databyte = self.get_data_byte()
-                if databyte != None:
+                if databyte is not None:
                     response[i + 1] = databyte
                 else:
                     self.last_bytes = 7 - i

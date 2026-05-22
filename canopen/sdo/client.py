@@ -316,21 +316,20 @@ class ReadableStream(io.RawIOBase):
         self.pos += length
         return response[1:length + 1]
 
-    # For now not used, but if needed, a test is also required:
-    # def readinto(self, b):
-    #     """
-    #     Read bytes into a pre-allocated, writable bytes-like object b,
-    #     and return the number of bytes read.
-    #     """
-    #     data = self.read(7)
-    #     b[:len(data)] = data
-    #     return len(data)
+    def readinto(self, b):
+        """
+        Read bytes into a pre-allocated, writable bytes-like object b,
+        and return the number of bytes read.
+        """
+        data = self.read(7)
+        b[:len(data)] = data
+        return len(data)
 
-    # def readable(self):
-    #     return True
+    def readable(self):
+        return True
 
-    # def tell(self):
-    #     return self.pos
+    def tell(self):
+        return self.pos
 
 
 class WritableStream(io.RawIOBase):
@@ -616,15 +615,14 @@ class BlockUploadStream(io.RawIOBase):
     def tell(self):
         return self.pos
 
-    # For now not used, but if needed, a test is also required:
-    # def readinto(self, b):
-    #     """
-    #     Read bytes into a pre-allocated, writable bytes-like object b,
-    #     and return the number of bytes read.
-    #     """
-    #     data = self.read(7)
-    #     b[:len(data)] = data
-    #     return len(data)
+    def readinto(self, b):
+        """
+        Read bytes into a pre-allocated, writable bytes-like object b,
+        and return the number of bytes read.
+        """
+        data = self.read(7)
+        b[:len(data)] = data
+        return len(data)
 
     def readable(self):
         return True

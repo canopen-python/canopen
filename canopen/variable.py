@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Union
 
 from canopen import objectdictionary
@@ -127,7 +129,7 @@ class Variable:
         self.raw = self.od.encode_desc(desc)
 
     @property
-    def bits(self) -> "Bits":
+    def bits(self) -> Bits:
         """Access bits using integers, slices, or bit descriptions."""
         return Bits(self)
 
@@ -183,23 +185,26 @@ class Variable:
 class Bits(Mapping):
 
     def __init__(self, variable: Variable):
+        assert variable.od.data_type in objectdictionary.datatypes.INTEGER_TYPES
         self.variable = variable
         self.read()
+        self.raw: int
 
     @staticmethod
-    def _get_bits(key):
+    def _get_bits(key: Union[slice, int, str, Collection[int]]) -> Union[str, Collection[int]]:
         if isinstance(key, slice):
-            bits = range(key.start, key.stop, key.step)
-        elif isinstance(key, int):
-            bits = [key]
-        else:
-            bits = key
-        return bits
+            if key.stop is None:
+                raise IndexError("Bits cannot be enumerated from open-ended slice")
+            else:
+                return range(key.start or 0, key.stop, key.step or 1)
+        if isinstance(key, int):
+            return [key]
+        return key
 
-    def __getitem__(self, key) -> int:
+    def __getitem__(self, key: Union[slice, int, str, Collection[int]]) -> int:
         return self.variable.od.decode_bits(self.raw, self._get_bits(key))
 
-    def __setitem__(self, key, value: int):
+    def __setitem__(self, key: Union[slice, int, str, Collection[int]], value: int):
         self.raw = self.variable.od.encode_bits(
             self.raw, self._get_bits(key), value)
         self.write()
@@ -211,7 +216,8 @@ class Bits(Mapping):
         return len(self.variable.od.bit_definitions)
 
     def read(self):
-        self.raw = self.variable.raw
+        assert isinstance(raw_int := self.variable.raw, int)
+        self.raw = raw_int
 
     def write(self):
         self.variable.raw = self.raw

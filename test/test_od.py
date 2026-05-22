@@ -257,9 +257,25 @@ class TestAlternativeRepresentations(unittest.TestCase):
         self.assertEqual(var.decode_bits(1, "BIT 0"), 1)
         self.assertEqual(var.decode_bits(1, [1]), 0)
         self.assertEqual(var.decode_bits(0xf, [0, 1, 2, 3]), 15)
+        self.assertEqual(var.decode_bits(0xf, range(4)), 15)
         self.assertEqual(var.decode_bits(8, "BIT 2 and 3"), 2)
         self.assertEqual(var.encode_bits(0xf, [1], 0), 0xd)
         self.assertEqual(var.encode_bits(0, "BIT 0", 1), 1)
+
+        with self.assertRaises(KeyError):
+            var.decode_bits(0, "DOES NOT EXIST")
+        with self.assertRaises(KeyError):
+            var.encode_bits(0, "DOES NOT EXIST", 0)
+
+    def test_bits_sparse(self):
+        var = od.ODVariable("Test UNSIGNED8", 0x1000)
+        var.data_type = od.UNSIGNED8
+
+        self.assertEqual(var.decode_bits(0b11111111, [2, 5]), 0b1001)
+        self.assertEqual(var.decode_bits(0b11011011, [2, 5]), 0)
+        self.assertEqual(var.encode_bits(0b11111111, [2, 5], 0), 0b11011011)
+        self.assertEqual(var.encode_bits(0b00000000, [2, 5], 0b1001), 0b00100100)
+        self.assertEqual(var.encode_bits(0b00000000, [2, 5], 0b1111), 0b00100100)
 
 
 class TestObjectDictionary(unittest.TestCase):

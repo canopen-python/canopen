@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 import struct
-from collections.abc import Iterator, Mapping, MutableMapping
+from collections.abc import Collection, Iterator, Mapping, MutableMapping
 from typing import Optional, TextIO, Union
 
 from canopen.objectdictionary.datatypes import *
@@ -516,27 +516,44 @@ class ODVariable:
         raise ValueError(
             f"No value corresponds to '{desc}'. Valid values are: {valid_values}")
 
-    def decode_bits(self, value: int, bits: list[int]) -> int:
-        try:
+    def decode_bits(self, value: int, bits: Union[str, Collection[int]]) -> int:
+        """Isolate and right-shift the specified bits from a given integer.
+
+        :param value: Variable value holding the bits
+        :param bits: Registered lookup name or concrete list of bit offsets
+        :return: Extracted bits, right-shifted to cut off to lowest specified offset
+        :raises KeyError: For unknown lookup names
+        """
+        if isinstance(bits, str):
             bits = self.bit_definitions[bits]
-        except (TypeError, KeyError):
-            pass
         mask = 0
         for bit in bits:
             mask |= 1 << bit
         return (value & mask) >> min(bits)
 
-    def encode_bits(self, original_value: int, bits: list[int], bit_value: int):
-        try:
+    def encode_bits(
+        self, original_value: int, bits: Union[str, Collection[int]], bit_value: int
+    ) -> int:
+        """Replace the specified bits with the given (unshifted) pattern.
+
+        The bit offsets sequence may be non-contiguous, but the replacement pattern
+        must specify all bits including the "holes".  It is only shifted once, so the
+        LSB lands at the lowest specified bit offset.
+
+        :param original_value: Variable value holding the bits
+        :param bits: Registered lookup name or concrete list of bit offsets
+        :param bit_value: Source pattern to overwrite with
+        :return: Merged value with the bits replaced
+        :raises KeyError: For unknown lookup names
+        """
+        if isinstance(bits, str):
             bits = self.bit_definitions[bits]
-        except (TypeError, KeyError):
-            pass
         temp = original_value
         mask = 0
         for bit in bits:
             mask |= 1 << bit
         temp &= ~mask
-        temp |= bit_value << min(bits)
+        temp |= (bit_value << min(bits)) & mask
         return temp
 
 

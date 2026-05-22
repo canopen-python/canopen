@@ -205,14 +205,14 @@ def import_from_node(node_id: int, network: canopen.network.Network):
 
 
 def _calc_bit_length(data_type: int) -> int:
-    if data_type in datatypes.SIGNED_TYPES:
+    if data_type in datatypes.INTEGER_TYPES:
         st = ODVariable.STRUCT_TYPES[data_type]
         if isinstance(st, datatypes.IntegerN):
             return st.width
         return st.size * 8
     else:
         raise ValueError(
-            f"Invalid data_type '{data_type}', expecting a signed integer data_type."
+            f"Invalid data_type 0x{data_type:04X}, expecting an integer data_type."
         )
 
 
@@ -256,29 +256,17 @@ def _convert_variable(node_id, var_type, value):
             return int(value, 0)
 
 
-def _int_to_hex(data_type: int, value: int) -> str:
-    """Format an integer as EDS hex string.
-
-    Signed types with a negative value are written as two's-complement hex
-    (e.g. INTEGER8 -1 → 0xFF) so the output is a valid EDS literal.
-    """
-    if data_type in datatypes.SIGNED_TYPES and value < 0:
-        bit_length = _calc_bit_length(data_type)
-        return f"0x{value + (1 << bit_length):0{bit_length // 4}X}"
-    return f"0x{value:02X}"
-
-
 def _revert_variable(var_type, value):
     if value is None:
         return None
-    if var_type in (datatypes.OCTET_STRING, datatypes.DOMAIN):
+    if var_type in (datatypes.OCTET_STRING, datatypes.DOMAIN) and isinstance(value, bytes):
         return bytes.hex(value)
     elif var_type in (datatypes.VISIBLE_STRING, datatypes.UNICODE_STRING):
         return value
     elif var_type in datatypes.FLOAT_TYPES:
         return value
     else:
-        return _int_to_hex(var_type, value)
+        return str(value)
 
 
 def build_variable(
@@ -446,9 +434,9 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
         eds.set(section, "PDOMapping", hex(var.pdo_mappable))
 
         if getattr(var, 'min', None) is not None:
-            eds.set(section, "LowLimit", _int_to_hex(var.data_type, var.min))
+            eds.set(section, "LowLimit", _revert_variable(var.data_type, var.min))
         if getattr(var, 'max', None) is not None:
-            eds.set(section, "HighLimit", _int_to_hex(var.data_type, var.max))
+            eds.set(section, "HighLimit", _revert_variable(var.data_type, var.max))
 
         if getattr(var, 'description', '') != '':
             eds.set(section, "Description", var.description)

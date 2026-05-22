@@ -260,6 +260,7 @@ def _revert_variable(var_type, value):
     else:
         return f"0x{value:02X}"
 
+
 _STANDARD_OPTIONS = {
     "ObjectType", "ParameterName", "DataType", "AccessType",
     "PDOMapping", "LowLimit", "HighLimit", "DefaultValue",
@@ -271,6 +272,7 @@ _STANDARD_OPTIONS = {
     # parsed by this codebase, so they flow through custom_options and
     # survive round-trips. Proper first-class support is tracked in #654.
 }
+
 
 def _get_custom_options(eds, section):
     custom_options = {}

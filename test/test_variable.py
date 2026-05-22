@@ -70,6 +70,7 @@ class TestVariable(unittest.TestCase):
         self.assertEqual(bits[range(1, 3)], 2)
         self.assertEqual(bits[1:3], 2)
         self.assertEqual(bits[0:3:2], 5)
+        self.assertEqual(bits[:3], 5)
         with self.assertRaises(IndexError):
             bits[1:]
 

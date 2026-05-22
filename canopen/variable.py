@@ -182,7 +182,7 @@ class Bits(Mapping):
             if key.stop is None:
                 raise IndexError("Bits cannot be enumerated from open-ended slice")
             else:
-                return range(key.start, key.stop, key.step or 1)
+                return range(key.start or 0, key.stop, key.step or 1)
         if isinstance(key, int):
             return [key]
         return key

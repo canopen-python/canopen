@@ -1,7 +1,6 @@
 import unittest
 
 from canopen import objectdictionary as od
-from canopen.variable import Variable
 
 
 class TestDataConversions(unittest.TestCase):

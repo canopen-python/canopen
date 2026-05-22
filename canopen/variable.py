@@ -179,7 +179,10 @@ class Bits(Mapping):
     @staticmethod
     def _get_bits(key: Union[slice, int, str, Collection[int]]) -> Union[str, Collection[int]]:
         if isinstance(key, slice):
-            return range(key.start, key.stop, key.step)
+            if key.stop is None:
+                raise IndexError("Bits cannot be enumerated from open-ended slice")
+            else:
+                return range(key.start, key.stop, key.step or 1)
         if isinstance(key, int):
             return [key]
         return key

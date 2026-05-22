@@ -126,7 +126,7 @@ class Variable:
 
     @desc.setter
     def desc(self, desc: str):
-        self.raw = self.od.encode_desc(desc)  # type: ignore[assignment]
+        self.raw = self.od.encode_desc(desc)
 
     @property
     def bits(self) -> Bits:
@@ -187,7 +187,6 @@ class Bits(Mapping):
     def __init__(self, variable: Variable):
         assert variable.od.data_type in objectdictionary.datatypes.INTEGER_TYPES
         self.variable = variable
-        self.raw: Union[int, bool, float, str, bytes] = 0
         self.read()
         self.raw: int
 
@@ -207,7 +206,7 @@ class Bits(Mapping):
 
     def __setitem__(self, key: Union[slice, int, str, Collection[int]], value: int):
         self.raw = self.variable.od.encode_bits(
-            self.raw, self._get_bits(key), value)  # type: ignore[arg-type]
+            self.raw, self._get_bits(key), value)
         self.write()
 
     def __iter__(self):

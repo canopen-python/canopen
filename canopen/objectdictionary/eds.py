@@ -385,8 +385,6 @@ def copy_variable(eds, section, subindex, src_var):
     # It is only the name and subindex that varies
     var.name = name
     var.subindex = subindex
-    # Give the copy its own custom_options dict to avoid shared-state mutations
-    var.custom_options = src_var.custom_options.copy()
     return var
 
 

@@ -252,25 +252,25 @@ class TestEDS(unittest.TestCase):
         self.assertTrue(od2[0x3064][1].is_domain)
 
     def test_reading_custom_options(self):
-        # custom options (unknown EDS keys) are collected in custom_options dict
+        """Custom options (unknown EDS keys) are collected in custom_options dict."""
         var = self.od[0x3061]
         self.assertIsInstance(var, canopen.objectdictionary.ODVariable)
         self.assertEqual(var.custom_options, {'Category': 'Motor', 'Offset': '100'})
 
     def test_custom_options_standard_keys_excluded(self):
-        # Standard CiA 306 keys must NOT appear in custom_options
+        """Standard CiA 306 keys must NOT appear in custom_options."""
         var = self.od[0x3061]
         for key in ('ParameterName', 'ObjectType', 'DataType', 'AccessType', 'PDOMapping'):
             self.assertNotIn(key, var.custom_options,
                              f"Standard key {key!r} must not be in custom_options")
 
     def test_custom_options_empty_for_standard_object(self):
-        # Objects without extra keys must have an empty custom_options dict
+        """Objects without extra keys must have an empty custom_options dict."""
         var = self.od['Producer heartbeat time']
         self.assertEqual(var.custom_options, {})
 
     def test_custom_options_record(self):
-        # custom_options is read for ODRecord container objects too
+        """custom_options is read for ODRecord container objects too."""
         record = self.od[0x3062]
         self.assertIsInstance(record, canopen.objectdictionary.ODRecord)
         self.assertEqual(record.custom_options, {'RecordTag': 'vendor_specific'})
@@ -278,7 +278,7 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(record[1].custom_options, {})
 
     def test_roundtrip_custom_options(self):
-        # custom_options survive an EDS export/import round-trip
+        """custom_options survive an EDS export/import round-trip."""
         import io
         with io.StringIO() as dest:
             canopen.export_od(self.od, dest, 'eds')
@@ -289,7 +289,7 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(od2[0x3062].custom_options, {'RecordTag': 'vendor_specific'})
 
     def test_roundtrip_custom_options_not_duplicated_as_standard(self):
-        # After round-trip the re-imported object must not contain standard keys
+        """After round-trip the re-imported object must not contain standard keys."""
         import io
         with io.StringIO() as dest:
             canopen.export_od(self.od, dest, 'eds')

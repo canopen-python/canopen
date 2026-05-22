@@ -295,8 +295,7 @@ class ODArray(Mapping):
                          "bit_definitions", "storage_location"):
                 if attr in template.__dict__:
                     var.__dict__[attr] = template.__dict__[attr]
-            if "custom_options" in template.__dict__:
-                var.__dict__["custom_options"] = template.__dict__["custom_options"].copy()
+            var.custom_options = getattr(template, "custom_options", {})
         else:
             raise KeyError(f"Could not find subindex {pretty_index(None, subindex)}")
         return var

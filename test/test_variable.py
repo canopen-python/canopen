@@ -60,6 +60,19 @@ class TestVariable(unittest.TestCase):
         bits[0] = 0
         self.assertEqual(v.raw, 4)
 
+    def test_bits_non_string(self):
+        var = od.ODVariable("Test UNSIGNED8", 0x1000)
+        var.data_type = od.UNSIGNED8
+        var.default = 0
+        v = _StubVariable(var)
+        v.raw = 5
+        bits = v.bits
+        self.assertEqual(bits[range(1, 3)], 2)
+        self.assertEqual(bits[1:3], 2)
+        self.assertEqual(bits[0:3:2], 5)
+        with self.assertRaises(IndexError):
+            bits[1:]
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -274,7 +274,7 @@ _STANDARD_OPTIONS = {
 }
 
 
-def _get_custom_options(eds, section):
+def _get_custom_options(eds: RawConfigParser, section: str) -> dict[str, str]:
     custom_options = {}
     for option, value in eds.items(section):
         if option not in _STANDARD_OPTIONS:

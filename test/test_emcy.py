@@ -1,6 +1,7 @@
 import logging
 import threading
 import unittest
+from contextlib import contextmanager
 
 import can
 
@@ -9,6 +10,17 @@ import canopen.emcy
 
 
 TIMEOUT = 0.1
+
+
+@contextmanager
+def mock_rx_thread(consumer: canopen.emcy.EmcyConsumer, func):
+    t = threading.Thread(target=func)
+    try:
+        with consumer.emcy_received:
+            t.start()
+            yield t
+    finally:
+        t.join(TIMEOUT)
 
 
 class TestEmcy(unittest.TestCase):
@@ -86,40 +98,28 @@ class TestEmcy(unittest.TestCase):
         self.assertIsNone(emcy.wait(timeout=TIMEOUT))
 
         # Check unfiltered wait, on success.
-        t = threading.Thread(target=push_err)
-        with self.assertLogs(level=logging.INFO):
-            with emcy.emcy_received:
-                t.start()
-                err = emcy.wait(timeout=TIMEOUT)
-        t.join(TIMEOUT)
-        check_err(err)
+        with (
+            self.assertLogs(level=logging.INFO),
+            mock_rx_thread(emcy, push_err),
+        ):
+            check_err(emcy.wait(timeout=TIMEOUT))
 
         # Check filtered wait, on success.
-        t = threading.Thread(target=push_err)
-        with self.assertLogs(level=logging.INFO):
-            with emcy.emcy_received:
-                t.start()
-                err = emcy.wait(0x2001, TIMEOUT)
-        t.join(TIMEOUT)
-        check_err(err)
+        with (
+            self.assertLogs(level=logging.INFO),
+            mock_rx_thread(emcy, push_err),
+        ):
+            check_err(emcy.wait(0x2001, TIMEOUT))
 
         # Check filtered wait, on timeout.
-        t = threading.Thread(target=push_err)
-        with emcy.emcy_received:
-            t.start()
-            result = emcy.wait(0x9000, TIMEOUT)
-        t.join(TIMEOUT)
-        self.assertIsNone(result)
+        with mock_rx_thread(emcy, push_err):
+            self.assertIsNone(emcy.wait(0x9000, TIMEOUT))
 
         def push_reset():
             emcy.on_emcy(0x81, b'\x00\x00\x00\x00\x00\x00\x00\x00', 100)
 
-        t = threading.Thread(target=push_reset)
-        with emcy.emcy_received:
-            t.start()
-            result = emcy.wait(0x9000, TIMEOUT)
-        t.join(TIMEOUT)
-        self.assertIsNone(result)
+        with mock_rx_thread(emcy, push_reset):
+            self.assertIsNone(emcy.wait(0x9000, TIMEOUT))
 
     def test_emcy_consumer_multiple_callbacks(self):
         """Test adding multiple callbacks and their execution order."""
@@ -172,12 +172,12 @@ class TestEmcy(unittest.TestCase):
             emcy.on_emcy(0x81, b'\x01\x20\x01\x01\x02\x03\x04\x05', 100)
             emcy.on_emcy(0x81, b'\x02\x20\x01\x01\x02\x03\x04\x05', 101)
             emcy.on_emcy(0x81, b'\x03\x20\x01\x01\x02\x03\x04\x05', 102)
-        t = threading.Thread(target=push_multiple_errors)
-        with self.assertLogs(level=logging.INFO):
-            with emcy.emcy_received:
-                t.start()
-                err = emcy.wait(0x2003, timeout=TIMEOUT)
-        t.join(TIMEOUT)
+
+        with (
+            self.assertLogs(level=logging.INFO),
+            mock_rx_thread(emcy, push_multiple_errors),
+        ):
+            err = emcy.wait(0x2003, timeout=TIMEOUT)
         self.assertIsNotNone(err)
         self.assertEqual(err.code, 0x2003)
 
@@ -327,13 +327,14 @@ class TestEmcyIntegration(unittest.TestCase):
         """Test that producer and consumer work together."""
         received_errors = []
         self.consumer.add_callback(lambda err: received_errors.append(err))
-        t = threading.Thread(
-            target=lambda: self.producer.send(0x2001, 0x02, b'\x01\x02\x03\x04\x05'),
-        )
-        with self.assertLogs(level=logging.INFO):
-            t.start()
+        with (
+            self.assertLogs(level=logging.INFO),
+            mock_rx_thread(
+                self.consumer,
+                lambda: self.producer.send(0x2001, 0x02, b'\x01\x02\x03\x04\x05'),
+            ),
+        ):
             err = self.consumer.wait(0x2001, timeout=TIMEOUT)
-        t.join(TIMEOUT)
         self.assertIsNotNone(err)
         self.assertEqual(err.code, 0x2001)
         self.assertEqual(err.register, 0x02)
@@ -342,20 +343,20 @@ class TestEmcyIntegration(unittest.TestCase):
 
     def test_producer_reset_consumer_integration(self):
         """Test producer reset clears consumer active errors."""
-        t = threading.Thread(
-            target=lambda: self.producer.send(0x2001, 0x02, b'\x01\x02\x03\x04\x05'),
-        )
-        with self.assertLogs(level=logging.INFO):
-            t.start()
+        with (
+            self.assertLogs(level=logging.INFO),
+            mock_rx_thread(
+                self.consumer,
+                lambda: self.producer.send(0x2001, 0x02, b'\x01\x02\x03\x04\x05'),
+            ),
+        ):
             self.consumer.wait(0x2001, timeout=TIMEOUT)
-        t.join(TIMEOUT)
         self.assertEqual(len(self.consumer.active), 1)
-        t = threading.Thread(target=self.producer.reset)
-        with self.assertLogs(level=logging.INFO):
-            t.start()
-            err = self.consumer.wait(timeout=TIMEOUT)
-        t.join(TIMEOUT)
-        self.assertIsNotNone(err)
+        with (
+            self.assertLogs(level=logging.INFO),
+            mock_rx_thread(self.consumer, self.producer.reset),
+        ):
+            self.assertIsNotNone(self.consumer.wait(timeout=TIMEOUT))
         self.assertEqual(len(self.consumer.active), 0)
         self.assertEqual(len(self.consumer.log), 2)
 

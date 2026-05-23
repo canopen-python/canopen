@@ -6,7 +6,6 @@ from contextlib import contextmanager
 import can
 
 import canopen
-import canopen.emcy
 
 
 TIMEOUT = 0.1
@@ -238,7 +237,6 @@ class TestEmcyError(unittest.TestCase):
         check(0xf100, "")
         check(0xff00, "Device Specific")
         check(0xffff, "Device Specific")
-
 
 
 class TestEmcyProducer(unittest.TestCase):

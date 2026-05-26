@@ -69,7 +69,7 @@ def export_od(
             from canopen.objectdictionary import eds
             return eds.export_dcf(od, dest)
     finally:
-        # If dest is opened in this fn, it should be closed
+        # If dest is opened in this function, it should be closed
         if opened_here is not None:
             opened_here.close()
 

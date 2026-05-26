@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def export_od(
     od: ObjectDictionary,
     dest: Union[str, TextIO, None] = None,
-    doc_type: Optional[str] = None
+    doc_type: Optional[str] = None,
 ) -> None:
     """Export an object dictionary.
 
@@ -47,7 +47,7 @@ def export_od(
             f"supported formats: {supported}"
         )
 
-    opened_here = False
+    opened_here: Optional[TextIO] = None
     try:
         if isinstance(dest, str):
             if doc_type is None:
@@ -58,7 +58,7 @@ def export_od(
                 else:
                     doc_type = "eds"
             dest = open(dest, 'w')
-            opened_here = True
+            opened_here = dest
 
         if doc_type == "eds":
             from canopen.objectdictionary import eds
@@ -68,8 +68,8 @@ def export_od(
             return eds.export_dcf(od, dest)
     finally:
         # If dest is opened in this fn, it should be closed
-        if opened_here:
-            dest.close()
+        if opened_here is not None:
+            opened_here.close()
 
 
 def import_od(

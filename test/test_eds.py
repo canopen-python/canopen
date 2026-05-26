@@ -2,6 +2,7 @@ import io
 import os
 import pathlib
 import unittest
+from unittest.mock import mock_open, patch
 
 import canopen
 from canopen.objectdictionary.eds import _signed_int_from_hex
@@ -297,6 +298,31 @@ class TestEDS(unittest.TestCase):
                         buf.name = "mock.eds"
                         self.verify_od(buf, "eds")
 
+    def test_export_eds_auto_close(self):
+        m_open = mock_open()
+        with patch("canopen.objectdictionary.open", m_open):
+            canopen.export_od(self.od, m_open)
+        fd = m_open()
+        # File object already passed in must NOT be closed
+        fd.close.assert_not_called()
+        for path in ("mock.eds", pathlib.Path("mock.eds")):
+            with self.subTest(path=path):
+                m_open = mock_open()
+                with patch("canopen.objectdictionary.open", m_open):
+                    canopen.export_od(self.od, path)
+                fd = m_open()
+                # File object opened at path must be closed before return
+                fd.close.assert_called_once()
+
+    def test_export_eds_auto_close_exception(self):
+        m_open = mock_open()
+        fd = m_open()
+        fd.write.side_effect = IOError("Simulated write failure")
+        with patch("canopen.objectdictionary.open", m_open), self.assertRaises(IOError):
+            canopen.export_od(self.od, "mock.eds")
+            # File object opened at path must be closed on inner exception
+            fd.close.assert_called_once()
+
     def test_export_eds_unknown_doctype(self):
         filelike_object = io.StringIO()
         self.addCleanup(filelike_object.close)
@@ -333,7 +359,6 @@ class TestEDS(unittest.TestCase):
             # 'name' member.
             buf.name = "mock.eds"
             self.verify_od(buf, "eds")
-
 
     def verify_od(self, source, doctype):
         exported_od = canopen.import_od(source)

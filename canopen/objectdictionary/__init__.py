@@ -75,7 +75,7 @@ def export_od(
 
 
 def import_od(
-    source: Union[str, TextIO, None],
+    source: Union[str, os.PathLike, TextIO, None],
     node_id: Optional[int] = None,
 ) -> ObjectDictionary:
     """Parse an EDS, DCF, or EPF file.
@@ -92,16 +92,17 @@ def import_od(
     """
     if source is None:
         return ObjectDictionary()
-    if hasattr(source, "read"):
+    filename = ""
+    if isinstance(source, (str, os.PathLike)):
+        # Path to file
+        filename = os.fspath(source)
+    elif hasattr(source, "read"):
         # File like object
-        filename = source.name
+        filename = getattr(source, "name", "")
     elif hasattr(source, "tag"):
         # XML tree, probably from an EPF file
         filename = "od.epf"
-    else:
-        # Path to file
-        filename = source
-    suffix = filename[filename.rfind("."):].lower()
+    _, suffix = os.path.splitext(filename.lower())
     if suffix in (".eds", ".dcf"):
         from canopen.objectdictionary import eds
         return eds.import_eds(source, node_id)

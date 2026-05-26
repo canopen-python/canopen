@@ -69,16 +69,19 @@ class EmcyConsumer:
         while True:
             with self.emcy_received:
                 prev_log_size = len(self.log)
-                self.emcy_received.wait(timeout)
+                remaining = end_time - time.time()
+                if remaining <= 0:
+                    return None  # Actual timeout reached
+                self.emcy_received.wait(remaining)
                 if len(self.log) == prev_log_size:
-                    # Resumed due to timeout
-                    return None
+                    if time.time() >= end_time:
+                        # Resumed due to timeout
+                        return None
+                    else:
+                        continue
                 # Get last logged EMCY
                 emcy = self.log[-1]
                 logger.info("Got %s", emcy)
-                if time.time() > end_time:
-                    # No valid EMCY received on time
-                    return None
                 if emcy_code is None or emcy.code == emcy_code:
                     # This is the one we're interested in
                     return emcy

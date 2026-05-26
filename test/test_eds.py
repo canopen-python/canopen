@@ -66,6 +66,8 @@ class TestEDS(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "''"):
             canopen.import_od('')
         with self.assertRaisesRegex(ValueError, "''"):
+            canopen.import_od(object())
+        with self.assertRaisesRegex(ValueError, "''"):
             filelike_object = io.StringIO()  # no .name attribute
             self.addCleanup(filelike_object.close)
             canopen.import_od(filelike_object)

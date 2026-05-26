@@ -5,6 +5,7 @@ Object Dictionary module
 from __future__ import annotations
 
 import logging
+import os
 import struct
 from collections.abc import Collection, Iterator, Mapping, MutableMapping
 from typing import Optional, TextIO, Union
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 def export_od(
     od: ObjectDictionary,
-    dest: Union[str, TextIO, None] = None,
+    dest: Union[str, os.PathLike, TextIO, None] = None,
     doc_type: Optional[str] = None,
 ) -> None:
     """Export an object dictionary.
@@ -49,10 +50,11 @@ def export_od(
 
     opened_here: Optional[TextIO] = None
     try:
-        if isinstance(dest, str):
+        if isinstance(dest, (str, os.PathLike)):
             if doc_type is None:
+                _, suffix = os.path.splitext(os.fspath(dest).lower())
                 for t in supported_doctypes:
-                    if dest.endswith(f".{t}"):
+                    if suffix == f".{t}":
                         doc_type = t
                         break
                 else:

@@ -485,7 +485,7 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
 
     try:
         # only if eds was loaded by us
-        origFileInfo = od.__edsFileInfo
+        origFileInfo = od.__edsFileInfo  # type: ignore[attr-defined] # custom addition
     except AttributeError:
         origFileInfo = {
             # just set some defaults

@@ -246,17 +246,15 @@ def _signed_int_from_hex(hex_str, bit_length):
 def _decode_from_eds(node_id: int, var_type: int, value: Any) -> Any:
     if var_type in (datatypes.OCTET_STRING, datatypes.DOMAIN):
         return bytes.fromhex(value)
-    elif var_type in (datatypes.VISIBLE_STRING, datatypes.UNICODE_STRING):
+    if var_type in (datatypes.VISIBLE_STRING, datatypes.UNICODE_STRING):
         return value
-    elif var_type in datatypes.FLOAT_TYPES:
+    if var_type in datatypes.FLOAT_TYPES:
         return float(value)
-    else:
-        # COB-ID can contain '$NODEID+' so replace this with node_id before converting
-        value = value.replace(" ", "").upper()
-        if '$NODEID' in value and node_id is not None:
-            return int(re.sub(r'\+?\$NODEID\+?', '', value), 0) + node_id
-        else:
-            return int(value, 0)
+    # COB-ID can contain '$NODEID+' so replace this with node_id before converting
+    value = value.replace(" ", "").upper()
+    if '$NODEID' in value and node_id is not None:
+        return int(re.sub(r'\+?\$NODEID\+?', '', value), 0) + node_id
+    return int(value, 0)
 
 
 def _encode_to_eds(var_type: int, value: Any) -> Any:
@@ -264,12 +262,11 @@ def _encode_to_eds(var_type: int, value: Any) -> Any:
         return None
     if var_type in (datatypes.OCTET_STRING, datatypes.DOMAIN):
         return bytes.hex(value)
-    elif var_type in (datatypes.VISIBLE_STRING, datatypes.UNICODE_STRING):
+    if var_type in (datatypes.VISIBLE_STRING, datatypes.UNICODE_STRING):
         return value
-    elif var_type in datatypes.FLOAT_TYPES:
+    if var_type in datatypes.FLOAT_TYPES:
         return value
-    else:
-        return f"0x{value:02X}"
+    return f"0x{value:02X}"
 
 
 _STANDARD_OPTIONS = {

@@ -3,7 +3,7 @@ import unittest
 from configparser import RawConfigParser
 
 import canopen
-from canopen.objectdictionary.eds import _signed_int_from_hex
+from canopen.objectdictionary.eds import _signed_int_from_hex, build_variable
 from canopen.utils import pretty_index
 
 from .util import DATATYPES_EDS, SAMPLE_EDS, tmp_file
@@ -190,7 +190,7 @@ class TestEDS(unittest.TestCase):
                 eds.read(DATATYPES_EDS)
                 eds[index][option] = value
                 with self.assertLogs(level="WARN") as cm:
-                    build_variable(eds, index, 42, objectcodes.VAR, int(index, 16))
+                    build_variable(eds, index, node_id=42, object_type=7, index=int(index, 16))
                 self.assertRegex(cm.output[0], option)
 
     def test_array_compact_subobj(self):

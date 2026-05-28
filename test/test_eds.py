@@ -1,3 +1,4 @@
+import io
 import os
 import unittest
 from configparser import RawConfigParser
@@ -71,8 +72,6 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(od.node_id, 16)
 
     def test_load_implicit_nodeid_fallback(self):
-        import io
-
         # First, remove the NodeID option from DeviceComissioning.
         with open(SAMPLE_EDS) as f:
             lines = [L for L in f.readlines() if not L.startswith("NodeID=")]
@@ -94,8 +93,6 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(od.bitrate, 500_000)
 
     def test_load_baudrate_fallback(self):
-        import io
-
         # Remove the Baudrate option.
         with open(SAMPLE_EDS) as f:
             lines = [L for L in f.readlines() if not L.startswith("Baudrate=")]
@@ -277,7 +274,6 @@ class TestEDS(unittest.TestCase):
 
     def test_roundtrip_domain_objects(self):
         # ObjectType==DOMAIN survive an EDS export/import round-trip
-        import io
         with io.StringIO() as dest:
             canopen.export_od(self.od, dest, 'eds')
             dest.name = 'mock.eds'
@@ -287,6 +283,17 @@ class TestEDS(unittest.TestCase):
         self.assertFalse(od2['Identity object']['Vendor-ID'].is_domain)
         self.assertTrue(od2[0x3063].is_domain)
         self.assertTrue(od2[0x3064][1].is_domain)
+
+    def test_export_without_raw_default_values(self):
+        od = canopen.import_od(DATATYPES_EDS)
+        # Make sure the values are not cached in raw form
+        for var in od.values():
+            try:
+                delattr(var, 'default_raw')
+            except AttributeError:
+                pass
+        with io.StringIO() as dest:
+            canopen.export_od(od, dest, 'eds')
 
 
     def test_comments(self):
@@ -308,7 +315,6 @@ class TestEDS(unittest.TestCase):
                         self.verify_od(dest, doctype)
 
     def test_export_eds_to_file_unknown_extension(self):
-        import io
         for suffix in ".txt", "":
             with tmp_file(suffix=suffix) as tmp:
                 dest = tmp.name
@@ -331,7 +337,6 @@ class TestEDS(unittest.TestCase):
                         self.verify_od(buf, "eds")
 
     def test_export_eds_unknown_doctype(self):
-        import io
         filelike_object = io.StringIO()
         self.addCleanup(filelike_object.close)
         for dest in "filename", None, filelike_object:
@@ -344,7 +349,6 @@ class TestEDS(unittest.TestCase):
                         os.stat(dest)
 
     def test_export_eds_to_filelike_object(self):
-        import io
         for doctype in "eds", "dcf":
             with io.StringIO() as dest:
                 with self.subTest(dest=dest, doctype=doctype):
@@ -358,7 +362,6 @@ class TestEDS(unittest.TestCase):
 
     def test_export_eds_to_stdout(self):
         import contextlib
-        import io
         with contextlib.redirect_stdout(io.StringIO()) as f:
             ret = canopen.export_od(self.od, None, "eds")
         self.assertIsNone(ret)

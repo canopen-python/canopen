@@ -135,16 +135,16 @@ class TestEDS(unittest.TestCase):
 
     def test_record_with_limits(self):
         cases = [
-            (0x3020, 0,            127),          # INTEGER8   hex limits
-            (0x3021, 2,            10),           # UNSIGNED8  hex limits
-            (0x3022, 100,          1000),         # UNSIGNED16 decimal limits
-            (0x3023, -100,         100),          # INTEGER16  decimal limits
-            (0x3030, -2147483648,  -1),           # INTEGER32  hex limits
-            (0x3031, -1,           0),            # INTEGER24  hex limits
-            (0x3032, -1,           0),            # INTEGER40  hex limits
-            (0x3033, -1,           0),            # INTEGER48  hex limits
-            (0x3034, -1,           0),            # INTEGER56  hex limits
-            (0x3040, -10,          +10),          # INTEGER64  hex limits
+            (0x3020, 0, 127),  # _          INTEGER8   hex limits
+            (0x3021, 2, 10),  # _           UNSIGNED8  hex limits
+            (0x3022, 100, 1000),  # _       UNSIGNED16 decimal limits
+            (0x3023, -100, 100),  # _       INTEGER16  decimal limits
+            (0x3030, -2147483648, -1),  # _ INTEGER32  hex limits
+            (0x3031, -1, 0),  # _           INTEGER24  hex limits
+            (0x3032, -1, 0),  # _           INTEGER40  hex limits
+            (0x3033, -1, 0),  # _           INTEGER48  hex limits
+            (0x3034, -1, 0),  # _           INTEGER56  hex limits
+            (0x3040, -10, +10),  # _        INTEGER64  hex limits
         ]
         for index, expected_min, expected_max in cases:
             with self.subTest(index=f"0x{index:04X}"):

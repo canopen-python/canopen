@@ -1,5 +1,6 @@
 import os
 import unittest
+from configparser import RawConfigParser
 
 import canopen
 from canopen.objectdictionary.eds import _signed_int_from_hex
@@ -172,6 +173,25 @@ class TestEDS(unittest.TestCase):
             _signed_int_from_hex("0xFFFF", 8)   # 16-bit value into 8-bit field
         with self.assertRaises(ValueError):
             _signed_int_from_hex("-129", 8)     # below minimum for 8-bit signed
+
+    def test_build_variable_range_warnings(self):
+        eds = RawConfigParser()
+        cases = [
+            ("2003", "LowLimit", str(-0xFFFF)),  # INTEGER16 < signed min
+            ("2003", "HighLimit", "0x10000"),  # INTEGER16 > unsigned max
+            ("2001", "DefaultValue", "SOMETHING"),  # BOOLEAN non-numeric
+            ("2003", "DefaultValue", "SOMETHING"),  # INTEGER16 non-numeric
+            ("2006", "ParameterValue", ""),  # UNSIGNED16 empty
+        ]
+        for index, option, value in cases:
+            with self.subTest(index=index, option=option, value=value):
+                # Fresh version for mutating temporarily
+                eds.clear()
+                eds.read(DATATYPES_EDS)
+                eds[index][option] = value
+                with self.assertLogs(level="WARN") as cm:
+                    build_variable(eds, index, 42, objectcodes.VAR, int(index, 16))
+                self.assertRegex(cm.output[0], option)
 
     def test_array_compact_subobj(self):
         array = self.od[0x1003]

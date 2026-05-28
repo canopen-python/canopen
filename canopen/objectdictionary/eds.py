@@ -571,12 +571,12 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
     supported_optional_indices = list(filter(optional_indices, od))
     supported_manufacturer_indices = list(filter(manufacturer_indices, od))
 
-    def add_list(section, list):
+    def add_list(section, lst):
         eds.add_section(section)
-        eds.set(section, "SupportedObjects", len(list))
-        for i in range(0, len(list)):
-            eds.set(section, (i + 1), f"0x{list[i]:04X}")
-        for index in list:
+        eds.set(section, "SupportedObjects", len(lst))
+        for i in range(0, len(lst)):
+            eds.set(section, (i + 1), f"0x{lst[i]:04X}")
+        for index in lst:
             export_object(od[index], eds)
 
     add_list("MandatoryObjects", supported_mantatory_indices)

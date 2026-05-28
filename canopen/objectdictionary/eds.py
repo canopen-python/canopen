@@ -330,8 +330,7 @@ def build_variable(
 
     var.pdo_mappable = bool(int(eds.get(section, "PDOMapping", fallback="0"), 0))
 
-    if eds.has_option(section, "LowLimit"):
-        raw_string = eds.get(section, "LowLimit")
+    if (raw_string := eds.get(section, "LowLimit", fallback=None)) is not None:
         try:
             if var.data_type in datatypes.SIGNED_TYPES:
                 var.min = _signed_int_from_hex(raw_string, _calc_bit_length(var.data_type))
@@ -341,8 +340,7 @@ def build_variable(
             logger.warning(
                 "Invalid LowLimit %r for %s (0x%X), ignoring", raw_string, var.name, var.index
             )
-    if eds.has_option(section, "HighLimit"):
-        raw_string = eds.get(section, "HighLimit")
+    if (raw_string := eds.get(section, "HighLimit", fallback=None)) is not None:
         try:
             if var.data_type in datatypes.SIGNED_TYPES:
                 var.max = _signed_int_from_hex(raw_string, _calc_bit_length(var.data_type))
@@ -352,8 +350,7 @@ def build_variable(
             logger.warning(
                 "Invalid HighLimit %r for %s (0x%X), ignoring", raw_string, var.name, var.index
             )
-    if eds.has_option(section, "DefaultValue"):
-        raw_string = eds.get(section, "DefaultValue")
+    if (raw_string := eds.get(section, "DefaultValue", fallback=None)) is not None:
         var.default_raw = raw_string  # type: ignore[attr-defined] # custom round-trip addition
         try:
             if '$NODEID' in raw_string:
@@ -364,8 +361,7 @@ def build_variable(
                 "Invalid DefaultValue %r for %s (0x%X), ignoring",
                 raw_string, var.name, var.index,
             )
-    if eds.has_option(section, "ParameterValue"):
-        raw_string = eds.get(section, "ParameterValue")
+    if (raw_string := eds.get(section, "ParameterValue", fallback=None)) is not None:
         var.value_raw = raw_string  # type: ignore[attr-defined] # custom round-trip addition
         try:
             var.value = _decode_from_eds(node_id, var.data_type, raw_string)
@@ -376,18 +372,17 @@ def build_variable(
             )
     # Factor, Description and Unit are not standard according to the CANopen specifications, but
     # they are implemented in the python canopen package, so we can at least try to use them
-    if eds.has_option(section, "Factor"):
-        raw_string = eds.get(section, "Factor")
+    if (raw_string := eds.get(section, "Factor", fallback=None)) is not None:
         try:
             var.factor = float(raw_string)
         except ValueError:
             logger.warning(
                 "Invalid Factor %r for %s (0x%X), ignoring", raw_string, var.name, var.index
             )
-    if eds.has_option(section, "Description"):
-        var.description = eds.get(section, "Description")
-    if eds.has_option(section, "Unit"):
-        var.unit = eds.get(section, "Unit")
+    if (raw_string := eds.get(section, "Description", fallback=None)) is not None:
+        var.description = raw_string
+    if (raw_string := eds.get(section, "Unit", fallback=None)) is not None:
+        var.unit = raw_string
 
     var.custom_options = _get_custom_options(eds, section)
     return var

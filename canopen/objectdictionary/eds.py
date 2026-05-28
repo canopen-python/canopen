@@ -100,10 +100,12 @@ def import_eds(source, node_id):
                 node_id = int(val, base=0)
         od.node_id = node_id
 
+    DUMMY_SECTION_REGEX = re.compile(r"^[Dd]ummy[Uu]sage$")
+    INDEX_SECTION_REGEX = re.compile(r"^[0-9A-Fa-f]{4}$")
+    SUB_SECTION_REGEX = re.compile(r"^([0-9A-Fa-f]{4})[S|s]ub([0-9A-Fa-f]+)$")
+    NAME_SECTION_REGEX = re.compile(r"^([0-9A-Fa-f]{4})Name")
     for section in eds.sections():
-        # Match dummy definitions
-        match = re.match(r"^[Dd]ummy[Uu]sage$", section)
-        if match is not None:
+        if DUMMY_SECTION_REGEX.match(section) is not None:
             for i in range(1, 8):
                 key = f"Dummy{i:04d}"
                 if eds.getint(section, key) == 1:
@@ -112,9 +114,7 @@ def import_eds(source, node_id):
                     var.access_type = "const"
                     od.add_object(var)
 
-        # Match indexes
-        match = re.match(r"^[0-9A-Fa-f]{4}$", section)
-        if match is not None:
+        if INDEX_SECTION_REGEX.match(section) is not None:
             index = int(section, 16)
             name = eds.get(section, "ParameterName")
             try:
@@ -154,11 +154,9 @@ def import_eds(source, node_id):
 
             continue
 
-        # Match subindexes
-        match = re.match(r"^([0-9A-Fa-f]{4})[S|s]ub([0-9A-Fa-f]+)$", section)
-        if match is not None:
-            index = int(match.group(1), 16)
-            subindex = int(match.group(2), 16)
+        if (m := SUB_SECTION_REGEX.match(section)) is not None:
+            index = int(m.group(1), 16)
+            subindex = int(m.group(2), 16)
             entry = od[index]
             if isinstance(entry, (ODRecord, ODArray)):
                 try:
@@ -169,9 +167,8 @@ def import_eds(source, node_id):
                 entry.add_member(var)
 
         # Match [index]Name
-        match = re.match(r"^([0-9A-Fa-f]{4})Name", section)
-        if match is not None:
-            index = int(match.group(1), 16)
+        if (m := NAME_SECTION_REGEX.match(section)) is not None:
+            index = int(m.group(1), 16)
             num_of_entries = int(eds.get(section, "NrOfEntries"))
             entry = od[index]
             # For CompactSubObj index 1 is were we find the variable

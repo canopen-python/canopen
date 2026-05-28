@@ -439,30 +439,28 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
 
         if getattr(var, 'default_raw', None) is not None:
             eds.set(section, "DefaultValue", var.default_raw)
-        elif getattr(var, 'default', None) is not None:
-            eds.set(section, "DefaultValue", _encode_to_eds(
-                var.data_type, var.default))
+        elif var.default is not None:
+            eds.set(section, "DefaultValue", _encode_to_eds(var.data_type, var.default))
 
         if device_commisioning:
             if getattr(var, 'value_raw', None) is not None:
                 eds.set(section, "ParameterValue", var.value_raw)
-            elif getattr(var, 'value', None) is not None:
-                eds.set(section, "ParameterValue",
-                        _encode_to_eds(var.data_type, var.value))
+            elif var.value is not None:
+                eds.set(section, "ParameterValue", _encode_to_eds(var.data_type, var.value))
 
         eds.set(section, "DataType", f"0x{var.data_type:04X}")
         eds.set(section, "PDOMapping", hex(var.pdo_mappable))
 
-        if getattr(var, 'min', None) is not None:
+        if var.min is not None:
             eds.set(section, "LowLimit", var.min)
-        if getattr(var, 'max', None) is not None:
+        if var.max is not None:
             eds.set(section, "HighLimit", var.max)
 
-        if getattr(var, 'description', '') != '':
+        if var.description != '':
             eds.set(section, "Description", var.description)
-        if getattr(var, 'factor', 1) != 1:
+        if var.factor != 1:
             eds.set(section, "Factor", var.factor)
-        if getattr(var, 'unit', '') != '':
+        if var.unit != '':
             eds.set(section, "Unit", var.unit)
 
         for option, value in var.custom_options.items():

@@ -331,58 +331,58 @@ def build_variable(
     var.pdo_mappable = bool(int(eds.get(section, "PDOMapping", fallback="0"), 0))
 
     if eds.has_option(section, "LowLimit"):
+        raw_string = eds.get(section, "LowLimit")
         try:
-            min_string = eds.get(section, "LowLimit")
             if var.data_type in datatypes.SIGNED_TYPES:
-                var.min = _signed_int_from_hex(min_string, _calc_bit_length(var.data_type))
+                var.min = _signed_int_from_hex(raw_string, _calc_bit_length(var.data_type))
             else:
-                var.min = int(min_string, 0)
+                var.min = int(raw_string, 0)
         except ValueError:
             logger.warning(
-                "Invalid LowLimit %r for %s (0x%X), ignoring",
-                min_string, var.name, var.index,
+                "Invalid LowLimit %r for %s (0x%X), ignoring", raw_string, var.name, var.index
             )
     if eds.has_option(section, "HighLimit"):
+        raw_string = eds.get(section, "HighLimit")
         try:
-            max_string = eds.get(section, "HighLimit")
             if var.data_type in datatypes.SIGNED_TYPES:
-                var.max = _signed_int_from_hex(max_string, _calc_bit_length(var.data_type))
+                var.max = _signed_int_from_hex(raw_string, _calc_bit_length(var.data_type))
             else:
-                var.max = int(max_string, 0)
+                var.max = int(raw_string, 0)
         except ValueError:
             logger.warning(
-                "Invalid HighLimit %r for %s (0x%X), ignoring",
-                max_string, var.name, var.index,
+                "Invalid HighLimit %r for %s (0x%X), ignoring", raw_string, var.name, var.index
             )
     if eds.has_option(section, "DefaultValue"):
+        raw_string = eds.get(section, "DefaultValue")
+        var.default_raw = raw_string  # type: ignore[attr-defined] # custom round-trip addition
         try:
-            var.default_raw = eds.get(section, "DefaultValue")
-            if '$NODEID' in var.default_raw:
+            if '$NODEID' in raw_string:
                 var.relative = True
-            var.default = _decode_from_eds(node_id, var.data_type, var.default_raw)
+            var.default = _decode_from_eds(node_id, var.data_type, raw_string)
         except ValueError:
             logger.warning(
                 "Invalid DefaultValue %r for %s (0x%X), ignoring",
-                var.default_raw, var.name, var.index,
+                raw_string, var.name, var.index,
             )
     if eds.has_option(section, "ParameterValue"):
+        raw_string = eds.get(section, "ParameterValue")
+        var.value_raw = raw_string  # type: ignore[attr-defined] # custom round-trip addition
         try:
-            var.value_raw = eds.get(section, "ParameterValue")
-            var.value = _decode_from_eds(node_id, var.data_type, var.value_raw)
+            var.value = _decode_from_eds(node_id, var.data_type, raw_string)
         except ValueError:
             logger.warning(
                 "Invalid ParameterValue %r for %s (0x%X), ignoring",
-                var.value_raw, var.name, var.index,
+                raw_string, var.name, var.index,
             )
     # Factor, Description and Unit are not standard according to the CANopen specifications, but
     # they are implemented in the python canopen package, so we can at least try to use them
     if eds.has_option(section, "Factor"):
+        raw_string = eds.get(section, "Factor")
         try:
-            var.factor = float(eds.get(section, "Factor"))
+            var.factor = float(raw_string)
         except ValueError:
             logger.warning(
-                "Invalid Factor %r for %s (0x%X), ignoring",
-                eds.get(section, "Factor"), var.name, var.index,
+                "Invalid Factor %r for %s (0x%X), ignoring", raw_string, var.name, var.index
             )
     if eds.has_option(section, "Description"):
         var.description = eds.get(section, "Description")

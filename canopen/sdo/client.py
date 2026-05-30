@@ -164,7 +164,7 @@ class SdoClient(SdoBase):
             fp.write(data)
 
     def open(self, index, subindex=0, mode="rb", encoding="ascii",
-             buffering=1024, size=None, block_transfer=False, force_segment=False, request_crc_support=True):
+             buffering=1024, size=None, block_transfer=False, force_segment=False, request_crc_support=True, blksize=127):
         """Open the data stream as a file like object.
 
         :param int index:
@@ -196,6 +196,8 @@ class SdoClient(SdoBase):
             Force use of segmented download regardless of data size.
         :param bool request_crc_support:
             If crc calculation should be requested when using block transfer
+        :param int blksize:
+            Size of block in number of segments. Default is 127.
 
         :returns:
             A file like object.
@@ -203,7 +205,7 @@ class SdoClient(SdoBase):
         buffer_size = buffering if buffering > 1 else io.DEFAULT_BUFFER_SIZE
         if "r" in mode:
             if block_transfer:
-                raw_stream = BlockUploadStream(self, index, subindex, request_crc_support=request_crc_support)
+                raw_stream = BlockUploadStream(self, index, subindex, request_crc_support=request_crc_support, blksize=blksize)
             else:
                 raw_stream = ReadableStream(self, index, subindex)
             if buffering:
@@ -458,11 +460,9 @@ class BlockUploadStream(io.RawIOBase):
     #: Total size of data or ``None`` if not specified
     size = None
 
-    blksize = 127
-
     crc_supported = False
 
-    def __init__(self, sdo_client, index, subindex=0, request_crc_support=True):
+    def __init__(self, sdo_client, index, subindex=0, request_crc_support=True, blksize=127):
         """
         :param canopen.sdo.SdoClient sdo_client:
             The SDO client to use for reading.
@@ -472,6 +472,8 @@ class BlockUploadStream(io.RawIOBase):
             Object dictionary sub-index to read from.
         :param bool request_crc_support:
             If crc calculation should be requested when using block transfer
+        :param int blksize:
+            Size of block in number of segments. Default is 127.
         """
         self._done = False
         self.sdo_client = sdo_client
@@ -479,7 +481,8 @@ class BlockUploadStream(io.RawIOBase):
         self._crc = sdo_client.crc_cls()
         self._server_crc = None
         self._ackseq = 0
-        self._error = False
+        self._error = False        
+        self.blksize = blksize
 
         logger.debug("Reading 0x%04X:%02X from node %d", index, subindex,
                      sdo_client.rx_cobid - 0x600)

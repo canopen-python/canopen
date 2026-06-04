@@ -227,6 +227,25 @@ class TestAlternativeRepresentations(unittest.TestCase):
         var.factor = 1.0
         self.assertIsInstance(var.decode_phys(42), float)
 
+    def test_phys_int_factor(self):
+        """Integer factor uses float division + round."""
+        var = od.ODVariable("Test INTEGER16", 0x1000)
+        var.data_type = od.INTEGER16
+        var.factor = 3
+        # 10 / 3 = 3
+        encoded = var.encode_phys(10)
+        self.assertEqual(encoded, 3)
+        self.assertIsInstance(encoded, int)
+
+    def test_phys_int_factor_decodes_to_int(self):
+        """decode_phys with float factor ensures a float result."""
+        var = od.ODVariable("Test INTEGER32", 0x1000)
+        var.data_type = od.INTEGER32
+        var.factor = 10
+        decoded = var.decode_phys(42)
+        self.assertEqual(decoded, 420)
+        self.assertIsInstance(decoded, int)
+
     def test_desc(self):
         var = od.ODVariable("Test UNSIGNED8", 0x1000)
         var.data_type = od.UNSIGNED8

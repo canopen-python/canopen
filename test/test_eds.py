@@ -211,11 +211,14 @@ class TestEDS(unittest.TestCase):
         var = self.od['EDS file extensions']['FactorAndDescription']
         self.assertEqual(var.factor, 0.1)
         self.assertEqual(var.description, "This is the a test description")
-        self.assertEqual(var.unit,'mV')
+        self.assertEqual(var.unit, 'mV')
         var2 = self.od['EDS file extensions']['Error Factor and No Description']
         self.assertEqual(var2.description, '')
         self.assertEqual(var2.factor, 1)
         self.assertEqual(var2.unit, '')
+        var3 = self.od['EDS file extensions']['Integer Factor']
+        self.assertEqual(var3.factor, 42)
+        self.assertIsInstance(var3.factor, int)
 
     def test_read_domain_object(self):
         var = self.od[0x3063]

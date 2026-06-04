@@ -489,7 +489,7 @@ class ODVariable:
     def decode_phys(
         self, value: Union[int, bool, float, str, bytes]
     ) -> Union[int, bool, float, str, bytes]:
-        if self.data_type in INTEGER_TYPES:
+        if self.data_type in NUMBER_TYPES:
             assert isinstance(value, (int, float))
             value *= self.factor
         return value
@@ -497,10 +497,12 @@ class ODVariable:
     def encode_phys(
         self, value: Union[int, bool, float, str, bytes]
     ) -> Union[int, bool, float, str, bytes]:
-        if self.data_type in INTEGER_TYPES:
+        if self.data_type in NUMBER_TYPES:
             assert isinstance(value, (int, float))
             if self.factor != 1:
-                value = round(value / self.factor)
+                value = value / self.factor
+            if self.data_type in INTEGER_TYPES:
+                value = round(value)
         return value
 
     def decode_desc(self, value: int) -> str:

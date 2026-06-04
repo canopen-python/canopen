@@ -486,13 +486,19 @@ class ODVariable:
             raise TypeError(
                 f"Do not know how to encode {value!r} to data type 0x{self.data_type:X}")
 
-    def decode_phys(self, value: int) -> Union[int, bool, float, str, bytes]:
+    def decode_phys(
+        self, value: Union[int, bool, float, str, bytes]
+    ) -> Union[int, bool, float, str, bytes]:
         if self.data_type in INTEGER_TYPES:
+            assert isinstance(value, (int, float))
             value *= self.factor
         return value
 
-    def encode_phys(self, value: Union[int, bool, float, str, bytes]) -> int:
+    def encode_phys(
+        self, value: Union[int, bool, float, str, bytes]
+    ) -> Union[int, bool, float, str, bytes]:
         if self.data_type in INTEGER_TYPES:
+            assert isinstance(value, (int, float))
             if self.factor != 1:
                 value = round(value / self.factor)
         return value

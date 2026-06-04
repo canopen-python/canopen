@@ -337,9 +337,12 @@ def build_variable(
     # they are implemented in the python canopen package, so we can at least try to use them
     if eds.has_option(section, "Factor"):
         try:
-            var.factor = float(eds.get(section, "Factor"))
+            var.factor = int(eds.get(section, "Factor"))
         except ValueError:
-            pass
+            try:
+                var.factor = float(eds.get(section, "Factor"))
+            except ValueError:
+                pass
     if eds.has_option(section, "Description"):
         try:
             var.description = eds.get(section, "Description")

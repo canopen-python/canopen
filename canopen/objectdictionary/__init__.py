@@ -354,7 +354,7 @@ class ODVariable:
         #: Physical unit
         self.unit: str = ""
         #: Factor between physical unit and integer value
-        self.factor: float = 1
+        self.factor: Union[int, float] = 1
         #: Minimum allowed value
         self.min: Optional[int] = None
         #: Maximum allowed value

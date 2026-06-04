@@ -183,13 +183,32 @@ class TestDataConversions(unittest.TestCase):
 
 class TestAlternativeRepresentations(unittest.TestCase):
 
-    def test_phys(self):
+    def test_phys_integer(self):
         var = od.ODVariable("Test INTEGER16", 0x1000)
         var.data_type = od.INTEGER16
         var.factor = 0.1
-
         self.assertAlmostEqual(var.decode_phys(128), 12.8)
         self.assertEqual(var.encode_phys(-0.1), -1)
+
+    def test_phys_real(self):
+        var = od.ODVariable("Test REAL32", 0x1000)
+        var.data_type = od.REAL32
+        var.factor = 0.1
+        self.assertAlmostEqual(var.decode_phys(128), 12.8)
+        self.assertEqual(var.encode_phys(-0.1), -1)
+
+    def test_phys_boolean(self):
+        var = od.ODVariable("Test BOOLEAN", 0x1000)
+        var.data_type = od.BOOLEAN
+        self.assertEqual(var.decode_phys(True), True)
+        self.assertEqual(var.decode_phys(False), False)
+        self.assertEqual(var.encode_phys(True), True)
+
+    def test_phys_string(self):
+        var = od.ODVariable("Test VISIBLE_STRING", 0x1000)
+        var.data_type = od.VISIBLE_STRING
+        self.assertEqual(var.decode_phys('foo'), 'foo')
+        self.assertEqual(var.encode_phys('bar'), 'bar')
 
     def test_phys_factor_1_int64_roundtrip(self):
         """int64 values must survive encode_phys when factor is 1."""

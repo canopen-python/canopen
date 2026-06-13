@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 def import_eds(source, node_id):
     eds = RawConfigParser(inline_comment_prefixes=(';',))
-    eds.optionxform = str
+    eds.optionxform = lambda optionstr: str(optionstr)  # type: ignore[method-assign]
     opened_here = False
     try:
         if hasattr(source, "read"):

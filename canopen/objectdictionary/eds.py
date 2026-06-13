@@ -80,16 +80,13 @@ def import_eds(source, node_id):
             (bool, "LSS_Supported", "LSS_supported"),
         ]:
             try:
-                if t in (int, bool):
-                    setattr(od.device_information, odprop,
-                            t(int(eds.get("DeviceInfo", eprop), 0))
-                            )
-                elif t is str:
-                    setattr(od.device_information, odprop,
-                            eds.get("DeviceInfo", eprop)
-                            )
+                raw_string = eds.get("DeviceInfo", eprop)
             except NoOptionError:
-                pass
+                continue
+            if t in (int, bool):
+                setattr(od.device_information, odprop, t(int(raw_string, 0)))
+            elif t is str:
+                setattr(od.device_information, odprop, raw_string)
 
     if eds.has_section("DeviceComissioning"):
         if val := eds.getint("DeviceComissioning", "Baudrate", fallback=None):

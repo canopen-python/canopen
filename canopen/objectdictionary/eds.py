@@ -168,8 +168,15 @@ def import_eds(source, node_id):
             index = int(m.group(1), 16)
             num_of_entries = int(eds.get(section, "NrOfEntries"))
             entry = od[index]
+            if not isinstance(entry, ODArray):
+                logger.warning(
+                    "Compact subobject section %r refers to non-array object 0x%04X",
+                    section,
+                    index,
+                )
+                continue
             # For CompactSubObj index 1 is were we find the variable
-            src_var = od[index][1]
+            src_var = entry[1]
             for subindex in range(1, num_of_entries + 1):
                 var = copy_variable(eds, section, subindex, src_var)
                 if var is not None:

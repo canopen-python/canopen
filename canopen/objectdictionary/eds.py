@@ -297,12 +297,12 @@ def build_variable(
     node_id: int,
     object_type: int,
     index: int,
-    subindex: int = 0
+    subindex: int = 0,
 ) -> ODVariable:
     """Create a object dictionary entry.
 
     :param eds: String stream of the eds file
-    :param section:
+    :param section: EDS file section corresponding to the object
     :param node_id: Node ID
     :param index: Index of the CANOpen object
     :param subindex: Subindex of the CANOpen object (if present, else 0)

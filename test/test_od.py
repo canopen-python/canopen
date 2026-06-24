@@ -183,13 +183,32 @@ class TestDataConversions(unittest.TestCase):
 
 class TestAlternativeRepresentations(unittest.TestCase):
 
-    def test_phys(self):
+    def test_phys_integer(self):
         var = od.ODVariable("Test INTEGER16", 0x1000)
         var.data_type = od.INTEGER16
         var.factor = 0.1
-
         self.assertAlmostEqual(var.decode_phys(128), 12.8)
         self.assertEqual(var.encode_phys(-0.1), -1)
+
+    def test_phys_real(self):
+        var = od.ODVariable("Test REAL32", 0x1000)
+        var.data_type = od.REAL32
+        var.factor = 0.1
+        self.assertAlmostEqual(var.decode_phys(128), 12.8)
+        self.assertEqual(var.encode_phys(-0.1), -1)
+
+    def test_phys_boolean(self):
+        var = od.ODVariable("Test BOOLEAN", 0x1000)
+        var.data_type = od.BOOLEAN
+        self.assertEqual(var.decode_phys(True), True)
+        self.assertEqual(var.decode_phys(False), False)
+        self.assertEqual(var.encode_phys(True), True)
+
+    def test_phys_string(self):
+        var = od.ODVariable("Test VISIBLE_STRING", 0x1000)
+        var.data_type = od.VISIBLE_STRING
+        self.assertEqual(var.decode_phys('foo'), 'foo')
+        self.assertEqual(var.encode_phys('bar'), 'bar')
 
     def test_phys_factor_1_int64_roundtrip(self):
         """int64 values must survive encode_phys when factor is 1."""
@@ -226,6 +245,25 @@ class TestAlternativeRepresentations(unittest.TestCase):
         var.data_type = od.INTEGER32
         var.factor = 1.0
         self.assertIsInstance(var.decode_phys(42), float)
+
+    def test_phys_int_factor(self):
+        """Integer factor uses float division + round."""
+        var = od.ODVariable("Test INTEGER16", 0x1000)
+        var.data_type = od.INTEGER16
+        var.factor = 3
+        # 10 / 3 = 3
+        encoded = var.encode_phys(10)
+        self.assertEqual(encoded, 3)
+        self.assertIsInstance(encoded, int)
+
+    def test_phys_int_factor_decodes_to_int(self):
+        """decode_phys with float factor ensures a float result."""
+        var = od.ODVariable("Test INTEGER32", 0x1000)
+        var.data_type = od.INTEGER32
+        var.factor = 10
+        decoded = var.decode_phys(42)
+        self.assertEqual(decoded, 420)
+        self.assertIsInstance(decoded, int)
 
     def test_desc(self):
         var = od.ODVariable("Test UNSIGNED8", 0x1000)

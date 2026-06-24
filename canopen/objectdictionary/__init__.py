@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 import struct
 from collections.abc import Collection, Iterator, Mapping, MutableMapping
-from typing import Optional, TextIO, Union
+from typing import Optional, TextIO, Union, cast
 
 from canopen.objectdictionary.datatypes import *
 from canopen.objectdictionary.datatypes import IntegerN, UnsignedN
@@ -354,7 +354,7 @@ class ODVariable:
         #: Physical unit
         self.unit: str = ""
         #: Factor between physical unit and integer value
-        self.factor: float = 1
+        self.factor: Union[int, float] = 1
         #: Minimum allowed value
         self.min: Optional[int] = None
         #: Maximum allowed value
@@ -486,15 +486,24 @@ class ODVariable:
             raise TypeError(
                 f"Do not know how to encode {value!r} to data type 0x{self.data_type:X}")
 
-    def decode_phys(self, value: int) -> Union[int, bool, float, str, bytes]:
-        if self.data_type in INTEGER_TYPES:
-            value *= self.factor
+    def decode_phys(
+        self, value: Union[int, bool, float, str, bytes]
+    ) -> Union[int, bool, float, str, bytes]:
+        if self.data_type in NUMBER_TYPES:
+            numeric = cast(Union[int, float], value)
+            value = numeric * self.factor
         return value
 
-    def encode_phys(self, value: Union[int, bool, float, str, bytes]) -> int:
-        if self.data_type in INTEGER_TYPES:
+    def encode_phys(
+        self, value: Union[int, bool, float, str, bytes]
+    ) -> Union[int, bool, float, str, bytes]:
+        if self.data_type in NUMBER_TYPES:
+            numeric = cast(Union[int, float], value)
             if self.factor != 1:
-                value = round(value / self.factor)
+                numeric = numeric / self.factor
+            if self.data_type in INTEGER_TYPES:
+                numeric = round(numeric)
+            value = numeric
         return value
 
     def decode_desc(self, value: int) -> str:

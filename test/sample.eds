@@ -995,7 +995,7 @@ ParameterName=Highest subindex
 ObjectType=0x7
 DataType=0x0005
 AccessType=ro
-DefaultValue=0x02
+DefaultValue=0x03
 PDOMapping=0x0
 
 [3050sub1]
@@ -1017,6 +1017,16 @@ PDOMapping=0x0
 Factor=ERROR
 Description=
 Unit=
+
+[3050sub3]
+ParameterName=Integer Factor
+ObjectType=0x7
+DataType=0x0004
+AccessType=ro
+PDOMapping=0x0
+Factor=42
+Description=Should be parsed as integer
+Unit=answer
 
 [3063]
 ParameterName=DOMAIN object

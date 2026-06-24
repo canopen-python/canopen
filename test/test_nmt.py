@@ -193,6 +193,14 @@ class TestNmtSlave(unittest.TestCase):
 
         self.local_node.nmt.stop_heartbeat()
 
+    def test_heartbeat_no_producer_time(self):
+        # Create a node without the producer heartbeat time parameter
+        node = canopen.LocalNode(1, canopen.ObjectDictionary())
+        with self.assertRaises(KeyError):
+            node.sdo[0x1017].raw = 100
+        # Should not fail because of missing 0x1017 object entry
+        node.nmt.state = "PRE-OPERATIONAL"
+
 
 if __name__ == "__main__":
     unittest.main()

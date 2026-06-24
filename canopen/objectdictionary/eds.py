@@ -240,7 +240,7 @@ def _signed_int_from_hex(hex_str, bit_length):
     return number
 
 
-def _convert_variable(node_id: int, var_type: int, value: Any) -> Any:
+def _decode_from_eds(node_id: int, var_type: int, value: Any) -> Any:
     if var_type in (datatypes.OCTET_STRING, datatypes.DOMAIN):
         return bytes.fromhex(value)
     elif var_type in (datatypes.VISIBLE_STRING, datatypes.UNICODE_STRING):
@@ -256,7 +256,7 @@ def _convert_variable(node_id: int, var_type: int, value: Any) -> Any:
             return int(value, 0)
 
 
-def _revert_variable(var_type: int, value: Any) -> Any:
+def _encode_to_eds(var_type: int, value: Any) -> Any:
     if value is None:
         return None
     if var_type in (datatypes.OCTET_STRING, datatypes.DOMAIN) and isinstance(value, bytes):
@@ -266,7 +266,7 @@ def _revert_variable(var_type: int, value: Any) -> Any:
     elif var_type in datatypes.FLOAT_TYPES:
         return value
     else:
-        return str(value)
+        return f"0x{value:02X}"
 
 
 def build_variable(
@@ -322,7 +322,7 @@ def build_variable(
         except ValueError:
             logger.warning(
                 "Invalid LowLimit %r for %s (0x%X), ignoring",
-                eds.get(section, "LowLimit"), var.name, var.index,
+                min_string, var.name, var.index,
             )
     if eds.has_option(section, "HighLimit"):
         try:
@@ -334,27 +334,27 @@ def build_variable(
         except ValueError:
             logger.warning(
                 "Invalid HighLimit %r for %s (0x%X), ignoring",
-                eds.get(section, "HighLimit"), var.name, var.index,
+                max_string, var.name, var.index,
             )
     if eds.has_option(section, "DefaultValue"):
         try:
             var.default_raw = eds.get(section, "DefaultValue")
             if '$NODEID' in var.default_raw:
                 var.relative = True
-            var.default = _convert_variable(node_id, var.data_type, var.default_raw)
+            var.default = _decode_from_eds(node_id, var.data_type, var.default_raw)
         except ValueError:
             logger.warning(
                 "Invalid DefaultValue %r for %s (0x%X), ignoring",
-                eds.get(section, "DefaultValue"), var.name, var.index,
+                var.default_raw, var.name, var.index,
             )
     if eds.has_option(section, "ParameterValue"):
         try:
             var.value_raw = eds.get(section, "ParameterValue")
-            var.value = _convert_variable(node_id, var.data_type, var.value_raw)
+            var.value = _decode_from_eds(node_id, var.data_type, var.value_raw)
         except ValueError:
             logger.warning(
                 "Invalid ParameterValue %r for %s (0x%X), ignoring",
-                eds.get(section, "ParameterValue"), var.name, var.index,
+                var.value_raw, var.name, var.index,
             )
     # Factor, Description and Unit are not standard according to the CANopen specifications, but
     # they are implemented in the python canopen package, so we can at least try to use them
@@ -420,7 +420,7 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
         if getattr(var, 'default_raw', None) is not None:
             eds.set(section, "DefaultValue", var.default_raw)
         elif getattr(var, 'default', None) is not None:
-            eds.set(section, "DefaultValue", _revert_variable(
+            eds.set(section, "DefaultValue", _encode_to_eds(
                 var.data_type, var.default))
 
         if device_commisioning:
@@ -428,15 +428,15 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
                 eds.set(section, "ParameterValue", var.value_raw)
             elif getattr(var, 'value', None) is not None:
                 eds.set(section, "ParameterValue",
-                        _revert_variable(var.data_type, var.value))
+                        _encode_to_eds(var.data_type, var.value))
 
         eds.set(section, "DataType", f"0x{var.data_type:04X}")
         eds.set(section, "PDOMapping", hex(var.pdo_mappable))
 
         if getattr(var, 'min', None) is not None:
-            eds.set(section, "LowLimit", _revert_variable(var.data_type, var.min))
+            eds.set(section, "LowLimit", var.min)
         if getattr(var, 'max', None) is not None:
-            eds.set(section, "HighLimit", _revert_variable(var.data_type, var.max))
+            eds.set(section, "HighLimit", var.max)
 
         if getattr(var, 'description', '') != '':
             eds.set(section, "Description", var.description)

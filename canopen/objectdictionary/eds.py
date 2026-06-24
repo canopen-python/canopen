@@ -139,14 +139,20 @@ def import_eds(source, node_id):
                 arr.add_member(last_subindex)
                 arr.add_member(build_variable(eds, section, node_id, object_type, index, 1))
                 arr.storage_location = storage_location
+                arr.obj_flags = _get_obj_flags(eds, section)
+                arr.denotation = eds.get(section, "Denotation") if eds.has_option(section, "Denotation") else ""
                 od.add_object(arr)
             elif object_type == objectcodes.ARRAY:
                 arr = ODArray(name, index)
                 arr.storage_location = storage_location
+                arr.obj_flags = _get_obj_flags(eds, section)
+                arr.denotation = eds.get(section, "Denotation") if eds.has_option(section, "Denotation") else ""
                 od.add_object(arr)
             elif object_type == objectcodes.RECORD:
                 record = ODRecord(name, index)
                 record.storage_location = storage_location
+                record.obj_flags = _get_obj_flags(eds, section)
+                record.denotation = eds.get(section, "Denotation") if eds.has_option(section, "Denotation") else ""
                 od.add_object(record)
 
             continue
@@ -258,6 +264,15 @@ def _revert_variable(var_type: int, value: Any) -> Any:
         return f"0x{value:02X}"
 
 
+def _get_obj_flags(eds, section):
+    if eds.has_option(section, "ObjFlags"):
+        try:
+            return int(eds.get(section, "ObjFlags"), 0)
+        except ValueError:
+            pass
+    return 0
+
+
 def build_variable(
     eds: RawConfigParser,
     section: str,
@@ -350,6 +365,9 @@ def build_variable(
             var.unit = eds.get(section, "Unit")
         except ValueError:
             pass
+    var.obj_flags = _get_obj_flags(eds, section)
+    if eds.has_option(section, "Denotation"):
+        var.denotation = eds.get(section, "Denotation")
     return var
 
 
@@ -425,12 +443,21 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
         if getattr(var, 'unit', '') != '':
             eds.set(section, "Unit", var.unit)
 
+        if getattr(var, 'obj_flags', 0) != 0:
+            eds.set(section, "ObjFlags", f"0x{var.obj_flags:X}")
+        if device_commisioning and getattr(var, 'denotation', '') != '':
+            eds.set(section, "Denotation", var.denotation)
+
     def export_record(var, eds):
         section = f"{var.index:04X}"
         export_common(var, eds, section)
         eds.set(section, "SubNumber", f"0x{len(var.subindices):X}")
         ot = objectcodes.RECORD if isinstance(var, ODRecord) else objectcodes.ARRAY
         eds.set(section, "ObjectType", f"0x{ot:X}")
+        if getattr(var, 'obj_flags', 0) != 0:
+            eds.set(section, "ObjFlags", f"0x{var.obj_flags:X}")
+        if device_commisioning and getattr(var, 'denotation', '') != '':
+            eds.set(section, "Denotation", var.denotation)
         for i in var:
             export_variable(var[i], eds)
 

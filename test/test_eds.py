@@ -396,6 +396,88 @@ class TestEDS(unittest.TestCase):
 
                 self.assertEqual(self.od.comments, exported_od.comments)
 
+    def test_reading_obj_flags(self):
+        var = self.od[0x3060]
+        self.assertIsInstance(var, canopen.objectdictionary.ODVariable)
+        self.assertEqual(var.obj_flags, 0x1)
+
+    def test_reading_obj_flags_default(self):
+        """Standard objects without ObjFlags must have obj_flags == 0."""
+        var = self.od[0x1017]  # Producer heartbeat time — no ObjFlags in sample.eds
+        self.assertEqual(var.obj_flags, 0)
+
+    def test_reading_obj_flags_record(self):
+        record = self.od[0x3065]
+        self.assertIsInstance(record, canopen.objectdictionary.ODRecord)
+        self.assertEqual(record.obj_flags, 0x3)
+
+    def test_roundtrip_obj_flags(self):
+        import io
+        with io.StringIO() as dest:
+            canopen.export_od(self.od, dest, 'eds')
+            dest.name = 'mock.eds'
+            dest.seek(0)
+            od2 = canopen.import_od(dest)
+        self.assertEqual(od2[0x3060].obj_flags, 0x1)
+        self.assertEqual(od2[0x1017].obj_flags, 0)
+
+    def test_roundtrip_obj_flags_record(self):
+        import io
+        with io.StringIO() as dest:
+            canopen.export_od(self.od, dest, 'eds')
+            dest.name = 'mock.eds'
+            dest.seek(0)
+            od2 = canopen.import_od(dest)
+        self.assertEqual(od2[0x3065].obj_flags, 0x3)
+
+    def test_invalid_obj_flags_returns_zero(self):
+        import configparser
+        from canopen.objectdictionary.eds import _get_obj_flags
+        eds = configparser.RawConfigParser()
+        eds.optionxform = str
+        eds.add_section("3060")
+        eds.set("3060", "ObjFlags", "not_a_number")
+        self.assertEqual(_get_obj_flags(eds, "3060"), 0)
+
+    def test_denotation_roundtrip_dcf(self):
+        import io
+        self.od[0x3060].denotation = 'FlaggedObject'
+        with io.StringIO() as dest:
+            canopen.export_od(self.od, dest, 'dcf')
+            dest.name = 'mock.dcf'
+            dest.seek(0)
+            od2 = canopen.import_od(dest)
+        self.assertEqual(od2[0x3060].denotation, 'FlaggedObject')
+
+    def test_denotation_not_exported_in_eds_mode(self):
+        import io
+        self.od[0x3060].denotation = 'ShouldNotAppear'
+        with io.StringIO() as dest:
+            canopen.export_od(self.od, dest, 'eds')
+            dest.name = 'mock.eds'
+            dest.seek(0)
+            od2 = canopen.import_od(dest)
+        self.assertEqual(od2[0x3060].denotation, '')
+
+    def test_obj_flags_in_repr(self):
+        var = self.od[0x3060]
+        self.assertIn("flags=0x1", repr(var))
+        record = self.od[0x3065]
+        self.assertIn("flags=0x3", repr(record))
+        # zero flags must not clutter repr
+        self.assertNotIn("flags", repr(self.od[0x1017]))
+
+    def test_denotation_record_roundtrip_dcf(self):
+        """Denotation on ODRecord/ODArray is preserved in DCF round-trip."""
+        import io
+        self.od[0x3065].denotation = 'RecordLabel'
+        with io.StringIO() as dest:
+            canopen.export_od(self.od, dest, 'dcf')
+            dest.name = 'mock.dcf'
+            dest.seek(0)
+            od2 = canopen.import_od(dest)
+        self.assertEqual(od2[0x3065].denotation, 'RecordLabel')
+
 
 if __name__ == "__main__":
     unittest.main()

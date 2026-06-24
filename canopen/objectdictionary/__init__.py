@@ -208,11 +208,16 @@ class ODRecord(MutableMapping):
         self.name = name
         #: Storage location of index
         self.storage_location: Optional[str] = None
+        #: CiA 306 ObjFlags bitfield
+        self.obj_flags: int = 0
+        #: CiA 306 Denotation string (DCF only)
+        self.denotation: str = ""
         self.subindices: dict[int, ODVariable] = {}
         self.names: dict[str, ODVariable] = {}
 
     def __repr__(self) -> str:
-        return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
+        flags = f" flags=0x{self.obj_flags:X}" if self.obj_flags else ""
+        return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}{flags}>"
 
     def __getitem__(self, subindex: Union[int, str]) -> ODVariable:
         item = self.names.get(subindex) or self.subindices.get(subindex)
@@ -269,11 +274,16 @@ class ODArray(Mapping):
         self.name = name
         #: Storage location of index
         self.storage_location: Optional[str] = None
+        #: CiA 306 ObjFlags bitfield
+        self.obj_flags: int = 0
+        #: CiA 306 Denotation string (DCF only)
+        self.denotation: str = ""
         self.subindices: dict[int, ODVariable] = {}
         self.names: dict[str, ODVariable] = {}
 
     def __repr__(self) -> str:
-        return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
+        flags = f" flags=0x{self.obj_flags:X}" if self.obj_flags else ""
+        return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}{flags}>"
 
     def __getitem__(self, subindex: Union[int, str]) -> ODVariable:
         var = self.names.get(subindex) or self.subindices.get(subindex)
@@ -379,12 +389,17 @@ class ODVariable:
         self.bit_definitions: dict[str, list[int]] = {}
         #: Storage location of index
         self.storage_location: Optional[str] = None
+        #: CiA 306 ObjFlags bitfield
+        self.obj_flags: int = 0
+        #: CiA 306 Denotation string (DCF only)
+        self.denotation: str = ""
         #: Can this variable be mapped to a PDO
         self.pdo_mappable = False
 
     def __repr__(self) -> str:
         subindex = self.subindex if isinstance(self.parent, (ODRecord, ODArray)) else None
-        return f"<{type(self).__qualname__} {self.qualname!r} at {pretty_index(self.index, subindex)}>"
+        flags = f" flags=0x{self.obj_flags:X}" if self.obj_flags else ""
+        return f"<{type(self).__qualname__} {self.qualname!r} at {pretty_index(self.index, subindex)}{flags}>"
 
     @property
     def qualname(self) -> str:

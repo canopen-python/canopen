@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 import struct
 from collections.abc import Collection, Iterator, Mapping, MutableMapping
-from typing import Optional, TextIO, Union
+from typing import Optional, TextIO, Union, cast
 
 from canopen.objectdictionary.datatypes import *
 from canopen.objectdictionary.datatypes import IntegerN, UnsignedN
@@ -490,19 +490,20 @@ class ODVariable:
         self, value: Union[int, bool, float, str, bytes]
     ) -> Union[int, bool, float, str, bytes]:
         if self.data_type in NUMBER_TYPES:
-            assert isinstance(value, (int, float))
-            value *= self.factor
+            numeric = cast(Union[int, float], value)
+            value = numeric * self.factor
         return value
 
     def encode_phys(
         self, value: Union[int, bool, float, str, bytes]
     ) -> Union[int, bool, float, str, bytes]:
         if self.data_type in NUMBER_TYPES:
-            assert isinstance(value, (int, float))
+            numeric = cast(Union[int, float], value)
             if self.factor != 1:
-                value = value / self.factor
+                numeric = numeric / self.factor
             if self.data_type in INTEGER_TYPES:
-                value = round(value)
+                numeric = round(numeric)
+            value = numeric
         return value
 
     def decode_desc(self, value: int) -> str:

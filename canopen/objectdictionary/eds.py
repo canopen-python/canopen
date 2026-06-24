@@ -342,7 +342,10 @@ def build_variable(
             try:
                 var.factor = float(eds.get(section, "Factor"))
             except ValueError:
-                pass
+                logger.warning(
+                    "Could not parse Factor for %s in section [%s], ignoring",
+                    var.name, section,
+                )
     if eds.has_option(section, "Description"):
         try:
             var.description = eds.get(section, "Description")

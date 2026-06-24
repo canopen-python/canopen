@@ -295,10 +295,9 @@ class ODArray(Mapping):
             var.parent = self
             for attr in ("data_type", "unit", "factor", "min", "max", "default",
                          "access_type", "description", "value_descriptions",
-                         "bit_definitions", "storage_location"):
-                if attr in template.__dict__:
-                    var.__dict__[attr] = template.__dict__[attr]
-            var.custom_options = template.custom_options
+                         "bit_definitions", "storage_location", "custom_options"):
+                if (template_value := getattr(template, attr)) is not None:
+                    setattr(var, attr, template_value)
         else:
             raise KeyError(f"Could not find subindex {pretty_index(None, subindex)}")
         return var

@@ -270,7 +270,7 @@ class NmtSlave(NmtBase):
 
     def update_heartbeat(self):
         if self._send_task is not None:
-            self._send_task.update([self._state])
+            self._send_task.update(bytes([self._state]))
 
 
 class NmtError(Exception):

@@ -1,8 +1,12 @@
+import configparser
+import contextlib
+import io
 import os
 import unittest
 
 import canopen
-from canopen.objectdictionary.eds import _signed_int_from_hex
+from canopen import objectdictionary
+from canopen.objectdictionary.eds import _get_obj_flags, _signed_int_from_hex
 from canopen.utils import pretty_index
 
 from .util import DATATYPES_EDS, SAMPLE_EDS, tmp_file
@@ -70,8 +74,6 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(od.node_id, 16)
 
     def test_load_implicit_nodeid_fallback(self):
-        import io
-
         # First, remove the NodeID option from DeviceComissioning.
         with open(SAMPLE_EDS) as f:
             lines = [L for L in f.readlines() if not L.startswith("NodeID=")]
@@ -93,8 +95,6 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(od.bitrate, 500_000)
 
     def test_load_baudrate_fallback(self):
-        import io
-
         # Remove the Baudrate option.
         with open(SAMPLE_EDS) as f:
             lines = [L for L in f.readlines() if not L.startswith("Baudrate=")]
@@ -105,11 +105,11 @@ class TestEDS(unittest.TestCase):
 
     def test_variable(self):
         var = self.od['Producer heartbeat time']
-        self.assertIsInstance(var, canopen.objectdictionary.ODVariable)
+        self.assertIsInstance(var, objectdictionary.ODVariable)
         self.assertEqual(var.index, 0x1017)
         self.assertEqual(var.subindex, 0)
         self.assertEqual(var.name, 'Producer heartbeat time')
-        self.assertEqual(var.data_type, canopen.objectdictionary.UNSIGNED16)
+        self.assertEqual(var.data_type, objectdictionary.UNSIGNED16)
         self.assertEqual(var.access_type, 'rw')
         self.assertFalse(var.is_domain)
         self.assertEqual(var.default, 0)
@@ -118,20 +118,21 @@ class TestEDS(unittest.TestCase):
     def test_relative_variable(self):
         var = self.od['Receive PDO 0 Communication Parameter']['COB-ID use by RPDO 1']
         self.assertTrue(var.relative)
+        assert self.od.node_id is not None
         self.assertEqual(var.default, 512 + self.od.node_id)
 
     def test_record(self):
         record = self.od['Identity object']
-        self.assertIsInstance(record, canopen.objectdictionary.ODRecord)
+        self.assertIsInstance(record, objectdictionary.ODRecord)
         self.assertEqual(len(record), 4)
         self.assertEqual(record.index, 0x1018)
         self.assertEqual(record.name, 'Identity object')
         var = record['Vendor-ID']
-        self.assertIsInstance(var, canopen.objectdictionary.ODVariable)
+        self.assertIsInstance(var, objectdictionary.ODVariable)
         self.assertEqual(var.name, 'Vendor-ID')
         self.assertEqual(var.index, 0x1018)
         self.assertEqual(var.subindex, 1)
-        self.assertEqual(var.data_type, canopen.objectdictionary.UNSIGNED32)
+        self.assertEqual(var.data_type, objectdictionary.UNSIGNED32)
         self.assertEqual(var.access_type, 'ro')
         self.assertFalse(var.is_domain)
 
@@ -158,15 +159,15 @@ class TestEDS(unittest.TestCase):
 
     def test_array_compact_subobj(self):
         array = self.od[0x1003]
-        self.assertIsInstance(array, canopen.objectdictionary.ODArray)
+        self.assertIsInstance(array, objectdictionary.ODArray)
         self.assertEqual(array.index, 0x1003)
         self.assertEqual(array.name, 'Pre-defined error field')
         var = array[5]
-        self.assertIsInstance(var, canopen.objectdictionary.ODVariable)
+        self.assertIsInstance(var, objectdictionary.ODVariable)
         self.assertEqual(var.name, 'Pre-defined error field_5')
         self.assertEqual(var.index, 0x1003)
         self.assertEqual(var.subindex, 5)
-        self.assertEqual(var.data_type, canopen.objectdictionary.UNSIGNED32)
+        self.assertEqual(var.data_type, objectdictionary.UNSIGNED32)
         self.assertEqual(var.access_type, 'ro')
         self.assertFalse(var.is_domain)
 
@@ -194,11 +195,11 @@ class TestEDS(unittest.TestCase):
 
     def test_dummy_variable(self):
         var = self.od['Dummy0003']
-        self.assertIsInstance(var, canopen.objectdictionary.ODVariable)
+        self.assertIsInstance(var, objectdictionary.ODVariable)
         self.assertEqual(var.index, 0x0003)
         self.assertEqual(var.subindex, 0)
         self.assertEqual(var.name, 'Dummy0003')
-        self.assertEqual(var.data_type, canopen.objectdictionary.INTEGER16)
+        self.assertEqual(var.data_type, objectdictionary.INTEGER16)
         self.assertEqual(var.access_type, 'const')
         self.assertFalse(var.is_domain)
         self.assertEqual(len(var), 16)
@@ -219,28 +220,27 @@ class TestEDS(unittest.TestCase):
 
     def test_read_domain_object(self):
         var = self.od[0x3063]
-        self.assertIsInstance(var, canopen.objectdictionary.ODVariable)
+        self.assertIsInstance(var, objectdictionary.ODVariable)
         self.assertEqual(var.index, 0x3063)
         self.assertEqual(var.subindex, 0)
         self.assertEqual(var.name, 'DOMAIN object')
-        self.assertEqual(var.data_type, canopen.objectdictionary.UNSIGNED32)
+        self.assertEqual(var.data_type, objectdictionary.UNSIGNED32)
         self.assertEqual(var.access_type, 'rw')
         self.assertTrue(var.is_domain)
 
     def test_read_domain_subobject(self):
         record = self.od[0x3064]
         var = record[1]
-        self.assertIsInstance(var, canopen.objectdictionary.ODVariable)
+        self.assertIsInstance(var, objectdictionary.ODVariable)
         self.assertEqual(var.index, 0x3064)
         self.assertEqual(var.subindex, 1)
         self.assertEqual(var.name, 'DOMAIN sub-object')
-        self.assertEqual(var.data_type, canopen.objectdictionary.UNSIGNED32)
+        self.assertEqual(var.data_type, objectdictionary.UNSIGNED32)
         self.assertEqual(var.access_type, 'rw')
         self.assertTrue(var.is_domain)
 
     def test_roundtrip_domain_objects(self):
         # ObjectType==DOMAIN survive an EDS export/import round-trip
-        import io
         with io.StringIO() as dest:
             canopen.export_od(self.od, dest, 'eds')
             dest.name = 'mock.eds'
@@ -271,7 +271,6 @@ class TestEDS(unittest.TestCase):
                         self.verify_od(dest, doctype)
 
     def test_export_eds_to_file_unknown_extension(self):
-        import io
         for suffix in ".txt", "":
             with tmp_file(suffix=suffix) as tmp:
                 dest = tmp.name
@@ -294,7 +293,6 @@ class TestEDS(unittest.TestCase):
                         self.verify_od(buf, "eds")
 
     def test_export_eds_unknown_doctype(self):
-        import io
         filelike_object = io.StringIO()
         self.addCleanup(filelike_object.close)
         for dest in "filename", None, filelike_object:
@@ -307,7 +305,6 @@ class TestEDS(unittest.TestCase):
                         os.stat(dest)
 
     def test_export_eds_to_filelike_object(self):
-        import io
         for doctype in "eds", "dcf":
             with io.StringIO() as dest:
                 with self.subTest(dest=dest, doctype=doctype):
@@ -320,8 +317,6 @@ class TestEDS(unittest.TestCase):
                     self.verify_od(dest, doctype)
 
     def test_export_eds_to_stdout(self):
-        import contextlib
-        import io
         with contextlib.redirect_stdout(io.StringIO()) as f:
             ret = canopen.export_od(self.od, None, "eds")
         self.assertIsNone(ret)
@@ -353,7 +348,7 @@ class TestEDS(unittest.TestCase):
             self.assertEqual(type(actual_object), type(expected_object))
             self.assertEqual(actual_object.name, expected_object.name)
 
-            if isinstance(actual_object, canopen.objectdictionary.ODVariable):
+            if isinstance(actual_object, objectdictionary.ODVariable):
                 expected_vars = [expected_object]
                 actual_vars = [actual_object]
             else:
@@ -398,7 +393,7 @@ class TestEDS(unittest.TestCase):
 
     def test_reading_obj_flags(self):
         var = self.od[0x3060]
-        self.assertIsInstance(var, canopen.objectdictionary.ODVariable)
+        self.assertIsInstance(var, objectdictionary.ODVariable)
         self.assertEqual(var.obj_flags, 0x1)
 
     def test_reading_obj_flags_default(self):
@@ -408,11 +403,10 @@ class TestEDS(unittest.TestCase):
 
     def test_reading_obj_flags_record(self):
         record = self.od[0x3065]
-        self.assertIsInstance(record, canopen.objectdictionary.ODRecord)
+        self.assertIsInstance(record, objectdictionary.ODRecord)
         self.assertEqual(record.obj_flags, 0x3)
 
     def test_roundtrip_obj_flags(self):
-        import io
         with io.StringIO() as dest:
             canopen.export_od(self.od, dest, 'eds')
             dest.name = 'mock.eds'
@@ -422,7 +416,6 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(od2[0x1017].obj_flags, 0)
 
     def test_roundtrip_obj_flags_record(self):
-        import io
         with io.StringIO() as dest:
             canopen.export_od(self.od, dest, 'eds')
             dest.name = 'mock.eds'
@@ -431,8 +424,6 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(od2[0x3065].obj_flags, 0x3)
 
     def test_invalid_obj_flags_returns_zero(self):
-        import configparser
-        from canopen.objectdictionary.eds import _get_obj_flags
         eds = configparser.RawConfigParser()
         eds.optionxform = str
         eds.add_section("3060")
@@ -440,7 +431,6 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(_get_obj_flags(eds, "3060"), 0)
 
     def test_denotation_roundtrip_dcf(self):
-        import io
         self.od[0x3060].denotation = 'FlaggedObject'
         with io.StringIO() as dest:
             canopen.export_od(self.od, dest, 'dcf')
@@ -450,7 +440,6 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(od2[0x3060].denotation, 'FlaggedObject')
 
     def test_denotation_not_exported_in_eds_mode(self):
-        import io
         self.od[0x3060].denotation = 'ShouldNotAppear'
         with io.StringIO() as dest:
             canopen.export_od(self.od, dest, 'eds')
@@ -469,7 +458,6 @@ class TestEDS(unittest.TestCase):
 
     def test_denotation_record_roundtrip_dcf(self):
         """Denotation on ODRecord/ODArray is preserved in DCF round-trip."""
-        import io
         self.od[0x3065].denotation = 'RecordLabel'
         with io.StringIO() as dest:
             canopen.export_od(self.od, dest, 'dcf')

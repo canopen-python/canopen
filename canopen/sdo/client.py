@@ -366,6 +366,7 @@ class WritableStream(io.RawIOBase):
             response = sdo_client.request_response(request)
             res_command, = struct.unpack_from("B", response)
             if res_command != RESPONSE_DOWNLOAD:
+                self._done = True  # prevent close() from sending a stray close segment
                 self.sdo_client.abort(ABORT_INVALID_COMMAND_SPECIFIER)
                 raise SdoCommunicationError(
                     f"Unexpected response 0x{res_command:02X}")
@@ -420,6 +421,7 @@ class WritableStream(io.RawIOBase):
             response = self.sdo_client.request_response(request)
             res_command, = struct.unpack("B", response[0:1])
             if res_command & 0xE0 != RESPONSE_SEGMENT_DOWNLOAD:
+                self._done = True  # prevent close() from sending a stray close segment
                 self.sdo_client.abort(ABORT_INVALID_COMMAND_SPECIFIER)
                 raise SdoCommunicationError(
                     f"Unexpected response 0x{res_command:02X} "
@@ -535,6 +537,7 @@ class BlockUploadStream(io.RawIOBase):
         if seqno == self._ackseq + 1:
             self._ackseq = seqno
         else:
+            logger.debug('Wrong seqno')
             # Wrong sequence number
             response = self._retransmit()
             res_command, = struct.unpack_from("B", response)
@@ -787,6 +790,8 @@ class BlockDownloadStream(io.RawIOBase):
         # Reset _seqno and update blksize
         self._seqno = 0
         self._blksize = blksize
+        # Reset _done so the last segment can be re-sent
+        self._done = False
         # We are retransmitting
         self._retransmitting = True
         # Resend the block

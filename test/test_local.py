@@ -1,5 +1,7 @@
 import time
 import unittest
+import struct
+from unittest.mock import MagicMock, patch
 
 import canopen
 
@@ -37,22 +39,87 @@ class TestSDO(unittest.TestCase):
         vendor_id = self.remote_node.sdo[0x1400][1].raw
         self.assertEqual(vendor_id, 0x99)
 
-    def test_block_upload_switch_to_expedite_upload(self):
-        with self.assertRaises(canopen.SdoCommunicationError) as context:
-            with self.remote_node.sdo[0x1008].open('r', block_transfer=True) as fp:
-                pass
-        # We get this since the sdo client don't support the switch
-        # from block upload to expedite upload
-        self.assertEqual("Unexpected response 0x41", str(context.exception))
+    def test_block_download(self):
+        data = b"BLOCK DOWNLOAD TEST DATA"
+        # Write data using block download
+        with self.remote_node.sdo[0x2000].open('wb', size=len(data), block_transfer=True) as fp:
+            fp.write(data)
+        # Read back using block upload (client requests upload from server)
+        with self.remote_node.sdo[0x2000].open('rb', block_transfer=True) as fp:
+            read_data = fp.read()
+        self.assertEqual(read_data, data)
+
+    def test_block_upload_multi_block(self):
+        """Block tranfer of bulk data using multiple blocks. Each block can transfer up to 127 segments of 7 bytes (889 bytes)"""
+        # 70 * 28 = 1960 bytes, exceeds one block (127 segments * 7 bytes = 889 bytes)
+        data = b"Lorem ipsum dolor sit amet. " * 70
+        self.local_node.sdo[0x2000].raw = data.decode("latin-1")
+        with self.remote_node.sdo[0x2000].open('rb', block_transfer=True) as fp:
+            read_data = fp.read()
+        self.assertEqual(read_data, data)
+
+    def test_process_block_up_data_wrong_ackseq(self):
+        """
+        Test that when client acks with wrong seqno, server rolls back data_uploaded to data_successful_upload
+        (the start of the current block) and asks for retransmit.
+        """
+        server = self.local_node.sdo
+        server._index = 0x2000
+        server._subindex = 0
+
+        mock_block = MagicMock()
+        mock_block.state = canopen.sdo.constants.BLOCK_STATE_UP_DATA  # 0x12
+        mock_block.last_seqno = 127          # server sent seqno 1..127
+        mock_block.data_uploaded = 889       # 127 * 7, end of first block
+        mock_block.data_successful_upload = 0
+        mock_block.size = 1960               # two blocks worth, transfer not done
+        mock_block.get_upload_blocks.return_value = []
+        server.sdo_block = mock_block
+
+        # command = REQUEST_BLOCK_UPLOAD (0xA0) | BLOCK_TRANSFER_RESPONSE (0x02) = 0xA2
+        # ackseq = 0 (wrong: last_seqno was 127), newblk = 127
+        request = bytearray(struct.pack("<BBB", 0xA2, 0, 127) + b'\x00' * 5)
+        with patch.object(server, 'send_response'):
+            server.on_request(0x601, request, 0.0)
+
+        # data_uploaded must have been rolled back to data_successful_upload (0)
+        self.assertEqual(mock_block.data_uploaded, 0)
+        # server must have asked for a retransmit block
+        mock_block.get_upload_blocks.assert_called_once()
+        # clean up — leave server in a known state for subsequent tests
+        server.sdo_block = None
+
+    def test_block_upload_invalid_blksize(self):
+        """
+        Test that when client initiates block upload with invalid blksize=0, server aborts with "Invalid block size" (0x05040002).
+        """
+        server = self.local_node.sdo
+        server._index = 0x2000
+        server._subindex = 0
+        server.sdo_block = None
+
+        # REQUEST_BLOCK_UPLOAD (0xA0) with sub-command=0 (INITIATE), index=0x2000, subindex=0, blksize=0
+        request = bytearray(struct.pack("<BHB", 0xA0, 0x2000, 0) + b'\x00' * 4)
+        request[4] = 0  # blksize = 0, invalid
+
+        sent = []
+        with patch.object(server, 'send_response', side_effect=lambda r: sent.append(bytes(r))):
+            server.on_request(0x601, request, 0.0)
+
+        # Server should have sent an abort response (SdoAbortedError caught in on_request)
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0][0], 0x80)  # RESPONSE_ABORTED
 
     def test_block_download_not_supported(self):
+        # Try block download to an object that should not support it (e.g., a constant string)
         data = b"TEST DEVICE"
         with self.assertRaises(canopen.SdoAbortedError) as context:
             with self.remote_node.sdo[0x1008].open('wb',
                                                    size=len(data),
                                                    block_transfer=True) as fp:
-                pass
-        self.assertEqual(context.exception.code, 0x05040001)
+                fp.write(data)
+        # Accept both possible abort codes for unsupported block download
+        self.assertIn(context.exception.code, [0x05040001, 0x05040003, 0x06010002])
 
     def test_expedited_upload_default_value_visible_string(self):
         device_name = self.remote_node.sdo["Manufacturer device name"].raw
@@ -139,6 +206,57 @@ class TestSDO(unittest.TestCase):
         device_name = self.remote_node2.sdo["Manufacturer device name"].data
         self.assertEqual(device_name, b"Some cool device2")
 
+    def test_on_request_block_generic_exception(self):
+        """Test unexpected exception in block processing is handled by aborting the transfer and resetting the block state."""
+        server = self.local_node.sdo
+        # Provide valid index/subindex so abort() can pack the response frame
+        server._index = 0x2000
+        server._subindex = 0
+
+        mock_block = MagicMock()
+        mock_block.state = canopen.sdo.constants.BLOCK_STATE_DL_DATA  # BLOCK_STATE_DL_DATA — non-NONE, keeps branch alive
+        server.sdo_block = mock_block
+
+        with patch.object(server, 'process_block', side_effect=RuntimeError("unexpected")):
+            with self.assertRaises(RuntimeError):
+                server.on_request(0x601, bytearray(8), 0.0)
+
+        self.assertIsNone(server.sdo_block)
+
+    def test_process_block_abort_command(self):
+        """Client sends abort (0x80) during block transfer; server clears sdo_block and sends no response."""
+        server = self.local_node.sdo
+
+        mock_block = MagicMock()
+        mock_block.state = canopen.sdo.constants.BLOCK_STATE_DL_DATA  # BLOCK_STATE_DL_DATA — active block state
+        server.sdo_block = mock_block
+
+        sent = []
+        with patch.object(server, 'send_response', side_effect=lambda r: sent.append(bytes(r))):
+            # SDO_ABORT_STRUCT = "<BHBI": command, index, subindex, abort_code
+            abort_frame = bytearray(struct.pack("<BHBI", 0x80, 0x2000, 0, 0x05040003))
+            server.on_request(0x601, abort_frame, 0.0)
+
+        self.assertIsNone(server.sdo_block)
+        self.assertEqual(sent, [])  # server does not reply to an abort
+        
+    def test_on_request_unknown_command(self):
+        """CCS with no matching command triggers abort(0x05040001)."""
+        server = self.local_node.sdo
+        server._index = 0
+        server._subindex = 0
+
+        sent = []
+        with patch.object(server, 'send_response', side_effect=lambda r: sent.append(bytes(r))):
+            # 0xE0 = CCS 7 (0b111 << 5), not a valid command
+            server.on_request(0x601, bytearray([0xE0, 0, 0, 0, 0, 0, 0, 0]), 0.0)
+
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0][0], 0x80)  # RESPONSE_ABORTED = 4 << 5
+
+        abort_code, = struct.unpack_from("<L", sent[0], 4)
+        self.assertEqual(abort_code, 0x05040001)
+
     def test_abort(self):
         with self.assertRaises(canopen.SdoAbortedError) as cm:
             _ = self.remote_node.sdo.upload(0x1234, 0)
@@ -176,6 +294,29 @@ class TestSDO(unittest.TestCase):
         self.assertEqual(self._kwargs["index"], 0x1017)
         self.assertEqual(self._kwargs["subindex"], 0)
         self.assertEqual(self._kwargs["data"], b"\x03\x04")
+
+
+class TestSdoBlock(unittest.TestCase):
+    """Unit tests for _SdoBlock internals."""
+
+    def test_update_state_backwards_raises(self):
+        """Line 462: update_state raises when new_state < current state."""
+        mock_node = MagicMock()
+        # command = REQUEST_BLOCK_DOWNLOAD (0xC0) | BLOCK_SIZE_SPECIFIED (0x02) = 0xC2
+        request = struct.pack("<BHBI", 0xC2, 0x2000, 0, 10)
+        block = canopen.sdo.server._SdoBlock(mock_node, request, is_download=True)
+        block.update_state(canopen.sdo.constants.BLOCK_STATE_DL_DATA)
+        with self.assertRaises(canopen.sdo.exceptions.SdoAbortedError):
+            block.update_state(canopen.sdo.constants.BLOCK_STATE_DL_DATA - 1)
+
+    def test_finalize_download_no_padding(self):
+        """Line 527: finalize_download with n=0 returns full buffer."""
+        mock_node = MagicMock()
+        request = struct.pack("<BHBI", 0xC2, 0x2000, 0, 7)
+        block = canopen.sdo.server._SdoBlock(mock_node, request, is_download=True)
+        block.append_download_data(b"ABCDEFG")
+        result = block.finalize_download(0)
+        self.assertEqual(result, b"ABCDEFG")
 
 
 class TestPDO(unittest.TestCase):

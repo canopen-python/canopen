@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 import os
 import struct
+import sys
 from collections.abc import Collection, Iterator, Mapping, MutableMapping
 from typing import Optional, TextIO, Union
 
@@ -50,7 +51,9 @@ def export_od(
 
     opened_here: Optional[TextIO] = None
     try:
-        if isinstance(dest, (str, os.PathLike)):
+        if dest is None:
+            dest = sys.stdout
+        elif isinstance(dest, (str, os.PathLike)):
             if doc_type is None:
                 _, suffix = os.path.splitext(os.fspath(dest).lower())
                 for t in supported_doctypes:

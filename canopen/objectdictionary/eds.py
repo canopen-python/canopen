@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 def import_eds(source, node_id):
     eds = RawConfigParser(inline_comment_prefixes=(';',))
     eds.optionxform = str
@@ -133,20 +134,22 @@ def import_eds(source, node_id):
                 od.add_object(var)
             elif object_type == objectcodes.ARRAY and eds.has_option(section, "CompactSubObj"):
                 arr = ODArray(name, index)
-                last_subindex = ODVariable(
-                    "Number of entries", index, 0)
+                last_subindex = ODVariable("Number of entries", index, 0)
                 last_subindex.data_type = datatypes.UNSIGNED8
                 arr.add_member(last_subindex)
                 arr.add_member(build_variable(eds, section, node_id, object_type, index, 1))
                 arr.storage_location = storage_location
+                arr.custom_options = _get_custom_options(eds, section)
                 od.add_object(arr)
             elif object_type == objectcodes.ARRAY:
                 arr = ODArray(name, index)
                 arr.storage_location = storage_location
+                arr.custom_options = _get_custom_options(eds, section)
                 od.add_object(arr)
             elif object_type == objectcodes.RECORD:
                 record = ODRecord(name, index)
                 record.storage_location = storage_location
+                record.custom_options = _get_custom_options(eds, section)
                 od.add_object(record)
 
             continue
@@ -269,6 +272,27 @@ def _encode_to_eds(var_type: int, value: Any) -> Any:
         return f"0x{value:02X}"
 
 
+_STANDARD_OPTIONS = {
+    "ObjectType", "ParameterName", "DataType", "AccessType",
+    "PDOMapping", "LowLimit", "HighLimit", "DefaultValue",
+    "ParameterValue", "Factor", "Description", "Unit",
+    "StorageLocation", "CompactSubObj",
+    # CiA 306 fields parsed explicitly:
+    "SubNumber",
+    # ObjFlags and Denotation are intentionally absent: they are not yet
+    # parsed by this codebase, so they flow through custom_options and
+    # survive round-trips. Proper first-class support is tracked in #654.
+}
+
+
+def _get_custom_options(eds: RawConfigParser, section: str) -> dict[str, str]:
+    custom_options = {}
+    for option, value in eds.items(section):
+        if option not in _STANDARD_OPTIONS:
+            custom_options[option] = value
+    return custom_options
+
+
 def build_variable(
     eds: RawConfigParser,
     section: str,
@@ -370,6 +394,8 @@ def build_variable(
         var.description = eds.get(section, "Description")
     if eds.has_option(section, "Unit"):
         var.unit = eds.get(section, "Unit")
+
+    var.custom_options = _get_custom_options(eds, section)
     return var
 
 
@@ -445,12 +471,19 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
         if getattr(var, 'unit', '') != '':
             eds.set(section, "Unit", var.unit)
 
+        for option, value in var.custom_options.items():
+            if option not in _STANDARD_OPTIONS:
+                eds.set(section, option, str(value))
+
     def export_record(var, eds):
         section = f"{var.index:04X}"
         export_common(var, eds, section)
         eds.set(section, "SubNumber", f"0x{len(var.subindices):X}")
         ot = objectcodes.RECORD if isinstance(var, ODRecord) else objectcodes.ARRAY
         eds.set(section, "ObjectType", f"0x{ot:X}")
+        for option, value in var.custom_options.items():
+            if option not in _STANDARD_OPTIONS:
+                eds.set(section, option, str(value))
         for i in var:
             export_variable(var[i], eds)
 

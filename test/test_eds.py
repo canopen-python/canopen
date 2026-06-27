@@ -1,8 +1,10 @@
+import io
 import os
 import unittest
+from configparser import RawConfigParser
 
 import canopen
-from canopen.objectdictionary.eds import _signed_int_from_hex
+from canopen.objectdictionary.eds import _signed_int_from_hex, build_variable
 from canopen.utils import pretty_index
 
 from .util import DATATYPES_EDS, SAMPLE_EDS, tmp_file
@@ -70,8 +72,6 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(od.node_id, 16)
 
     def test_load_implicit_nodeid_fallback(self):
-        import io
-
         # First, remove the NodeID option from DeviceComissioning.
         with open(SAMPLE_EDS) as f:
             lines = [L for L in f.readlines() if not L.startswith("NodeID=")]
@@ -93,8 +93,6 @@ class TestEDS(unittest.TestCase):
         self.assertEqual(od.bitrate, 500_000)
 
     def test_load_baudrate_fallback(self):
-        import io
-
         # Remove the Baudrate option.
         with open(SAMPLE_EDS) as f:
             lines = [L for L in f.readlines() if not L.startswith("Baudrate=")]
@@ -136,18 +134,23 @@ class TestEDS(unittest.TestCase):
         self.assertFalse(var.is_domain)
 
     def test_record_with_limits(self):
-        int8 = self.od[0x3020]
-        self.assertEqual(int8.min, 0)
-        self.assertEqual(int8.max, 127)
-        uint8 = self.od[0x3021]
-        self.assertEqual(uint8.min, 2)
-        self.assertEqual(uint8.max, 10)
-        int32 = self.od[0x3030]
-        self.assertEqual(int32.min, -2147483648)
-        self.assertEqual(int32.max, -1)
-        int64 = self.od[0x3040]
-        self.assertEqual(int64.min, -10)
-        self.assertEqual(int64.max, +10)
+        cases = [
+            (0x3020, 0, 127),  # _          INTEGER8   hex limits
+            (0x3021, 2, 10),  # _           UNSIGNED8  hex limits
+            (0x3022, 100, 1000),  # _       UNSIGNED16 decimal limits
+            (0x3023, -100, 100),  # _       INTEGER16  decimal limits
+            (0x3030, -2147483648, -1),  # _ INTEGER32  hex limits
+            (0x3031, -1, 0),  # _           INTEGER24  hex limits
+            (0x3032, -1, 0),  # _           INTEGER40  hex limits
+            (0x3033, -1, 0),  # _           INTEGER48  hex limits
+            (0x3034, -1, 0),  # _           INTEGER56  hex limits
+            (0x3040, -10, +10),  # _        INTEGER64  hex limits
+        ]
+        for index, expected_min, expected_max in cases:
+            with self.subTest(index=f"0x{index:04X}"):
+                var = self.od[index]
+                self.assertEqual(var.min, expected_min)
+                self.assertEqual(var.max, expected_max)
 
     def test_signed_int_from_hex(self):
         for data_type, test_cases in self.test_data.items():
@@ -155,6 +158,37 @@ class TestEDS(unittest.TestCase):
                 with self.subTest(data_type=data_type, test_case=test_case):
                     result = _signed_int_from_hex('0x' + test_case["hex_str"], test_case["bit_length"])
                     self.assertEqual(result, test_case["expected"])
+
+    def test_signed_int_from_hex_accepts_decimal(self):
+        # Negative decimal values are valid EDS literals (CiA 306 allows both formats).
+        self.assertEqual(_signed_int_from_hex("-1", 8), -1)
+        self.assertEqual(_signed_int_from_hex("-128", 8), -128)
+        self.assertEqual(_signed_int_from_hex("-2147483648", 32), -2147483648)
+
+    def test_signed_int_from_hex_rejects_out_of_range(self):
+        with self.assertRaises(ValueError):
+            _signed_int_from_hex("0xFFFF", 8)   # 16-bit value into 8-bit field
+        with self.assertRaises(ValueError):
+            _signed_int_from_hex("-129", 8)     # below minimum for 8-bit signed
+
+    def test_build_variable_range_warnings(self):
+        eds = RawConfigParser()
+        cases = [
+            ("2003", "LowLimit", str(-0xFFFF)),  # INTEGER16 < signed min
+            ("2003", "HighLimit", "0x10000"),  # INTEGER16 > unsigned max
+            ("2001", "DefaultValue", "SOMETHING"),  # BOOLEAN non-numeric
+            ("2003", "DefaultValue", "SOMETHING"),  # INTEGER16 non-numeric
+            ("2006", "ParameterValue", ""),  # UNSIGNED16 empty
+        ]
+        for index, option, value in cases:
+            with self.subTest(index=index, option=option, value=value):
+                # Fresh version for mutating temporarily
+                eds.clear()
+                eds.read(DATATYPES_EDS)
+                eds[index][option] = value
+                with self.assertLogs(level="WARN") as cm:
+                    build_variable(eds, index, node_id=42, object_type=7, index=int(index, 16))
+                self.assertRegex(cm.output[0], option)
 
     def test_array_compact_subobj(self):
         array = self.od[0x1003]
@@ -240,7 +274,6 @@ class TestEDS(unittest.TestCase):
 
     def test_roundtrip_domain_objects(self):
         # ObjectType==DOMAIN survive an EDS export/import round-trip
-        import io
         with io.StringIO() as dest:
             canopen.export_od(self.od, dest, 'eds')
             dest.name = 'mock.eds'
@@ -250,6 +283,17 @@ class TestEDS(unittest.TestCase):
         self.assertFalse(od2['Identity object']['Vendor-ID'].is_domain)
         self.assertTrue(od2[0x3063].is_domain)
         self.assertTrue(od2[0x3064][1].is_domain)
+
+    def test_export_without_raw_default_values(self):
+        od = canopen.import_od(DATATYPES_EDS)
+        # Make sure the values are not cached in raw form
+        for var in od.values():
+            try:
+                delattr(var, 'default_raw')
+            except AttributeError:
+                pass
+        with io.StringIO() as dest:
+            canopen.export_od(od, dest, 'eds')
 
 
     def test_comments(self):
@@ -271,7 +315,6 @@ class TestEDS(unittest.TestCase):
                         self.verify_od(dest, doctype)
 
     def test_export_eds_to_file_unknown_extension(self):
-        import io
         for suffix in ".txt", "":
             with tmp_file(suffix=suffix) as tmp:
                 dest = tmp.name
@@ -294,7 +337,6 @@ class TestEDS(unittest.TestCase):
                         self.verify_od(buf, "eds")
 
     def test_export_eds_unknown_doctype(self):
-        import io
         filelike_object = io.StringIO()
         self.addCleanup(filelike_object.close)
         for dest in "filename", None, filelike_object:
@@ -307,7 +349,6 @@ class TestEDS(unittest.TestCase):
                         os.stat(dest)
 
     def test_export_eds_to_filelike_object(self):
-        import io
         for doctype in "eds", "dcf":
             with io.StringIO() as dest:
                 with self.subTest(dest=dest, doctype=doctype):
@@ -321,7 +362,6 @@ class TestEDS(unittest.TestCase):
 
     def test_export_eds_to_stdout(self):
         import contextlib
-        import io
         with contextlib.redirect_stdout(io.StringIO()) as f:
             ret = canopen.export_od(self.od, None, "eds")
         self.assertIsNone(ret)

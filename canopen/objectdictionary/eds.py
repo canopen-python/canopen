@@ -4,7 +4,7 @@ import copy
 import logging
 import re
 from configparser import NoOptionError, NoSectionError, RawConfigParser
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from canopen.objectdictionary import (
     ODArray,
@@ -207,32 +207,43 @@ def import_from_node(node_id: int, network: canopen.network.Network):
     return od
 
 
-def _calc_bit_length(data_type):
-    if data_type == datatypes.INTEGER8:
-        return 8
-    elif data_type == datatypes.INTEGER16:
-        return 16
-    elif data_type == datatypes.INTEGER32:
-        return 32
-    elif data_type == datatypes.INTEGER64:
-        return 64
+def _calc_bit_length(data_type: int) -> int:
+    if data_type in datatypes.INTEGER_TYPES:
+        st = ODVariable.STRUCT_TYPES[data_type]
+        if isinstance(st, datatypes.IntegerN):
+            return st.width
+        return st.size * 8
     else:
         raise ValueError(
-            f"Invalid data_type '{data_type}', expecting a signed integer data_type."
+            f"Invalid data_type 0x{data_type:04X}, expecting an integer data_type."
         )
 
 
 def _signed_int_from_hex(hex_str, bit_length):
     number = int(hex_str, 0)
-    max_value = (1 << (bit_length - 1)) - 1
+    min_signed = -(1 << (bit_length - 1))
+    max_signed = (1 << (bit_length - 1)) - 1
+    max_unsigned = (1 << bit_length) - 1
 
-    if number > max_value:
-        return number - (1 << bit_length)
-    else:
+    if number < min_signed:
+        raise ValueError(
+            f"Value {hex_str!r} is out of range for a {bit_length}-bit signed integer"
+        )
+    if number < 0:
+        # Negative literal (e.g. LowLimit=-32768 or -0x8000)
         return number
 
+    if number > max_unsigned:
+        raise ValueError(
+            f"Value {hex_str!r} is out of range for a {bit_length}-bit signed integer"
+        )
+    if number > max_signed:
+        # Unsigned hex literal, two's-complement (e.g. LowLimit=0xFFFF → -1 for INTEGER16)
+        return number - (1 << bit_length)
+    return number
 
-def _convert_variable(node_id, var_type, value):
+
+def _decode_from_eds(node_id: int, var_type: int, value: Any) -> Any:
     if var_type in (datatypes.OCTET_STRING, datatypes.DOMAIN):
         return bytes.fromhex(value)
     elif var_type in (datatypes.VISIBLE_STRING, datatypes.UNICODE_STRING):
@@ -248,7 +259,7 @@ def _convert_variable(node_id, var_type, value):
             return int(value, 0)
 
 
-def _revert_variable(var_type, value):
+def _encode_to_eds(var_type: int, value: Any) -> Any:
     if value is None:
         return None
     if var_type in (datatypes.OCTET_STRING, datatypes.DOMAIN):
@@ -333,7 +344,10 @@ def build_variable(
             else:
                 var.min = int(min_string, 0)
         except ValueError:
-            pass
+            logger.warning(
+                "Invalid LowLimit %r for %s (0x%X), ignoring",
+                min_string, var.name, var.index,
+            )
     if eds.has_option(section, "HighLimit"):
         try:
             max_string = eds.get(section, "HighLimit")
@@ -342,38 +356,44 @@ def build_variable(
             else:
                 var.max = int(max_string, 0)
         except ValueError:
-            pass
+            logger.warning(
+                "Invalid HighLimit %r for %s (0x%X), ignoring",
+                max_string, var.name, var.index,
+            )
     if eds.has_option(section, "DefaultValue"):
         try:
             var.default_raw = eds.get(section, "DefaultValue")
             if '$NODEID' in var.default_raw:
                 var.relative = True
-            var.default = _convert_variable(node_id, var.data_type, var.default_raw)
+            var.default = _decode_from_eds(node_id, var.data_type, var.default_raw)
         except ValueError:
-            pass
+            logger.warning(
+                "Invalid DefaultValue %r for %s (0x%X), ignoring",
+                var.default_raw, var.name, var.index,
+            )
     if eds.has_option(section, "ParameterValue"):
         try:
             var.value_raw = eds.get(section, "ParameterValue")
-            var.value = _convert_variable(node_id, var.data_type, var.value_raw)
+            var.value = _decode_from_eds(node_id, var.data_type, var.value_raw)
         except ValueError:
-            pass
+            logger.warning(
+                "Invalid ParameterValue %r for %s (0x%X), ignoring",
+                var.value_raw, var.name, var.index,
+            )
     # Factor, Description and Unit are not standard according to the CANopen specifications, but
     # they are implemented in the python canopen package, so we can at least try to use them
     if eds.has_option(section, "Factor"):
         try:
             var.factor = float(eds.get(section, "Factor"))
         except ValueError:
-            pass
+            logger.warning(
+                "Invalid Factor %r for %s (0x%X), ignoring",
+                eds.get(section, "Factor"), var.name, var.index,
+            )
     if eds.has_option(section, "Description"):
-        try:
-            var.description = eds.get(section, "Description")
-        except ValueError:
-            pass
+        var.description = eds.get(section, "Description")
     if eds.has_option(section, "Unit"):
-        try:
-            var.unit = eds.get(section, "Unit")
-        except ValueError:
-            pass
+        var.unit = eds.get(section, "Unit")
 
     var.custom_options = _get_custom_options(eds, section)
     return var
@@ -426,7 +446,7 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
         if getattr(var, 'default_raw', None) is not None:
             eds.set(section, "DefaultValue", var.default_raw)
         elif getattr(var, 'default', None) is not None:
-            eds.set(section, "DefaultValue", _revert_variable(
+            eds.set(section, "DefaultValue", _encode_to_eds(
                 var.data_type, var.default))
 
         if device_commisioning:
@@ -434,7 +454,7 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
                 eds.set(section, "ParameterValue", var.value_raw)
             elif getattr(var, 'value', None) is not None:
                 eds.set(section, "ParameterValue",
-                        _revert_variable(var.data_type, var.value))
+                        _encode_to_eds(var.data_type, var.value))
 
         eds.set(section, "DataType", f"0x{var.data_type:04X}")
         eds.set(section, "PDOMapping", hex(var.pdo_mappable))

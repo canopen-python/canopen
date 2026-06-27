@@ -259,7 +259,7 @@ def _decode_from_eds(node_id: int, var_type: int, value: Any) -> Any:
 def _encode_to_eds(var_type: int, value: Any) -> Any:
     if value is None:
         return None
-    if var_type in (datatypes.OCTET_STRING, datatypes.DOMAIN) and isinstance(value, bytes):
+    if var_type in (datatypes.OCTET_STRING, datatypes.DOMAIN):
         return bytes.hex(value)
     elif var_type in (datatypes.VISIBLE_STRING, datatypes.UNICODE_STRING):
         return value

@@ -1,3 +1,4 @@
+import contextlib
 import io
 import os
 import pathlib
@@ -337,7 +338,6 @@ class TestEDS(unittest.TestCase):
 
     def test_roundtrip_custom_options(self):
         """custom_options survive an EDS export/import round-trip."""
-        import io
         with io.StringIO() as dest:
             canopen.export_od(self.od, dest, 'eds')
             dest.name = 'mock.eds'
@@ -348,7 +348,6 @@ class TestEDS(unittest.TestCase):
 
     def test_roundtrip_custom_options_not_duplicated_as_standard(self):
         """After round-trip the re-imported object must not contain standard keys."""
-        import io
         with io.StringIO() as dest:
             canopen.export_od(self.od, dest, 'eds')
             dest.name = 'mock.eds'
@@ -449,7 +448,6 @@ class TestEDS(unittest.TestCase):
                     self.verify_od(dest, doctype)
 
     def test_export_eds_to_stdout(self):
-        import contextlib
         with contextlib.redirect_stdout(io.StringIO()) as f:
             ret = canopen.export_od(self.od, None, "eds")
         self.assertIsNone(ret)

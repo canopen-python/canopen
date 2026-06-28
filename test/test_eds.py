@@ -67,8 +67,6 @@ class TestEDS(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "''"):
             canopen.import_od('')
         with self.assertRaisesRegex(ValueError, "''"):
-            canopen.import_od(object())
-        with self.assertRaisesRegex(ValueError, "''"):
             filelike_object = io.StringIO()  # no .name attribute
             self.addCleanup(filelike_object.close)
             canopen.import_od(filelike_object)
@@ -76,6 +74,10 @@ class TestEDS(unittest.TestCase):
     def test_load_file_object(self):
         with open(SAMPLE_EDS) as fp:
             od = canopen.import_od(fp)
+        self.assertTrue(len(od) > 0)
+
+    def test_load_pathlib_path(self):
+        od = canopen.import_od(pathlib.Path(SAMPLE_EDS))
         self.assertTrue(len(od) > 0)
 
     def test_load_implicit_nodeid(self):

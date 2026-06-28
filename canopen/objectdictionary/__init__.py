@@ -5,7 +5,9 @@ Object Dictionary module
 from __future__ import annotations
 
 import logging
+import os
 import struct
+import sys
 from collections.abc import Collection, Iterator, Mapping, MutableMapping
 from typing import Optional, TextIO, Union
 
@@ -19,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 def export_od(
     od: ObjectDictionary,
-    dest: Union[str, TextIO, None] = None,
-    doc_type: Optional[str] = None
+    dest: Union[str, os.PathLike, TextIO, None] = None,
+    doc_type: Optional[str] = None,
 ) -> None:
     """Export an object dictionary.
 
@@ -47,18 +49,21 @@ def export_od(
             f"supported formats: {supported}"
         )
 
-    opened_here = False
+    opened_here: Optional[TextIO] = None
     try:
-        if isinstance(dest, str):
+        if dest is None:
+            dest = sys.stdout
+        elif isinstance(dest, (str, os.PathLike)):
             if doc_type is None:
+                _, suffix = os.path.splitext(os.fspath(dest).lower())
                 for t in supported_doctypes:
-                    if dest.endswith(f".{t}"):
+                    if suffix == f".{t}":
                         doc_type = t
                         break
                 else:
                     doc_type = "eds"
             dest = open(dest, 'w')
-            opened_here = True
+            opened_here = dest
 
         if doc_type == "eds":
             from canopen.objectdictionary import eds
@@ -67,13 +72,13 @@ def export_od(
             from canopen.objectdictionary import eds
             return eds.export_dcf(od, dest)
     finally:
-        # If dest is opened in this fn, it should be closed
-        if opened_here:
-            dest.close()
+        # If dest is opened in this function, it should be closed
+        if opened_here is not None:
+            opened_here.close()
 
 
 def import_od(
-    source: Union[str, TextIO, None],
+    source: Union[str, os.PathLike, TextIO, None],
     node_id: Optional[int] = None,
 ) -> ObjectDictionary:
     """Parse an EDS, DCF, or EPF file.
@@ -90,16 +95,17 @@ def import_od(
     """
     if source is None:
         return ObjectDictionary()
-    if hasattr(source, "read"):
+    filename = ""
+    if isinstance(source, (str, os.PathLike)):
+        # Path to file
+        filename = os.fspath(source)
+    elif hasattr(source, "read"):
         # File like object
-        filename = source.name
+        filename = getattr(source, "name", "")
     elif hasattr(source, "tag"):
         # XML tree, probably from an EPF file
         filename = "od.epf"
-    else:
-        # Path to file
-        filename = source
-    suffix = filename[filename.rfind("."):].lower()
+    _, suffix = os.path.splitext(filename.lower())
     if suffix in (".eds", ".dcf"):
         from canopen.objectdictionary import eds
         return eds.import_eds(source, node_id)

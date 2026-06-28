@@ -4,7 +4,7 @@ import copy
 import logging
 import re
 from configparser import NoOptionError, NoSectionError, RawConfigParser
-from typing import Any, TYPE_CHECKING
+from typing import Any, TextIO, TYPE_CHECKING
 
 from canopen.objectdictionary import (
     ODArray,
@@ -408,11 +408,11 @@ def copy_variable(eds, section, subindex, src_var):
     return var
 
 
-def export_dcf(od, dest=None, fileInfo={}):
+def export_dcf(od: ObjectDictionary, dest: TextIO, fileInfo={}):
     return export_eds(od, dest, fileInfo, True)
 
 
-def export_eds(od, dest=None, file_info={}, device_commisioning=False):
+def export_eds(od: ObjectDictionary, dest: TextIO, file_info={}, device_commisioning=False):
     def export_object(obj, eds):
         if isinstance(obj, ODVariable):
             return export_variable(obj, eds)
@@ -595,9 +595,5 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
     add_list("MandatoryObjects", supported_mantatory_indices)
     add_list("OptionalObjects", supported_optional_indices)
     add_list("ManufacturerObjects", supported_manufacturer_indices)
-
-    if not dest:
-        import sys
-        dest = sys.stdout
 
     eds.write(dest, False)

@@ -1,7 +1,10 @@
+import contextlib
 import io
 import os
+import pathlib
 import unittest
 from configparser import RawConfigParser
+from unittest.mock import MagicMock, patch
 
 import canopen
 from canopen.objectdictionary.eds import _signed_int_from_hex, build_variable
@@ -56,14 +59,26 @@ class TestEDS(unittest.TestCase):
     def test_load_nonexisting_file(self):
         with self.assertRaises(IOError):
             canopen.import_od('/path/to/wrong_file.eds')
+        with self.assertRaises(IOError):
+            canopen.import_od(pathlib.Path('/path/to/wrong_file.eds'))
 
     def test_load_unsupported_format(self):
         with self.assertRaisesRegex(ValueError, "'py'"):
             canopen.import_od(__file__)
+        with self.assertRaisesRegex(ValueError, "''"):
+            canopen.import_od('')
+        with self.assertRaisesRegex(ValueError, "''"):
+            filelike_object = io.StringIO()  # no .name attribute
+            self.addCleanup(filelike_object.close)
+            canopen.import_od(filelike_object)
 
     def test_load_file_object(self):
         with open(SAMPLE_EDS) as fp:
             od = canopen.import_od(fp)
+        self.assertTrue(len(od) > 0)
+
+    def test_load_pathlib_path(self):
+        od = canopen.import_od(pathlib.Path(SAMPLE_EDS))
         self.assertTrue(len(od) > 0)
 
     def test_load_implicit_nodeid(self):
@@ -323,7 +338,6 @@ class TestEDS(unittest.TestCase):
 
     def test_roundtrip_custom_options(self):
         """custom_options survive an EDS export/import round-trip."""
-        import io
         with io.StringIO() as dest:
             canopen.export_od(self.od, dest, 'eds')
             dest.name = 'mock.eds'
@@ -334,7 +348,6 @@ class TestEDS(unittest.TestCase):
 
     def test_roundtrip_custom_options_not_duplicated_as_standard(self):
         """After round-trip the re-imported object must not contain standard keys."""
-        import io
         with io.StringIO() as dest:
             canopen.export_od(self.od, dest, 'eds')
             dest.name = 'mock.eds'
@@ -383,6 +396,33 @@ class TestEDS(unittest.TestCase):
                         buf.name = "mock.eds"
                         self.verify_od(buf, "eds")
 
+    def test_export_eds_auto_close(self):
+        fd = io.StringIO()
+        self.addCleanup(fd.close)
+        canopen.export_od(self.od, fd)
+        # File object already passed in must NOT be closed
+        self.assertIs(fd.closed, False)
+        for path in ("mock.eds", pathlib.Path("mock.eds")):
+            with self.subTest(path=path):
+                fd = io.StringIO()
+                with patch("canopen.objectdictionary.open", return_value=fd):
+                    canopen.export_od(self.od, path)
+                # File object opened at path must be closed before return
+                self.assertIs(fd.closed, True)
+
+    def test_export_eds_auto_close_exception(self):
+        buf = io.StringIO()
+        self.addCleanup(buf.close)
+        fd = MagicMock(wraps=buf)
+        fd.write.side_effect = IOError("Simulated write failure")
+        with (
+            patch("canopen.objectdictionary.open", return_value=fd),
+            self.assertRaises(IOError),
+        ):
+            canopen.export_od(self.od, "mock.eds")
+        # File object opened at path must be closed on inner exception
+        self.assertIs(buf.closed, True)
+
     def test_export_eds_unknown_doctype(self):
         filelike_object = io.StringIO()
         self.addCleanup(filelike_object.close)
@@ -408,7 +448,6 @@ class TestEDS(unittest.TestCase):
                     self.verify_od(dest, doctype)
 
     def test_export_eds_to_stdout(self):
-        import contextlib
         with contextlib.redirect_stdout(io.StringIO()) as f:
             ret = canopen.export_od(self.od, None, "eds")
         self.assertIsNone(ret)
@@ -419,7 +458,6 @@ class TestEDS(unittest.TestCase):
             # 'name' member.
             buf.name = "mock.eds"
             self.verify_od(buf, "eds")
-
 
     def verify_od(self, source, doctype):
         exported_od = canopen.import_od(source)

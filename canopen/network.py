@@ -6,6 +6,7 @@ from collections.abc import Iterator, MutableMapping
 from typing import Callable, Final, Optional, Union
 
 import can
+from can.typechecking import CanData
 
 from canopen.lss import LssMaster
 from canopen.nmt import NmtMaster
@@ -187,7 +188,7 @@ class Network(MutableMapping):
         self[node.id] = node
         return node
 
-    def send_message(self, can_id: int, data: bytes, remote: bool = False) -> None:
+    def send_message(self, can_id: int, data: Optional[CanData], remote: bool = False) -> None:
         """Send a raw CAN message to the network.
 
         This method may be overridden in a subclass if you need to integrate
@@ -215,7 +216,7 @@ class Network(MutableMapping):
         self.check()
 
     def send_periodic(
-        self, can_id: int, data: bytes, period: float, remote: bool = False
+        self, can_id: int, data: Optional[CanData], period: float, remote: bool = False
     ) -> PeriodicMessageTask:
         """Start sending a message periodically.
 
@@ -310,7 +311,7 @@ class PeriodicMessageTask:
     def __init__(
         self,
         can_id: int,
-        data: bytes,
+        data: Optional[CanData],
         period: float,
         bus,
         remote: bool = False,
@@ -339,7 +340,7 @@ class PeriodicMessageTask:
         """Stop transmission"""
         self._task.stop()
 
-    def update(self, data: bytes) -> None:
+    def update(self, data: CanData) -> None:
         """Update data of message
 
         :param data:

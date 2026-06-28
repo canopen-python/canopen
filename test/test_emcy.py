@@ -6,7 +6,6 @@ from contextlib import contextmanager
 import can
 
 import canopen
-import canopen.emcy
 
 
 TIMEOUT = 0.1
@@ -313,6 +312,8 @@ class TestEmcyIntegration(unittest.TestCase):
         self.rx_net.connect()
         self.producer = canopen.emcy.EmcyProducer(0x081)
         self.producer.network = self.net
+        self.consumer = canopen.emcy.EmcyConsumer()
+        self.rx_net.subscribe(0x081, self.consumer.on_emcy)
 
     def tearDown(self):
         self.net.disconnect()
@@ -322,18 +323,16 @@ class TestEmcyIntegration(unittest.TestCase):
 
     def test_producer_consumer_integration(self):
         """Test that producer and consumer work together."""
-        consumer = canopen.emcy.EmcyConsumer()
-        self.rx_net.subscribe(0x081, consumer.on_emcy)
         received_errors = []
-        consumer.add_callback(lambda err: received_errors.append(err))
+        self.consumer.add_callback(lambda err: received_errors.append(err))
         with (
             self.assertLogs(level=logging.INFO),
             mock_rx_thread(
-                consumer,
+                self.consumer,
                 lambda: self.producer.send(0x2001, 0x02, b'\x01\x02\x03\x04\x05'),
             ),
         ):
-            err = consumer.wait(0x2001, timeout=TIMEOUT)
+            err = self.consumer.wait(0x2001, timeout=TIMEOUT)
         self.assertIsNotNone(err)
         self.assertEqual(err.code, 0x2001)
         self.assertEqual(err.register, 0x02)
@@ -342,24 +341,22 @@ class TestEmcyIntegration(unittest.TestCase):
 
     def test_producer_reset_consumer_integration(self):
         """Test producer reset clears consumer active errors."""
-        consumer = canopen.emcy.EmcyConsumer()
-        self.rx_net.subscribe(0x081, consumer.on_emcy)
         with (
             self.assertLogs(level=logging.INFO),
             mock_rx_thread(
-                consumer,
+                self.consumer,
                 lambda: self.producer.send(0x2001, 0x02, b'\x01\x02\x03\x04\x05'),
             ),
         ):
-            consumer.wait(0x2001, timeout=TIMEOUT)
-        self.assertEqual(len(consumer.active), 1)
+            self.consumer.wait(0x2001, timeout=TIMEOUT)
+        self.assertEqual(len(self.consumer.active), 1)
         with (
             self.assertLogs(level=logging.INFO),
-            mock_rx_thread(consumer, self.producer.reset),
+            mock_rx_thread(self.consumer, self.producer.reset),
         ):
-            self.assertIsNotNone(consumer.wait(timeout=TIMEOUT))
-        self.assertEqual(len(consumer.active), 0)
-        self.assertEqual(len(consumer.log), 2)
+            self.assertIsNotNone(self.consumer.wait(timeout=TIMEOUT))
+        self.assertEqual(len(self.consumer.active), 0)
+        self.assertEqual(len(self.consumer.log), 2)
 
 
 if __name__ == "__main__":

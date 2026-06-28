@@ -2,7 +2,7 @@ import io
 import os
 import pathlib
 import unittest
-from unittest.mock import mock_open, patch
+from unittest.mock import MagicMock, patch
 
 import canopen
 from canopen.objectdictionary.eds import _signed_int_from_hex
@@ -301,29 +301,31 @@ class TestEDS(unittest.TestCase):
                         self.verify_od(buf, "eds")
 
     def test_export_eds_auto_close(self):
-        m_open = mock_open()
-        with patch("canopen.objectdictionary.open", m_open):
-            canopen.export_od(self.od, m_open)
-        fd = m_open()
+        fd = io.StringIO()
+        self.addCleanup(fd.close)
+        canopen.export_od(self.od, fd)
         # File object already passed in must NOT be closed
-        fd.close.assert_not_called()
+        self.assertIs(fd.closed, False)
         for path in ("mock.eds", pathlib.Path("mock.eds")):
             with self.subTest(path=path):
-                m_open = mock_open()
-                with patch("canopen.objectdictionary.open", m_open):
+                fd = io.StringIO()
+                with patch("canopen.objectdictionary.open", return_value=fd):
                     canopen.export_od(self.od, path)
-                fd = m_open()
                 # File object opened at path must be closed before return
-                fd.close.assert_called_once()
+                self.assertIs(fd.closed, True)
 
     def test_export_eds_auto_close_exception(self):
-        m_open = mock_open()
-        fd = m_open()
+        buf = io.StringIO()
+        self.addCleanup(buf.close)
+        fd = MagicMock(wraps=buf)
         fd.write.side_effect = IOError("Simulated write failure")
-        with patch("canopen.objectdictionary.open", m_open), self.assertRaises(IOError):
+        with (
+            patch("canopen.objectdictionary.open", return_value=fd),
+            self.assertRaises(IOError),
+        ):
             canopen.export_od(self.od, "mock.eds")
-            # File object opened at path must be closed on inner exception
-            fd.close.assert_called_once()
+        # File object opened at path must be closed on inner exception
+        self.assertIs(buf.closed, True)
 
     def test_export_eds_unknown_doctype(self):
         filelike_object = io.StringIO()

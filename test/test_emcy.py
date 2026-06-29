@@ -86,6 +86,10 @@ class TestEmcy(unittest.TestCase):
         def push_err():
             emcy.on_emcy(0x81, b'\x01\x20\x01\x01\x02\x03\x04\x05', 100)
 
+        def no_err():
+            with emcy.emcy_received:
+                emcy.emcy_received.notify_all()
+
         def check_err(err):
             self.assertIsNotNone(err)
             self.check_error(
@@ -102,6 +106,10 @@ class TestEmcy(unittest.TestCase):
             mock_rx_thread(emcy, push_err),
         ):
             check_err(emcy.wait(timeout=TIMEOUT))
+
+        # Check unfiltered wait, spurious condition wake-up.
+        with mock_rx_thread(emcy, no_err):
+            self.assertIsNone(emcy.wait(timeout=TIMEOUT))
 
         # Check filtered wait, on success.
         with (

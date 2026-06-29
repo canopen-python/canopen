@@ -69,7 +69,7 @@ def export_od(
     finally:
         # If dest is opened in this fn, it should be closed
         if opened_here:
-            dest.close()
+            dest.close()  # type: ignore[union-attr]
 
 
 def import_od(
@@ -92,7 +92,7 @@ def import_od(
         return ObjectDictionary()
     if hasattr(source, "read"):
         # File like object
-        filename = source.name
+        filename = source.name  # type: ignore[union-attr]
     elif hasattr(source, "tag"):
         # XML tree, probably from an EPF file
         filename = "od.epf"
@@ -469,15 +469,18 @@ class ODVariable:
         if isinstance(value, (bytes, bytearray)):
             return value
         elif self.data_type == VISIBLE_STRING:
+            assert isinstance(value, str)
             return value.encode("ascii")
         elif self.data_type == UNICODE_STRING:
+            assert isinstance(value, str)
             return value.encode("utf_16_le")
         elif self.data_type in (DOMAIN, OCTET_STRING):
-            return bytes(value)
+            return bytes(value)  # type: ignore[arg-type]
         elif self.data_type in self.STRUCT_TYPES:
             if self.data_type in INTEGER_TYPES:
                 value = int(value)
             if self.data_type in NUMBER_TYPES:
+                assert isinstance(value, (int, float))
                 if self.min is not None and value < self.min:
                     logger.warning(
                         "Value %d is less than min value %d", value, self.min)
@@ -495,16 +498,18 @@ class ODVariable:
             raise TypeError(
                 f"Do not know how to encode {value!r} to data type 0x{self.data_type:X}")
 
-    def decode_phys(self, value: int) -> Union[int, bool, float, str, bytes]:
+    def decode_phys(self, value: Union[int, bool, float, str, bytes]) -> Union[int, bool, float, str, bytes]:
         if self.data_type in INTEGER_TYPES:
-            value *= self.factor
+            assert isinstance(value, (int, float))
+            return value * self.factor
         return value
 
     def encode_phys(self, value: Union[int, bool, float, str, bytes]) -> int:
         if self.data_type in INTEGER_TYPES:
+            assert isinstance(value, (int, float))
             if self.factor != 1:
                 value = round(value / self.factor)
-        return value
+        return value  # type: ignore[return-value]
 
     def decode_desc(self, value: int) -> str:
         if not self.value_descriptions:

@@ -331,6 +331,13 @@ class TestObjectDictionary(unittest.TestCase):
         self.assertIsInstance(item, od.ODArray)
         self.assertIs(item, array)
 
+    def test_get_item_dot_on_variable(self):
+        test_od = od.ObjectDictionary()
+        var = od.ODVariable("Test Variable", 0x1000)
+        test_od.add_object(var)
+        with self.assertRaises(TypeError):
+            test_od["Test Variable.sub"]
+
     def test_get_variable_not_found(self):
         test_od = od.ObjectDictionary()
         self.assertIsNone(test_od.get_variable(0x9999))

@@ -161,7 +161,7 @@ class Network(MutableMapping):
             if upload_eds:
                 logger.info("Trying to read EDS from node %d", node)
                 object_dictionary = import_from_node(node, self)
-            node = RemoteNode(node, object_dictionary)
+            node = RemoteNode(node, object_dictionary)  # type: ignore[arg-type]
         self[node.id] = node
         return node
 
@@ -183,7 +183,7 @@ class Network(MutableMapping):
             The Node object that was added.
         """
         if isinstance(node, int):
-            node = LocalNode(node, object_dictionary)
+            node = LocalNode(node, object_dictionary)  # type: ignore[arg-type]
         self[node.id] = node
         return node
 

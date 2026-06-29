@@ -135,7 +135,7 @@ class SdoArray(Mapping):
         return iter(range(1, len(self) + 1))
 
     def __len__(self) -> int:
-        return self[0].raw
+        return self[0].raw  # type: ignore[return-value]
 
     def __contains__(self, subindex: object) -> bool:
         if not isinstance(subindex, int):

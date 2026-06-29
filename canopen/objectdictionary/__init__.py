@@ -210,6 +210,8 @@ class ODRecord(MutableMapping):
         self.storage_location: Optional[str] = None
         self.subindices: dict[int, ODVariable] = {}
         self.names: dict[str, ODVariable] = {}
+        #: Key-Value pairs not defined by the standard
+        self.custom_options: dict[str, str] = {}
 
     def __repr__(self) -> str:
         return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
@@ -271,12 +273,17 @@ class ODArray(Mapping):
         self.storage_location: Optional[str] = None
         self.subindices: dict[int, ODVariable] = {}
         self.names: dict[str, ODVariable] = {}
+        #: Key-Value pairs not defined by the standard
+        self.custom_options: dict[str, str] = {}
 
     def __repr__(self) -> str:
         return f"<{type(self).__qualname__} {self.name!r} at {pretty_index(self.index)}>"
 
     def __getitem__(self, subindex: Union[int, str]) -> ODVariable:
-        var = self.names.get(subindex) or self.subindices.get(subindex)
+        var = (
+            self.names.get(subindex)  # type: ignore[arg-type]
+            or self.subindices.get(subindex)  # type: ignore[arg-type]
+        )
         if var is not None:
             # This subindex is defined
             pass
@@ -288,9 +295,9 @@ class ODArray(Mapping):
             var.parent = self
             for attr in ("data_type", "unit", "factor", "min", "max", "default",
                          "access_type", "description", "value_descriptions",
-                         "bit_definitions", "storage_location"):
-                if attr in template.__dict__:
-                    var.__dict__[attr] = template.__dict__[attr]
+                         "bit_definitions", "storage_location", "custom_options"):
+                if (template_value := getattr(template, attr)) is not None:
+                    setattr(var, attr, template_value)
         else:
             raise KeyError(f"Could not find subindex {pretty_index(None, subindex)}")
         return var
@@ -381,6 +388,8 @@ class ODVariable:
         self.storage_location: Optional[str] = None
         #: Can this variable be mapped to a PDO
         self.pdo_mappable = False
+        #: Key-Value pairs not defined by the standard
+        self.custom_options: dict[str, str] = {}
 
     def __repr__(self) -> str:
         subindex = self.subindex if isinstance(self.parent, (ODRecord, ODArray)) else None

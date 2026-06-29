@@ -967,6 +967,24 @@ HighLimit=0x0A
 LowLimit=0x02
 PDOMapping=0
 
+[3022]
+ParameterName=UNSIGNED16 decimal limits
+ObjectType=0x7
+DataType=0x06
+AccessType=rw
+LowLimit=100
+HighLimit=1000
+PDOMapping=0
+
+[3023]
+ParameterName=INTEGER16 decimal limits
+ObjectType=0x7
+DataType=0x03
+AccessType=rw
+LowLimit=-100
+HighLimit=100
+PDOMapping=0
+
 [3030]
 ParameterName=INTEGER32 only negative values
 ObjectType=0x7
@@ -974,6 +992,42 @@ DataType=0x04
 AccessType=rw
 HighLimit=0xFFFFFFFF
 LowLimit=0x80000000
+PDOMapping=0
+
+[3031]
+ParameterName=INTEGER24 value range -1 to 0
+ObjectType=0x7
+DataType=0x10
+AccessType=rw
+HighLimit=0x000000
+LowLimit=0xFFFFFF
+PDOMapping=0
+
+[3032]
+ParameterName=INTEGER40 value range -1 to 0
+ObjectType=0x7
+DataType=0x12
+AccessType=rw
+HighLimit=0x0000000000
+LowLimit=0xFFFFFFFFFF
+PDOMapping=0
+
+[3033]
+ParameterName=INTEGER48 value range -1 to 0
+ObjectType=0x7
+DataType=0x13
+AccessType=rw
+HighLimit=0x000000000000
+LowLimit=0xFFFFFFFFFFFF
+PDOMapping=0
+
+[3034]
+ParameterName=INTEGER56 value range -1 to 0
+ObjectType=0x7
+DataType=0x14
+AccessType=rw
+HighLimit=0x00000000000000
+LowLimit=0xFFFFFFFFFFFFFF
 PDOMapping=0
 
 [3040]
@@ -1017,6 +1071,36 @@ PDOMapping=0x0
 Factor=ERROR
 Description=
 Unit=
+
+[3061]
+ParameterName=Object with custom options
+ObjectType=0x7
+DataType=0x0007
+AccessType=rw
+PDOMapping=0
+Category=Motor
+Offset=100
+
+[3062]
+ParameterName=Record with custom options
+SubNumber=0x2
+ObjectType=0x9
+RecordTag=vendor_specific
+
+[3062sub0]
+ParameterName=Highest subindex
+ObjectType=0x7
+DataType=0x0005
+AccessType=ro
+DefaultValue=0x01
+PDOMapping=0
+
+[3062sub1]
+ParameterName=Value
+ObjectType=0x7
+DataType=0x0007
+AccessType=rw
+PDOMapping=0
 
 [3063]
 ParameterName=DOMAIN object

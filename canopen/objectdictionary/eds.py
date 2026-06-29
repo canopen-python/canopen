@@ -333,8 +333,10 @@ def build_variable(
             )
             # Assume DOMAIN to force application to interpret the byte data
             var.data_type = datatypes.DOMAIN
-
-    var.pdo_mappable = bool(int(eds.get(section, "PDOMapping", fallback="0"), 0))
+    
+    pdo_mappable_string = eds.get(section, "PDOMapping", fallback="0")
+    if pdo_mappable_string != "":
+        var.pdo_mappable = bool(int(pdo_mappable_string, 0))
 
     if eds.has_option(section, "LowLimit"):
         try:

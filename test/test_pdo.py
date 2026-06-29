@@ -106,6 +106,34 @@ class TestPDO(unittest.TestCase):
         pdo = node.tpdo[1]
         self.assertEqual(len(pdo), sum(1 for _ in pdo))
 
+    def test_pdo_bit_offsets(self):
+        pdo = self.node.pdo.tx[2]
+        pdo.add_variable('UNSIGNED8 value', length=4)  # byte-aligned, partial byte length
+        pdo.add_variable('INTEGER8 value')  # non-byte-aligned, one whole byte length
+        pdo.add_variable('UNSIGNED32 value', length=24)  # non-aligned, partial last byte
+        pdo.add_variable('UNSIGNED16 value', length=12)  # non-aligned, whole last byte
+        pdo.add_variable('INTEGER16 value', length=3)  # byte-aligned, partial byte length
+        pdo.add_variable('INTEGER32 value', length=13)  # non-aligned, whole last byte
+
+        # Write some values
+        pdo['UNSIGNED8 value'].raw = 3
+        pdo['INTEGER8 value'].raw = -2
+        pdo['UNSIGNED32 value'].raw = 0x987654
+        pdo['UNSIGNED16 value'].raw = 0x321
+        pdo['INTEGER16 value'].raw = -1
+        pdo['INTEGER32 value'].raw = -1071
+
+        # Check expected data
+        self.assertEqual(pdo.data, b'\xe3\x4f\x65\x87\x19\x32\x8f\xde')
+
+        # Read values from data
+        self.assertEqual(pdo['UNSIGNED8 value'].raw, 3)
+        self.assertEqual(pdo['INTEGER8 value'].raw, -2)
+        self.assertEqual(pdo['UNSIGNED32 value'].raw, 0x987654)
+        self.assertEqual(pdo['UNSIGNED16 value'].raw, 0x321)
+        self.assertEqual(pdo['INTEGER16 value'].raw, -1)
+        self.assertEqual(pdo['INTEGER32 value'].raw, -1071)
+
     def test_pdo_save(self):
         self.node.tpdo.save()
         self.node.rpdo.save()

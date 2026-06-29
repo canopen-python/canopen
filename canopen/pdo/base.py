@@ -3,7 +3,6 @@ from __future__ import annotations
 import binascii
 import contextlib
 import logging
-import math
 import threading
 from collections.abc import Iterator, Mapping
 from typing import Callable, Optional, TYPE_CHECKING, Union
@@ -291,7 +290,7 @@ class PdoMap:
             self.map.append(var)
 
     def _update_data_size(self):
-        self.data = bytearray(int(math.ceil(self.length / 8.0)))
+        self.data = bytearray(-(-self.length // 8))  # rounds up
 
     @property
     def name(self) -> str:
@@ -622,6 +621,7 @@ class PdoVariable(variable.Variable):
         """
         byte_offset, bit_offset = divmod(self.offset, 8)
 
+        byte_last = -(-(self.offset + self.length) // 8)  # rounds up
         if bit_offset or self.length % 8:
             # Need information of the current variable type (unsigned vs signed)
             data_type = self.od.data_type
@@ -629,16 +629,21 @@ class PdoVariable(variable.Variable):
                 # A boolean type needs to be treated as an U08
                 data_type = objectdictionary.UNSIGNED8
             od_struct = self.od.STRUCT_TYPES[data_type]
-            data = od_struct.unpack_from(self.pdo_parent.data, byte_offset)[0]
+            # Mask of relevant bits for this mapping, starting at bit 0
+            mask = (1 << self.length) - 1
+            # Extract all needed bytes and convert to a number for bit operations
+            cur_msg_data = self.pdo_parent.data[byte_offset:byte_last]
+            cur_msg_bits = int.from_bytes(cur_msg_data, byteorder="little")
             # Shift and mask to get the correct values
-            data = (data >> bit_offset) & ((1 << self.length) - 1)
+            data_bits = (cur_msg_bits >> bit_offset) & mask
+
             # Check if the variable is signed and if the data is negative prepend signedness
-            if od_struct.format.islower() and (1 << (self.length - 1)) < data:
+            if od_struct.format.islower() and (1 << (self.length - 1)) < data_bits:
                 # fill up the rest of the bits to get the correct signedness
-                data = data | (~((1 << self.length) - 1))
-            data = od_struct.pack(data)
+                data_bits |= ~mask
+            data = od_struct.pack(data_bits)
         else:
-            data = self.pdo_parent.data[byte_offset:byte_offset + len(self.od) // 8]
+            data = self.pdo_parent.data[byte_offset:byte_last]
 
         return data
 
@@ -651,27 +656,24 @@ class PdoVariable(variable.Variable):
         logger.debug("Updating %s to %s in %s",
                      self.name, binascii.hexlify(data), self.pdo_parent.name)
 
+        byte_last = -(-(self.offset + self.length) // 8)  # rounds up
         if bit_offset or self.length % 8:
-            cur_msg_data = self.pdo_parent.data[byte_offset:byte_offset + len(self.od) // 8]
-            # Need information of the current variable type (unsigned vs signed)
-            data_type = self.od.data_type
-            if data_type == objectdictionary.BOOLEAN:
-                # A boolean type needs to be treated as an U08
-                data_type = objectdictionary.UNSIGNED8
-            od_struct = self.od.STRUCT_TYPES[data_type]
-            cur_msg_data = od_struct.unpack(cur_msg_data)[0]
-            # data has to have the same size as old_data
-            data = od_struct.unpack(data)[0]
+            # Mask of relevant bits for this mapping, starting at bit 0
+            mask = (1 << self.length) - 1
+            # Extract all needed bytes and convert to a number for bit operations
+            cur_msg_data = self.pdo_parent.data[byte_offset:byte_last]
+            cur_msg_bits = int.from_bytes(cur_msg_data, byteorder="little")
             # Mask out the old data value
-            # At the end we need to mask for correct variable length (bitwise operation failure)
-            shifted = (((1 << self.length) - 1) << bit_offset) & ((1 << len(self.od)) - 1)
-            bitwise_not = (~shifted) & ((1 << len(self.od)) - 1)
-            cur_msg_data = cur_msg_data & bitwise_not
+            cur_msg_bits &= ~(mask << bit_offset)
+            # Convert new value to a number for generic bit operations
+            data_bits = int.from_bytes(data, byteorder="little") & mask
             # Set the new data on the correct position
-            data = (data << bit_offset) | cur_msg_data
-            od_struct.pack_into(self.pdo_parent.data, byte_offset, data)
+            data_bits = (data_bits << bit_offset) | cur_msg_bits
+
+            merged_data = data_bits.to_bytes(byte_last - byte_offset, byteorder="little")
+            self.pdo_parent.data[byte_offset:byte_last] = merged_data
         else:
-            self.pdo_parent.data[byte_offset:byte_offset + len(data)] = data
+            self.pdo_parent.data[byte_offset:byte_last] = data[0:byte_last]
 
         self.pdo_parent.update()
 

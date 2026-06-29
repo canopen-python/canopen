@@ -884,6 +884,20 @@ DataType=0x0001
 AccessType=rw
 PDOMapping=1
 
+[2007]
+ParameterName=UNSIGNED16 value
+ObjectType=0x7
+DataType=0x0006
+AccessType=rw
+PDOMapping=1
+
+[2008]
+ParameterName=UNSIGNED32 value
+ObjectType=0x7
+DataType=0x0007
+AccessType=rw
+PDOMapping=1
+
 [2020]
 ParameterName=Complex data type
 ObjectType=0x7

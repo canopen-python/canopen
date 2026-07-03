@@ -76,7 +76,7 @@ def import_od(
     source: Union[str, TextIO, None],
     node_id: Optional[int] = None,
 ) -> ObjectDictionary:
-    """Parse an EDS, DCF, or EPF file.
+    """Parse an EDS, DCF, EPF or XDD file.
 
     :param source:
         The path to object dictionary file, a file like object, or an EPF XML tree.
@@ -106,9 +106,12 @@ def import_od(
     elif suffix == ".epf":
         from canopen.objectdictionary import epf
         return epf.import_epf(source)
+    elif suffix == ".xdd":
+        from canopen.objectdictionary import xdd
+        return xdd.import_xdd(source, node_id)
     else:
         doc_type = suffix[1:]
-        allowed = ", ".join(["eds", "dcf", "epf"])
+        allowed = ", ".join(["eds", "dcf", "epf", "xdd"])
         raise ValueError(
             f"Cannot import from the {doc_type!r} format; "
             f"supported formats: {allowed}"

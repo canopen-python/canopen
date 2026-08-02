@@ -135,8 +135,8 @@ class NmtMaster(NmtBase):
             self._state_received = new_state
             self.state_update.notify_all()
 
-        for callback in self._callbacks:
-            callback(new_state)
+        # Call all registered callbacks
+        self.network.dispatch_callbacks(self._callbacks, new_state)
 
     def send_command(self, code: int):
         """Send an NMT command code to the node.

@@ -24,6 +24,16 @@ def mock_rx_thread(consumer: canopen.emcy.EmcyConsumer, func):
 
 class TestEmcy(unittest.TestCase):
 
+    def setUp(self):
+        self.net = canopen.Network()
+        self.net.connect(interface="virtual")
+        self.net.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
+        self.emcy = canopen.emcy.EmcyConsumer()
+        self.emcy.network = self.net
+
+    def tearDown(self):
+        self.net.disconnect()
+
     def check_error(self, err, code, reg, data, ts):
         self.assertIsInstance(err, canopen.emcy.EmcyError)
         self.assertIsInstance(err, Exception)
@@ -34,7 +44,7 @@ class TestEmcy(unittest.TestCase):
 
     def test_emcy_consumer_on_emcy(self):
         """Make sure multiple callbacks receive the same information."""
-        emcy = canopen.emcy.EmcyConsumer()
+        emcy = self.emcy
         acc1 = []
         acc2 = []
         emcy.add_callback(lambda err: acc1.append(err))
@@ -70,7 +80,7 @@ class TestEmcy(unittest.TestCase):
         self.assertEqual(len(emcy.active), 0)
 
     def test_emcy_consumer_reset(self):
-        emcy = canopen.emcy.EmcyConsumer()
+        emcy = self.emcy
         emcy.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
         emcy.on_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
         self.assertEqual(len(emcy.log), 2)
@@ -81,7 +91,7 @@ class TestEmcy(unittest.TestCase):
         self.assertEqual(len(emcy.active), 0)
 
     def test_emcy_consumer_wait(self):
-        emcy = canopen.emcy.EmcyConsumer()
+        emcy = self.emcy
 
         def push_err():
             emcy.on_emcy(0x81, b'\x01\x20\x01\x01\x02\x03\x04\x05', 100)
@@ -122,7 +132,7 @@ class TestEmcy(unittest.TestCase):
 
     def test_emcy_consumer_multiple_callbacks(self):
         """Test adding multiple callbacks and their execution order."""
-        emcy = canopen.emcy.EmcyConsumer()
+        emcy = self.emcy
         call_order = []
         emcy.add_callback(lambda err: call_order.append('callback1'))
         emcy.add_callback(lambda err: call_order.append('callback2'))
@@ -132,7 +142,7 @@ class TestEmcy(unittest.TestCase):
 
     def test_emcy_consumer_callback_exception_handling(self):
         """Test that callback exceptions don't break other callbacks or the system."""
-        emcy = canopen.emcy.EmcyConsumer()
+        emcy = self.emcy
         successful_callbacks = []
         emcy.add_callback(lambda err: successful_callbacks.append('success1'))
         emcy.add_callback(
@@ -144,7 +154,7 @@ class TestEmcy(unittest.TestCase):
 
     def test_emcy_consumer_error_reset_variants(self):
         """Test different error reset code patterns."""
-        emcy = canopen.emcy.EmcyConsumer()
+        emcy = self.emcy
         emcy.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
         emcy.on_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
         self.assertEqual(len(emcy.active), 2)
@@ -157,7 +167,7 @@ class TestEmcy(unittest.TestCase):
 
     def test_emcy_consumer_wait_timeout_edge_cases(self):
         """Test wait method with various timeout scenarios."""
-        emcy = canopen.emcy.EmcyConsumer()
+        emcy = self.emcy
         result = emcy.wait(timeout=0)
         self.assertIsNone(result)
         result = emcy.wait(timeout=0.001)
@@ -165,7 +175,7 @@ class TestEmcy(unittest.TestCase):
 
     def test_emcy_consumer_wait_concurrent_errors(self):
         """Test wait method when multiple errors arrive concurrently."""
-        emcy = canopen.emcy.EmcyConsumer()
+        emcy = self.emcy
 
         def push_multiple_errors():
             emcy.on_emcy(0x81, b'\x01\x20\x01\x01\x02\x03\x04\x05', 100)
@@ -313,6 +323,7 @@ class TestEmcyIntegration(unittest.TestCase):
         self.producer = canopen.emcy.EmcyProducer(0x081)
         self.producer.network = self.net
         self.consumer = canopen.emcy.EmcyConsumer()
+        self.consumer.network = self.rx_net
         self.rx_net.subscribe(0x081, self.consumer.on_emcy)
 
     def tearDown(self):

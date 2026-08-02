@@ -24,6 +24,7 @@ class EmcyConsumer:
         self.active: list[EmcyError] = []
         self.callbacks = []
         self.emcy_received = threading.Condition()
+        self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
 
     def on_emcy(self, can_id, data, timestamp):
         code, register, data = EMCY_STRUCT.unpack(data)
@@ -38,11 +39,8 @@ class EmcyConsumer:
             self.log.append(entry)
             self.emcy_received.notify_all()
 
-        for callback in self.callbacks:
-            try:
-                callback(entry)
-            except Exception:
-                logger.exception("Exception in EMCY callback")
+        # Call all registered callbacks
+        self.network.dispatch_callbacks(self.callbacks, entry, ignore_errors=True)
 
     def add_callback(self, callback: Callable[[EmcyError], None]):
         """Get notified on EMCY messages from this node.

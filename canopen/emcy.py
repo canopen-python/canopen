@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import struct
 import threading
 import time
 from typing import Callable, Optional
 
+from canopen.async_guard import ensure_not_async
 import canopen.network
 
 
@@ -24,6 +26,7 @@ class EmcyConsumer:
         self.active: list[EmcyError] = []
         self.callbacks = []
         self.emcy_received = threading.Condition()
+        self.network: canopen.network.Network = canopen.network._UNINITIALIZED_NETWORK
 
     def on_emcy(self, can_id, data, timestamp):
         code, register, data = EMCY_STRUCT.unpack(data)
@@ -38,11 +41,8 @@ class EmcyConsumer:
             self.log.append(entry)
             self.emcy_received.notify_all()
 
-        for callback in self.callbacks:
-            try:
-                callback(entry)
-            except Exception:
-                logger.exception("Exception in EMCY callback")
+        # Call all registered callbacks
+        self.network.dispatch_callbacks(self.callbacks, entry, ignore_errors=True)
 
     def add_callback(self, callback: Callable[[EmcyError], None]):
         """Get notified on EMCY messages from this node.
@@ -58,6 +58,7 @@ class EmcyConsumer:
         self.log = []
         self.active = []
 
+    @ensure_not_async("Use async_wait() instead")
     def wait(
         self, emcy_code: Optional[int] = None, timeout: float = 10
     ) -> Optional[EmcyError]:
@@ -85,6 +86,18 @@ class EmcyConsumer:
                 if emcy_code is None or emcy.code == emcy_code:
                     # This is the one we're interested in
                     return emcy
+
+    async def async_wait(
+        self, emcy_code: Optional[int] = None, timeout: float = 10
+    ) -> Optional[EmcyError]:
+        """Wait for a new EMCY to arrive.
+
+        :param emcy_code: EMCY code to wait for
+        :param timeout: Max time in seconds to wait
+
+        :return: The EMCY exception object or None if timeout
+        """
+        return await asyncio.to_thread(self.wait, emcy_code, timeout)
 
 
 class EmcyProducer:

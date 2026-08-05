@@ -8,6 +8,80 @@ automation tasks rather than a standard compliant master implementation.
 
 The library supports Python 3.9 or newer.
 
+The library can be run in two modes: regular mode or in async mode. In regular
+mode, calls to the library may block until a response is ready. In async mode
+it is possible to read and write to more than one node at the same time
+without the need of multiple threads.
+
+
+Asyncio port
+------------
+
+The objective of the library is to provide a canopen implementation in
+either async or non-async environment, with suitable API for both.
+
+To minimize the impact of the async changes, this port is designed to use the
+existing synchronous backend of the library. This means that the library
+uses :code:`asyncio.to_thread()` for many asynchronous operations.
+
+This port remains compatible with using it in a regular non-asyncio
+environment. This is selected with the `loop` parameter in the
+:code:`Network` constructor. If you pass a valid asyncio event loop, the
+library will run in async mode. If you pass `loop=None`, it will run in
+regular blocking mode. It cannot be used in both modes at the same time.
+
+
+Difference between async and non-async version
+----------------------------------------------
+
+This port have some differences with the upstream non-async version of canopen.
+
+* The async use of :code:`Network` must be used in an async context. This is
+  required to setup the async tasks and handles proper cleanup and exception
+  handling.
+
+      async with canopen.Network().connect() as network:
+          # do async stuff with network
+
+* Most async functions follow an "a" prefix naming scheme.
+  E.g. the async variant for :code:`SdoClient.download()` is available
+  as :code:`SdoClient.adownload()`.
+
+* Variables in the regular canopen library uses properties for getting and
+  setting. This is replaced with awaitable methods in the async version.
+
+      var = sdo['Variable'].raw  # synchronous
+      sdo['Variable'].raw = 12   # synchronous
+
+      var = await sdo['Variable']          # async
+      var = await sdo['Variable'].aread()  # async (equivalent)
+      await sdo['Variable'].awrite(12)     # async
+
+* Opt-in :code:`ensure_not_async()` sentinel guard in functions which prevents
+  calling blocking functions in async context. It will raise the exception
+  :code:`RuntimeError` "Calling a blocking function" when this happen. If this
+  is encountered, the code is not using the async variants of the library when
+  it shouldn't.
+
+  To enable it call :code:`canopen.async_guard.enable_async_guard(True)` in
+  your main thread/main loop.
+
+* The callbacks to the message handlers have been changed to be handled by
+  :code:`Network.dispatch_callbacks()`. They are no longer called with any
+  locks held, as this would not work with async. This affects:
+    * :code:`PdoMaps.on_message`
+    * :code:`EmcyConsumer.on_emcy`
+    * :code:`NtmMaster.on_heartbaet`
+
+* SDO block upload and download is not yet supported in async mode.
+
+* :code:`BaseNode402` does not work with async
+
+* :code:`Bits` is not working differently in async mode. In non-async mode,
+  the raw value is read from the node when the :code:`Bits` object is created.
+  In async mode, the raw value must be manually read by calling
+  :code:`await bits.aread()` before accessing the bits.
+
 
 Features
 --------
@@ -154,6 +228,70 @@ The :code:`n` is the PDO index (normally 1 to 4). The second form of access is f
     # Disconnect from CAN bus
     network.sync.stop()
     network.disconnect()
+
+
+Asyncio
+-------
+
+This is the same example as above, but using asyncio
+
+.. code-block:: python
+
+    import asyncio
+    import canopen
+    import can
+
+    async def my_node(network, nodeid, od):
+
+        # Create the node object and load the OD
+        node = network.add_node(nodeid, od)
+
+        # Read the PDOs from the remote
+        await node.tpdo.aread()
+        await node.rpdo.aread()
+
+        # Set the module state
+        node.nmt.set_state('OPERATIONAL')
+
+        # Set motor speed via SDO
+        await node.sdo['MotorSpeed'].awrite(2)
+
+        while True:
+
+            # Wait for TPDO 1
+            t = await node.tpdo[1].await_for_reception(1)
+            if not t:
+                continue
+
+            # Get the TPDO 1 value
+            rpm = node.tpdo[1]['MotorSpeed Actual'].raw
+            print(f'SPEED on motor {nodeid}:', rpm)
+
+            # Sleep a little
+            await asyncio.sleep(0.2)
+
+            # Send RPDO 1 with some data
+            node.rpdo[1]['Some variable'].awrite(42, "phys")
+            node.rpdo[1].transmit()
+
+    async def main():
+
+        # Connect to the CAN bus
+        # Arguments are passed to python-can's can.Bus() constructor
+        # (see https://python-can.readthedocs.io/en/latest/bus.html).
+        # Note the loop parameter to enable asyncio operation
+        loop = asyncio.get_running_loop()
+        async with canopen.Network(loop=loop).connect(
+                interface='pcan', bitrate=1000000) as network:
+
+            # Create two independent tasks for two nodes 51 and 52 which will run concurrently
+            task1 = asyncio.create_task(my_node(network, 51, '/path/to/object_dictionary.eds'))
+            task2 = asyncio.create_task(my_node(network, 52, '/path/to/object_dictionary.eds'))
+
+            # Wait for both to complete (which will never happen)
+            await asyncio.gather((task1, task2))
+
+    asyncio.run(main())
 
 
 Debugging

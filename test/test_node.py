@@ -29,17 +29,15 @@ class TestBaseNode(unittest.TestCase):
 
 class TestLocalNode(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls):
-        cls.network = canopen.Network()
-        cls.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
-        cls.network.connect(interface="virtual")
+    def setUp(self):
+        self.network = canopen.Network()
+        self.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
+        self.network.connect(interface="virtual")
 
-        cls.node = canopen.LocalNode(2, canopen.objectdictionary.ObjectDictionary())
+        self.node = canopen.LocalNode(2, canopen.objectdictionary.ObjectDictionary())
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.network.disconnect()
+    def tearDown(self):
+        self.network.disconnect()
 
     def test_associate_network(self):
         # Need to store the number of subscribers before associating because the
@@ -78,17 +76,15 @@ class TestLocalNode(unittest.TestCase):
 
 class TestRemoteNode(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls):
-        cls.network = canopen.Network()
-        cls.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
-        cls.network.connect(interface="virtual")
+    def setUp(self):
+        self.network = canopen.Network()
+        self.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
+        self.network.connect(interface="virtual")
 
-        cls.node = canopen.RemoteNode(2, canopen.objectdictionary.ObjectDictionary())
+        self.node = canopen.RemoteNode(2, canopen.objectdictionary.ObjectDictionary())
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.network.disconnect()
+    def tearDown(self):
+        self.network.disconnect()
 
     def test_associate_network(self):
         # Need to store the number of subscribers before associating because the
@@ -102,6 +98,7 @@ class TestRemoteNode(unittest.TestCase):
         self.assertIs(self.node.tpdo.network, self.network)
         self.assertIs(self.node.rpdo.network, self.network)
         self.assertIs(self.node.nmt.network, self.network)
+        self.assertIs(self.node.emcy.network, self.network)
 
         # Test that its not possible to associate the network multiple times
         with self.assertRaises(RuntimeError) as cm:
@@ -117,6 +114,7 @@ class TestRemoteNode(unittest.TestCase):
         self.assertIs(self.node.tpdo.network, uninitalized)
         self.assertIs(self.node.rpdo.network, uninitalized)
         self.assertIs(self.node.nmt.network, uninitalized)
+        self.assertIs(self.node.emcy.network, uninitalized)
         self.assertEqual(count_subscribers(self.network), n_subscribers)
 
         # Test that its possible to deassociate the network multiple times

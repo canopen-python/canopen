@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import threading
 import unittest
@@ -7,6 +8,7 @@ import can
 
 import canopen
 
+from .async_tests import DualSyncAsyncTestCase
 
 TIMEOUT = 0.1
 
@@ -22,7 +24,29 @@ def mock_rx_thread(consumer: canopen.emcy.EmcyConsumer, func):
         t.join(TIMEOUT)
 
 
-class TestEmcy(unittest.TestCase):
+class TestEmcy(DualSyncAsyncTestCase):
+
+    __test__ = False  # This is a base class, tests should not be run directly.
+
+    def setUp(self):
+        super().setUp()
+
+        self.net = canopen.Network()
+        self.net.connect(interface="virtual")
+        self.net.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
+        self.emcy = canopen.emcy.EmcyConsumer()
+        self.emcy.network = self.net
+
+    async def asyncSetUp(self):
+        if self.async_test:
+            await self.net.__aenter__()
+
+    async def asyncTearDown(self):
+        if self.async_test:
+            await self.net.__aexit__(None, None, None)
+
+    def tearDown(self):
+        self.net.disconnect()
 
     def check_error(self, err, code, reg, data, ts):
         self.assertIsInstance(err, canopen.emcy.EmcyError)
@@ -32,15 +56,24 @@ class TestEmcy(unittest.TestCase):
         self.assertEqual(err.data, data)
         self.assertAlmostEqual(err.timestamp, ts)
 
-    def test_emcy_consumer_on_emcy(self):
+    async def on_emcy(self, can_id, data, ts):
+        # Dispatch an EMCY datagram.
+        if self.async_test:
+            await asyncio.to_thread(
+                self.emcy.on_emcy, can_id, data, ts
+            )
+        else:
+            self.emcy.on_emcy(can_id, data, ts)
+
+    async def test_emcy_consumer_on_emcy(self):
         """Make sure multiple callbacks receive the same information."""
-        emcy = canopen.emcy.EmcyConsumer()
+        emcy = self.emcy
         acc1 = []
         acc2 = []
         emcy.add_callback(lambda err: acc1.append(err))
         emcy.add_callback(lambda err: acc2.append(err))
 
-        emcy.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
+        await self.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
 
         self.assertEqual(len(emcy.log), 1)
         self.assertEqual(len(emcy.active), 1)
@@ -53,7 +86,7 @@ class TestEmcy(unittest.TestCase):
                 data=bytes([0, 1, 2, 3, 4]), ts=1000,
             )
 
-        emcy.on_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
+        await self.on_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
         self.assertEqual(len(emcy.log), 2)
         self.assertEqual(len(emcy.active), 2)
 
@@ -65,14 +98,14 @@ class TestEmcy(unittest.TestCase):
                 data=bytes([4, 3, 2, 1, 0]), ts=2000,
             )
 
-        emcy.on_emcy(0x81, b'\x00\x00\x00\x00\x00\x00\x00\x00', 2000)
+        await self.on_emcy(0x81, b'\x00\x00\x00\x00\x00\x00\x00\x00', 2000)
         self.assertEqual(len(emcy.log), 3)
         self.assertEqual(len(emcy.active), 0)
 
-    def test_emcy_consumer_reset(self):
-        emcy = canopen.emcy.EmcyConsumer()
-        emcy.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
-        emcy.on_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
+    async def test_emcy_consumer_reset(self):
+        emcy = self.emcy
+        await self.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
+        await self.on_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
         self.assertEqual(len(emcy.log), 2)
         self.assertEqual(len(emcy.active), 2)
 
@@ -80,8 +113,11 @@ class TestEmcy(unittest.TestCase):
         self.assertEqual(len(emcy.log), 0)
         self.assertEqual(len(emcy.active), 0)
 
-    def test_emcy_consumer_wait(self):
-        emcy = canopen.emcy.EmcyConsumer()
+    async def test_emcy_consumer_wait(self):
+        if self.async_test:
+            self.skipTest("Not implemented for async")
+
+        emcy = self.emcy
 
         def push_err():
             emcy.on_emcy(0x81, b'\x01\x20\x01\x01\x02\x03\x04\x05', 100)
@@ -94,19 +130,22 @@ class TestEmcy(unittest.TestCase):
             )
 
         # Check unfiltered wait, on timeout.
-        self.assertIsNone(emcy.wait(timeout=TIMEOUT))
+        if self.async_test:
+            self.assertIsNone(await emcy.async_wait(timeout=TIMEOUT))
+        else:
+            self.assertIsNone(emcy.wait(timeout=TIMEOUT))
 
         # Check unfiltered wait, on success.
         with (
             self.assertLogs(level=logging.INFO),
-            mock_rx_thread(emcy, push_err),
+            mock_rx_thread(emcy, push_err),  # FIXME for async
         ):
             check_err(emcy.wait(timeout=TIMEOUT))
 
         # Check filtered wait, on success.
         with (
             self.assertLogs(level=logging.INFO),
-            mock_rx_thread(emcy, push_err),
+            mock_rx_thread(emcy, push_err),  # FIXME for async
         ):
             check_err(emcy.wait(0x2001, TIMEOUT))
 
@@ -120,44 +159,50 @@ class TestEmcy(unittest.TestCase):
         with mock_rx_thread(emcy, push_reset):
             self.assertIsNone(emcy.wait(0x9000, TIMEOUT))
 
-    def test_emcy_consumer_multiple_callbacks(self):
+    async def test_emcy_consumer_multiple_callbacks(self):
         """Test adding multiple callbacks and their execution order."""
-        emcy = canopen.emcy.EmcyConsumer()
+        emcy = self.emcy
         call_order = []
         emcy.add_callback(lambda err: call_order.append('callback1'))
         emcy.add_callback(lambda err: call_order.append('callback2'))
         emcy.add_callback(lambda err: call_order.append('callback3'))
-        emcy.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
+        await self.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
         self.assertEqual(call_order, ['callback1', 'callback2', 'callback3'])
 
-    def test_emcy_consumer_callback_exception_handling(self):
+    async def test_emcy_consumer_callback_exception_handling(self):
         """Test that callback exceptions don't break other callbacks or the system."""
-        emcy = canopen.emcy.EmcyConsumer()
+        emcy = self.emcy
         successful_callbacks = []
         emcy.add_callback(lambda err: successful_callbacks.append('success1'))
         emcy.add_callback(
             lambda err: exec('raise ValueError("Test exception in callback")')
         )
         emcy.add_callback(lambda err: successful_callbacks.append('success2'))
-        emcy.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
+        await self.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
         self.assertEqual(successful_callbacks, ['success1', 'success2'])
 
-    def test_emcy_consumer_error_reset_variants(self):
+    async def test_emcy_consumer_error_reset_variants(self):
         """Test different error reset code patterns."""
-        emcy = canopen.emcy.EmcyConsumer()
-        emcy.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
-        emcy.on_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
+        if self.async_test:
+            self.skipTest("Not implemented for async")
+
+        emcy = self.emcy
+        await self.on_emcy(0x81, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1000)
+        await self.on_emcy(0x81, b'\x10\x90\x01\x04\x03\x02\x01\x00', 2000)
         self.assertEqual(len(emcy.active), 2)
-        emcy.on_emcy(0x81, b'\x00\x00\x00\x00\x00\x00\x00\x00', 3000)
+        await self.on_emcy(0x81, b'\x00\x00\x00\x00\x00\x00\x00\x00', 3000)
         self.assertEqual(len(emcy.active), 0)
-        emcy.on_emcy(0x81, b'\x01\x30\x02\x00\x01\x02\x03\x04', 4000)
+        await self.on_emcy(0x81, b'\x01\x30\x02\x00\x01\x02\x03\x04', 4000)
         self.assertEqual(len(emcy.active), 1)
-        emcy.on_emcy(0x81, b'\x99\x00\x01\x00\x00\x00\x00\x00', 5000)
+        await self.on_emcy(0x81, b'\x99\x00\x01\x00\x00\x00\x00\x00', 5000)
         self.assertEqual(len(emcy.active), 0)
 
     def test_emcy_consumer_wait_timeout_edge_cases(self):
         """Test wait method with various timeout scenarios."""
-        emcy = canopen.emcy.EmcyConsumer()
+        if self.async_test:
+            self.skipTest("Not implemented for async")
+
+        emcy = self.emcy
         result = emcy.wait(timeout=0)
         self.assertIsNone(result)
         result = emcy.wait(timeout=0.001)
@@ -165,7 +210,10 @@ class TestEmcy(unittest.TestCase):
 
     def test_emcy_consumer_wait_concurrent_errors(self):
         """Test wait method when multiple errors arrive concurrently."""
-        emcy = canopen.emcy.EmcyConsumer()
+        if self.async_test:
+            self.skipTest("Not implemented for async")
+
+        emcy = self.emcy
 
         def push_multiple_errors():
             emcy.on_emcy(0x81, b'\x01\x20\x01\x01\x02\x03\x04\x05', 100)
@@ -179,6 +227,18 @@ class TestEmcy(unittest.TestCase):
             err = emcy.wait(0x2003, timeout=TIMEOUT)
         self.assertIsNotNone(err)
         self.assertEqual(err.code, 0x2003)
+
+
+class TestEmcySync(TestEmcy):
+    """ Run the tests in non-asynchronous mode. """
+    __test__ = True
+    async_test = False
+
+
+class TestEmcyAsync(TestEmcy):
+    """ Run the tests in asynchronous mode. """
+    __test__ = True
+    async_test = True
 
 
 class TestEmcyError(unittest.TestCase):
@@ -239,9 +299,12 @@ class TestEmcyError(unittest.TestCase):
         check(0xffff, "Device Specific")
 
 
-class TestEmcyProducer(unittest.TestCase):
+class TestEmcyProducer(DualSyncAsyncTestCase):
+    __test__ = False  # This is a base class, tests should not be run directly.
 
     def setUp(self):
+        super().setUp()
+
         self.txbus = can.Bus(interface="virtual")
         self.rxbus = can.Bus(interface="virtual")
         self.net = canopen.Network(self.txbus)
@@ -249,6 +312,14 @@ class TestEmcyProducer(unittest.TestCase):
         self.net.connect()
         self.emcy = canopen.emcy.EmcyProducer(0x80 + 1)
         self.emcy.network = self.net
+
+    async def asyncSetUp(self):
+        if self.async_test:
+            await self.net.__aenter__()
+
+    async def asyncTearDown(self):
+        if self.async_test:
+            await self.net.__aexit__(None, None, None)
 
     def tearDown(self):
         self.net.disconnect()
@@ -298,6 +369,18 @@ class TestEmcyProducer(unittest.TestCase):
         self.check_response(b'\x00\x00\x12\xAB\xCD\x00\x00\x00')
 
 
+class TestEmcyProducerSync(TestEmcyProducer):
+    """ Run the tests in non-asynchronous mode. """
+    __test__ = True
+    async_test = False
+
+
+class TestEmcyProducerAsync(TestEmcyProducer):
+    """ Run the tests in asynchronous mode. """
+    __test__ = True
+    async_test = True
+
+
 class TestEmcyIntegration(unittest.TestCase):
     """Integration tests for EMCY producer and consumer."""
 
@@ -313,6 +396,7 @@ class TestEmcyIntegration(unittest.TestCase):
         self.producer = canopen.emcy.EmcyProducer(0x081)
         self.producer.network = self.net
         self.consumer = canopen.emcy.EmcyConsumer()
+        self.consumer.network = self.rx_net
         self.rx_net.subscribe(0x081, self.consumer.on_emcy)
 
     def tearDown(self):

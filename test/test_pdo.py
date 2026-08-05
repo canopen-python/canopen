@@ -3,10 +3,15 @@ import unittest
 import canopen
 
 from .util import SAMPLE_EDS, tmp_file
+from .async_tests import DualSyncAsyncTestCase
 
 
-class TestPDO(unittest.TestCase):
+class TestPDO(DualSyncAsyncTestCase):
+    __test__ = False  # This is a base class, tests should not be run directly.
+
     def setUp(self):
+        super().setUp()
+
         node = canopen.LocalNode(1, SAMPLE_EDS)
         pdo = node.pdo.tx[1]
         pdo.add_variable('INTEGER16 value')  # 0x2001
@@ -106,22 +111,34 @@ class TestPDO(unittest.TestCase):
         pdo = node.tpdo[1]
         self.assertEqual(len(pdo), sum(1 for _ in pdo))
 
-    def test_pdo_save(self):
-        self.node.tpdo.save()
-        self.node.rpdo.save()
+    async def test_pdo_save(self):
+        if not self.async_test:
+            self.node.tpdo.save()
+            self.node.rpdo.save()
+        else:
+            await self.node.tpdo.asave()
+            await self.node.rpdo.asave()
 
-    def test_pdo_save_skip_readonly(self):
+    async def test_pdo_save_skip_readonly(self):
         """Expect no exception when a record entry is not writable."""
         # Saving only happens with a defined COB ID and for specified parameters
         self.node.tpdo[1].cob_id = self.node.tpdo[1].predefined_cob_id
         self.node.tpdo[1].trans_type = 1
         self.node.tpdo[1].map_array[1].od.access_type = "r"
-        self.node.tpdo[1].save()
+
+        if not self.async_test:
+            self.node.tpdo[1].save()
+        else:
+            await self.node.tpdo[1].asave()
 
         self.node.tpdo[2].cob_id = self.node.tpdo[2].predefined_cob_id
         self.node.tpdo[2].trans_type = 1
         self.node.tpdo[2].com_record[2].od.access_type = "r"
-        self.node.tpdo[2].save()
+
+        if not self.async_test:
+            self.node.tpdo[2].save()
+        else:
+            await self.node.tpdo[2].asave()
 
     def test_pdo_export(self):
         try:
@@ -138,6 +155,18 @@ class TestPDO(unittest.TestCase):
                         header = csv.readline()
                         self.assertIn("ID", header)
                         self.assertIn("Frame Name", header)
+
+
+class TestPDOSync(TestPDO):
+    """ Test the functions in synchronous mode. """
+    __test__ = True
+    async_test = False
+
+
+class TestPDOAsync(TestPDO):
+    """ Test the functions in asynchronous mode. """
+    __test__ = True
+    async_test = True
 
 
 if __name__ == "__main__":

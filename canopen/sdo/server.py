@@ -1,5 +1,6 @@
 import logging
 
+from canopen.async_guard import ensure_not_async
 from canopen.sdo.base import SdoBase
 from canopen.sdo.constants import *
 from canopen.sdo.exceptions import *
@@ -205,7 +206,43 @@ class SdoServer(SdoBase):
         """
         return self._node.get_data(index, subindex)
 
+    async def aupload(self, index: int, subindex: int) -> bytes:
+        """May be called to make a read operation without an Object Dictionary.
+
+        :param index:
+            Index of object to read.
+        :param subindex:
+            Sub-index of object to read.
+
+        :return: A data object.
+
+        :raises canopen.SdoAbortedError:
+            When node responds with an error.
+        """
+        return self._node.get_data(index, subindex)
+
     def download(
+        self,
+        index: int,
+        subindex: int,
+        data: bytes,
+        force_segment: bool = False,
+    ):
+        """May be called to make a write operation without an Object Dictionary.
+
+        :param index:
+            Index of object to write.
+        :param subindex:
+            Sub-index of object to write.
+        :param data:
+            Data to be written.
+
+        :raises canopen.SdoAbortedError:
+            When node responds with an error.
+        """
+        return self._node.set_data(index, subindex, data)
+
+    async def adownload(
         self,
         index: int,
         subindex: int,

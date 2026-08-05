@@ -1,12 +1,15 @@
+import asyncio
 import logging
+import threading
 import time
 import unittest
 
 import can
 
 import canopen
+from canopen.network import ExceptionGroup
 
-from .util import SAMPLE_EDS
+from .util import SAMPLE_EDS, SupressNotAwaited
 
 
 class TestNetwork(unittest.TestCase):
@@ -14,6 +17,8 @@ class TestNetwork(unittest.TestCase):
     def setUp(self):
         self.network = canopen.Network()
         self.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
+        self.network.FILTER_ERRORS = False
+        self.addCleanup(self.network.disconnect)
 
     def test_network_add_node(self):
         # Add using str.
@@ -71,7 +76,6 @@ class TestNetwork(unittest.TestCase):
             # .disconnect() implicitly calls .check() during test tear down.
             if self.network.notifier is not None:
                 self.network.notifier.exception = None
-            self.network.disconnect()
 
         self.addCleanup(cleanup)
         self.assertIsNone(self.network.check())
@@ -80,6 +84,35 @@ class TestNetwork(unittest.TestCase):
             pass
 
         self.network.notifier.exception = Custom("fake")
+        with self.assertRaisesRegex(Custom, "fake"):
+            with self.assertLogs(level=logging.ERROR):
+                self.network.check()
+        with self.assertRaisesRegex(Custom, "fake"):
+            with self.assertLogs(level=logging.ERROR):
+                self.network.disconnect()
+
+    def test_network_check_thread(self):
+        """This test runs an actual notifier thread and verifies that the exception is detected."""
+        class Custom(Exception):
+            pass
+
+        event = threading.Event()
+
+        class FaultyListener(can.Listener):
+            def on_message_received(self, msg):
+                raise Custom("fake")
+            def on_error(self, exc):
+                # This suppress the exception from ending up as a
+                # "PytestUnraisableExceptionWarning" in the test output.
+                event.set()
+
+        self.network.connect(interface="virtual", receive_own_messages=True)
+        self.network.notifier.add_listener(FaultyListener())
+
+        self.network.send_message(0x123, [1, 2, 3, 4, 5, 6, 7, 8])
+        # Wait for the error to be processed in the listener thread
+        self.assertTrue(event.wait(timeout=0.1))
+
         with self.assertRaisesRegex(Custom, "fake"):
             with self.assertLogs(level=logging.ERROR):
                 self.network.check()
@@ -97,12 +130,72 @@ class TestNetwork(unittest.TestCase):
         self.assertEqual(node.nmt.state, 'OPERATIONAL')
         self.assertListEqual(self.network.scanner.nodes, [2])
 
+    def test_network_notify_create_task_from_thread(self):
+        self.network.connect(interface="virtual", receive_own_messages=True)
+        self.network.FILTER_ERRORS = True
+
+        async def async_callback(*args):
+            pass
+
+        event = threading.Event()
+        def callback(*args):
+            # This will fail with RuntimeError: Network is not running in async mode
+            self.network.create_task(SupressNotAwaited(async_callback(*args)))
+        def terminate(*args):
+            # This is run after the callback is done processing the exception
+            # above, and will signal the test to continue.
+            event.set()
+
+        self.network.subscribe(0x20, callback)
+        self.network.subscribe(0x20, terminate)
+
+        with self.assertLogs(level=logging.ERROR):
+            # Sending this message, will reflect back the message from the
+            # rx thread of the rxbus and then call the notify method,
+            # which will call the callback above that will fail.
+            self.network.send_message(0x20, [1, 2, 3])
+
+            # Wait for the error to be processed in the listener thread.
+            self.assertTrue(event.wait(timeout=0.1))
+
+        # The exception is raised due to self.network.FILTER_ERRORS = False
+        # The error is logged due to self.network.on_error() logging
+        with self.assertRaisesRegex(RuntimeError, "Network is not running in async mode"):
+            self.network.check()
+
+    def test_network_notify_error_handling(self):
+        self.network.connect(interface="virtual", receive_own_messages=True)
+        self.network.FILTER_ERRORS = True
+
+        event = threading.Event()
+        def callback1(*args):
+            raise RuntimeError("Callback error 1")
+        def callback2(*args):
+            raise RuntimeError("Callback error 2")
+        def terminate(*args):
+            event.set()  # Signal end of processing the exceptions
+
+        self.network.subscribe(0x20, callback1)
+        self.network.subscribe(0x20, callback2)
+        self.network.subscribe(0x20, terminate)
+
+        with self.assertLogs(level=logging.ERROR):
+            self.network.send_message(0x20, [1, 2, 3])
+
+            # Wait for the error to be processed in the listener thread.
+            self.assertTrue(event.wait(timeout=0.1))
+
+        # The exception is raised due to self.network.FILTER_ERRORS = False
+        # The error is logged due to self.network.on_error() logging
+        with self.assertRaises(ExceptionGroup) as cm:
+            self.network.check()
+        self.assertEqual(len(cm.exception.exceptions), 2)
+
     def test_network_send_message(self):
         bus = can.interface.Bus(interface="virtual")
         self.addCleanup(bus.shutdown)
 
         self.network.connect(interface="virtual")
-        self.addCleanup(self.network.disconnect)
 
         # Send standard ID
         self.network.send_message(0x123, [1, 2, 3, 4, 5, 6, 7, 8])
@@ -124,7 +217,6 @@ class TestNetwork(unittest.TestCase):
         accumulators = [] * N_HOOKS
 
         self.network.connect(interface="virtual", receive_own_messages=True)
-        self.addCleanup(self.network.disconnect)
 
         for i in range(N_HOOKS):
             accumulators.append([])
@@ -152,7 +244,6 @@ class TestNetwork(unittest.TestCase):
     def test_network_subscribe_multiple(self):
         N_HOOKS = 3
         self.network.connect(interface="virtual", receive_own_messages=True)
-        self.addCleanup(self.network.disconnect)
 
         accumulators = []
         hooks = []
@@ -202,9 +293,24 @@ class TestNetwork(unittest.TestCase):
         self.assertEqual(accumulators[1], BATCH1)
         self.assertEqual(accumulators[2], BATCH1 + [BATCH2] + [BATCH3])
 
-    def test_network_context_manager(self):
+    def test_network_subscribe_coroutine_when_no_async(self):
+        self.network.connect(interface="virtual", receive_own_messages=True)
+
+        async def async_callback(*args):
+            # WIll never be run because async isn't enabled.
+            pass
+        self.network.subscribe(0x20, SupressNotAwaited(async_callback))
+
+        # Will fail because async isn't enabled.
+        with self.assertRaises(RuntimeError):
+            with self.assertLogs(level=logging.ERROR):
+                self.network.notify(0x20, bytes([1, 2, 3]), 1000)
+
+    def test_network_context_manager(self):  #***
         with self.network.connect(interface="virtual"):
             pass
+        # This should raise an exception, since the network is disconnected
+        # when the context manager exits.
         with self.assertRaisesRegex(RuntimeError, "Not connected"):
             self.network.send_message(0, [])
 
@@ -237,7 +343,6 @@ class TestNetwork(unittest.TestCase):
         PERIOD = 0.01
         TIMEOUT = PERIOD * 10
         self.network.connect(interface="virtual")
-        self.addCleanup(self.network.disconnect)
 
         bus = can.Bus(interface="virtual")
         self.addCleanup(bus.shutdown)
@@ -288,7 +393,6 @@ class TestNetwork(unittest.TestCase):
 
     def test_network_connect_does_not_recreate_notifier(self):
         self.network.connect(interface="virtual")
-        self.addCleanup(self.network.disconnect)
         notifier1 = self.network.notifier
         self.assertIsNotNone(notifier1)
         # Calling connect() again should reuse the existing notifier
@@ -313,6 +417,103 @@ class TestNetwork(unittest.TestCase):
                 self.network.disconnect()
         # Notifier must be released even when check() raises
         self.assertIsNone(self.network.notifier)
+
+
+class TestNetworkAsync(unittest.IsolatedAsyncioTestCase):
+
+    def setUp(self):
+        self.network = canopen.Network()
+        self.network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
+        self.network.FILTER_ERRORS = False
+        self.addCleanup(self.network.disconnect)
+
+    async def test_network_add_node_upload_eds(self):
+        # Will err because we're not connected to a real network.
+        with self.assertLogs(level=logging.ERROR):
+            # Async doesn't support uploads_eds directly
+            od = await canopen.objectdictionary.eds.aimport_from_node(2, self.network)
+            self.network.add_node(2, od, upload_eds=False)
+
+    async def test_network_async_context_manager(self):
+        async with self.network.connect(interface="virtual"):
+            pass
+        # This should raise an exception, since the network is disconnected
+        # when the context manager exits.
+        with self.assertRaisesRegex(RuntimeError, "Not connected"):
+            self.network.send_message(0, [])
+
+    async def test_network_subscribe_coroutine(self):
+        async with self.network.connect(interface="virtual", receive_own_messages=True):
+
+            event = asyncio.Event()
+            async def async_callback(*args):
+                await asyncio.sleep(0.01)
+                event.set()
+
+            self.network.subscribe(0x20, async_callback)
+            self.network.notify(0x20, bytes([1, 2, 3]), 1000)
+
+            # The success is that this does not raise an TimeoutError
+            await asyncio.wait_for(event.wait(), timeout=0.1)  # Wait for the callback to complete.
+
+    async def test_network_notify(self):
+        with self.assertLogs():
+            self.network.add_node(2, SAMPLE_EDS)
+        node = self.network[2]
+        async def notify(*args):
+            """Simulate a notification from the network thread."""
+            await asyncio.to_thread(self.network.notify, *args)
+        await notify(0x82, b'\x01\x20\x02\x00\x01\x02\x03\x04', 1473418396.0)
+        self.assertEqual(len(node.emcy.active), 1)
+        await notify(0x702, b'\x05', 1473418396.0)
+        self.assertEqual(node.nmt.state, 'OPERATIONAL')
+        self.assertListEqual(self.network.scanner.nodes, [2])
+
+    async def test_network_notify_create_task_from_thread(self):
+        async with self.network.connect(interface="virtual", receive_own_messages=True):
+
+            event = asyncio.Event()
+            async def async_callback(*args):
+                event.set()
+
+            def callback(*args):
+                # This will fail with AttributeError: 'NoneType' object has no attribute 'call_soon_threadsafe'
+                # Because there is no running event loop.
+                self.network.create_task(async_callback(*args))
+
+            self.network.subscribe(0x20, callback)
+            self.network.send_message(0x20, [1, 2, 3])
+
+            # The success is that this does not raise an TimeoutError
+            await asyncio.wait_for(event.wait(), timeout=0.1)  # Wait for the callback to complete.
+
+    async def test_network_notify_error_handling(self):
+        async with self.network.connect(interface="virtual", receive_own_messages=True):
+            self.network.FILTER_ERRORS = True
+
+            event = asyncio.Event()
+            async def callback1(*args):
+                raise RuntimeError("Callback error 1")
+            async def callback2(*args):
+                raise RuntimeError("Callback error 2")
+            async def terminate(*args):
+                await asyncio.sleep(0.05)
+                event.set()  # Signal end of processing the exceptions
+
+            self.network.subscribe(0x20, callback1)
+            self.network.subscribe(0x20, callback2)
+            self.network.subscribe(0x20, terminate)
+
+            with self.assertLogs(level=logging.ERROR):
+                self.network.send_message(0x20, [1, 2, 3])
+                await asyncio.wait_for(event.wait(), timeout=0.1)  # Wait for the error to be processed in the listener thread.
+
+            # The success is that this does not raise an TimeoutError
+            # await asyncio.sleep(0.1)  # Wait for the callbacks to complete.
+
+            with self.assertRaises(ExceptionGroup) as cm:
+                self.network.check()
+            self.assertEqual(len(cm.exception.exceptions), 2)
 
 
 class TestScanner(unittest.TestCase):

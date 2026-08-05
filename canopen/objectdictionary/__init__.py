@@ -9,6 +9,7 @@ import struct
 from collections.abc import Collection, Iterator, Mapping, MutableMapping
 from typing import Optional, TextIO, Union
 
+from canopen.async_guard import is_async_guarded
 from canopen.objectdictionary.datatypes import *
 from canopen.objectdictionary.datatypes import IntegerN, UnsignedN
 from canopen.utils import pretty_index
@@ -57,6 +58,12 @@ def export_od(
                         break
                 else:
                     doc_type = "eds"
+            if is_async_guarded():
+                logger.warning(
+                    "Opening EDS file %s in async is not recommended, "
+                    "use a thread or pass a file-like object instead",
+                    dest
+                )
             dest = open(dest, 'w')
             opened_here = True
 

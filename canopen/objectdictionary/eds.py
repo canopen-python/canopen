@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import copy
 import logging
 import re
 from configparser import NoOptionError, NoSectionError, RawConfigParser
 from typing import Any, TYPE_CHECKING
 
+from canopen.async_guard import ensure_not_async, is_async_guarded
 from canopen.objectdictionary import (
     ODArray,
     ODRecord,
@@ -31,6 +33,12 @@ def import_eds(source, node_id):
         if hasattr(source, "read"):
             fp = source
         else:
+            if is_async_guarded():
+                logger.warning(
+                    "Opening EDS file %s in async is not recommended, "
+                    "use a thread or pass a file-like object instead",
+                    source
+                )
             fp = open(source)
             opened_here = True
         eds.read_file(fp)
@@ -184,6 +192,7 @@ def import_eds(source, node_id):
     return od
 
 
+@ensure_not_async("Use aimport_from_node() instead")
 def import_from_node(node_id: int, network: canopen.network.Network):
     """ Download the configuration from the remote node
     :param int node_id: Identifier of the node
@@ -196,6 +205,7 @@ def import_from_node(node_id: int, network: canopen.network.Network):
     network.subscribe(0x580 + node_id, sdo_client.on_response)
     # Create file like object for Store EDS variable
     try:
+        # Opening an SDO channel with file-like object is not supported in async
         with sdo_client.open(0x1021, 0, "rt") as eds_fp:
             od = import_eds(eds_fp, node_id)
     except Exception as e:
@@ -205,6 +215,14 @@ def import_from_node(node_id: int, network: canopen.network.Network):
     finally:
         network.unsubscribe(0x580 + node_id)
     return od
+
+
+async def aimport_from_node(node_id: int, network: canopen.network.Network):
+    """ Download the configuration from the remote node, async variant
+    :param int node_id: Identifier of the node
+    :param network: network object
+    """
+    return await asyncio.to_thread(import_from_node, node_id, network)
 
 
 def _calc_bit_length(data_type: int) -> int:

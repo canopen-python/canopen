@@ -1,8 +1,10 @@
+import asyncio
 import logging
 import queue
 import struct
 import time
 
+from canopen.async_guard import ensure_not_async
 import canopen.network
 
 
@@ -241,6 +243,7 @@ class LssMaster:
         message[0] = CS_IDENTIFY_NON_CONFIGURED_REMOTE_SLAVE
         self.__send_command(message)
 
+    @ensure_not_async("Use afast_scan() instead")
     def fast_scan(self):
         """This command sends a series of fastscan message
         to find unconfigured slave with lowest number of LSS idenities
@@ -282,6 +285,10 @@ class LssMaster:
 
         return False, None
 
+    async def afast_scan(self):
+        """Asynchronous version of fast_scan"""
+        return await asyncio.to_thread(self.fast_scan)
+
     def __send_fast_scan_message(self, id_number, bit_checker, lss_sub, lss_next):
         message = bytearray(8)
         message[0:8] = struct.pack('<BIBBB', CS_FAST_SCAN, id_number, bit_checker, lss_sub, lss_next)
@@ -296,6 +303,7 @@ class LssMaster:
 
         return False
 
+    @ensure_not_async
     def __send_lss_address(self, req_cs, number):
         message = bytearray(8)
 
@@ -359,6 +367,7 @@ class LssMaster:
             error_msg = f"LSS Error: {error_code}"
             raise LssError(error_msg)
 
+    @ensure_not_async
     def __send_command(self, message):
         """Send a LSS operation code to the network
 

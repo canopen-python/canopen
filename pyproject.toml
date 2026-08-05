@@ -8,6 +8,7 @@ authors = [
     {name = "Christian Sandberg", email = "christiansandberg@me.com"},
     {name = "André Colomb", email = "src@andre.colomb.de"},
     {name = "André Filipe Silva", email = "afsilva.work@gmail.com"},
+    {name = "Svein Seldal", email = "sveinse@seldal.com"},
 ]
 description = "CANopen stack implementation"
 readme = "README.rst"
@@ -23,6 +24,8 @@ classifiers = [
 ]
 dependencies = [
     "python-can >= 3.0.0",
+    "taskgroup; python_version <= '3.10'",
+    "exceptiongroup; python_version <= '3.10'",
 ]
 dynamic = ["version"]
 
@@ -67,3 +70,10 @@ lines-after-imports = 2
 [tool.black]
 line-length = 96
 skip-string-normalization = true
+
+[tool.coverage.run]
+branch = true
+[tool.coverage.report]
+exclude_also = [
+    'if TYPE_CHECKING:',
+]

@@ -1,5 +1,6 @@
 """Additional utility functions for canopen."""
 
+import asyncio
 from typing import Optional, Union
 
 
@@ -21,3 +22,16 @@ def pretty_index(index: Optional[Union[int, str]],
         sub_str = f"{sub!r}"
 
     return ":".join(s for s in (index_str, sub_str) if s)
+
+
+def is_running_async() -> bool:
+    """Check if the current thread is running in an async context.
+
+    :return: :code:`True` if the current thread is running in an async context,
+             :code:`False` otherwise.
+    """
+    try:
+        asyncio.get_running_loop()
+        return True
+    except RuntimeError:
+        return False

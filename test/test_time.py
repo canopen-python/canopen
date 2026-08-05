@@ -19,6 +19,7 @@ class TestTime(unittest.TestCase):
 
     def test_time_producer(self):
         network = canopen.Network()
+        self.addCleanup(network.disconnect)
         network.NOTIFIER_SHUTDOWN_TIMEOUT = 0.0
         network.connect(interface="virtual", receive_own_messages=True)
         producer = canopen.timestamp.TimeProducer(network)
@@ -41,8 +42,6 @@ class TestTime(unittest.TestCase):
             ms, days = struct.unpack("<LH", msg.data)
             self.assertEqual(days, int(current_from_epoch) // 86400)
             self.assertEqual(ms, int(current_from_epoch % 86400 * 1000))
-
-        network.disconnect()
 
 
 if __name__ == "__main__":

@@ -1,9 +1,11 @@
+import asyncio
 import logging
 import struct
 import threading
 import time
 from typing import Callable, Final, Optional, TYPE_CHECKING
 
+from canopen.async_guard import ensure_not_async
 import canopen.network
 
 if TYPE_CHECKING:
@@ -135,8 +137,8 @@ class NmtMaster(NmtBase):
             self._state_received = new_state
             self.state_update.notify_all()
 
-        for callback in self._callbacks:
-            callback(new_state)
+        # Call all registered callbacks
+        self.network.dispatch_callbacks(self._callbacks, new_state)
 
     def send_command(self, code: int):
         """Send an NMT command code to the node.
@@ -149,6 +151,7 @@ class NmtMaster(NmtBase):
             "Sending NMT command 0x%X to node %d", code, self.id)
         self.network.send_message(0, [code, self.id])
 
+    @ensure_not_async("Use await_for_heartbeat() instead")
     def wait_for_heartbeat(self, timeout: float = 10):
         """Wait until a heartbeat message is received."""
         with self.state_update:
@@ -158,6 +161,11 @@ class NmtMaster(NmtBase):
             raise NmtError("No boot-up or heartbeat received")
         return self.state
 
+    async def await_for_heartbeat(self, timeout: float = 10):
+        """Wait until a heartbeat message is received."""
+        return await asyncio.to_thread(self.wait_for_heartbeat, timeout)
+
+    @ensure_not_async("Use await_for_bootup() instead")
     def wait_for_bootup(self, timeout: float = 10) -> None:
         """Wait until a boot-up message is received."""
         end_time = time.time() + timeout
@@ -170,6 +178,10 @@ class NmtMaster(NmtBase):
                 raise NmtError("Timeout waiting for boot-up message")
             if self._state_received == 0:
                 break
+
+    async def await_for_bootup(self, timeout: float = 10) -> None:
+        """Wait until a boot-up message is received."""
+        return await asyncio.to_thread(self.wait_for_bootup, timeout)
 
     def add_heartbeat_callback(self, callback: Callable[[int], None]):
         """Add function to be called on heartbeat reception.
@@ -230,11 +242,23 @@ class NmtSlave(NmtBase):
         # The heartbeat service should start on the transition
         # between INITIALIZING and PRE-OPERATIONAL state
         if old_state == 0 and self._state == 127:
-            try:
-                heartbeat_time_ms = self._local_node.sdo[0x1017].raw
-                self.start_heartbeat(heartbeat_time_ms)
-            except KeyError:
-                pass
+            if self.network.is_running_async:
+                # In async mode we cannot read the heartbeat directly, so we
+                # create a task to read it asynchronously and start the heartbeat
+                # service when the read is complete.
+                async def start_heartbeat_async():
+                    try:
+                        heartbeat_time_ms = await self._local_node.sdo[0x1017].aread()
+                        self.start_heartbeat(heartbeat_time_ms)
+                    except KeyError:
+                        pass
+                self.network.create_task(start_heartbeat_async())
+            else:
+                try:
+                    heartbeat_time_ms = self._local_node.sdo[0x1017].raw
+                    self.start_heartbeat(heartbeat_time_ms)
+                except KeyError:
+                    pass
         else:
             self.update_heartbeat()
 

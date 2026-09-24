@@ -110,6 +110,41 @@ class TestPDO(unittest.TestCase):
         self.node.tpdo.save()
         self.node.rpdo.save()
 
+    def test_pdo_save_writes_the_entries_of_an_array_mapping(self):
+        # A mapping declared as an ARRAY is sized by its sub-index 0, which
+        # save() sets to 0 before it writes the entries.
+        od = canopen.objectdictionary.ObjectDictionary()
+        comm = canopen.objectdictionary.ODRecord("TPDO 1 communication", 0x1800)
+        for subindex, data_type in ((0, canopen.objectdictionary.UNSIGNED8),
+                                    (1, canopen.objectdictionary.UNSIGNED32),
+                                    (2, canopen.objectdictionary.UNSIGNED8)):
+            var = canopen.objectdictionary.ODVariable(f"sub{subindex}", 0x1800, subindex)
+            var.data_type, var.access_type, var.default = data_type, "rw", 0
+            comm.add_member(var)
+        od.add_object(comm)
+        mapping = canopen.objectdictionary.ODArray("TPDO 1 mapping", 0x1A00)
+        for subindex in range(5):
+            var = canopen.objectdictionary.ODVariable(f"sub{subindex}", 0x1A00, subindex)
+            var.data_type = (canopen.objectdictionary.UNSIGNED8 if subindex == 0
+                             else canopen.objectdictionary.UNSIGNED32)
+            var.access_type, var.default = "rw", 0
+            mapping.add_member(var)
+        od.add_object(mapping)
+        for index, data_type in ((0x2001, canopen.objectdictionary.INTEGER16),
+                                 (0x2002, canopen.objectdictionary.UNSIGNED8)):
+            var = canopen.objectdictionary.ODVariable(f"value {index:X}", index)
+            var.data_type, var.access_type, var.pdo_mappable = data_type, "rw", True
+            od.add_object(var)
+        node = canopen.LocalNode(1, od)
+        pdo = node.tpdo[1]
+        pdo.add_variable(0x2001)
+        pdo.add_variable(0x2002, length=4)
+        pdo.cob_id = 0x181
+        pdo.save()
+        self.assertEqual(node.sdo.upload(0x1A00, 0), bytes([2]))
+        self.assertEqual(node.sdo.upload(0x1A00, 1), (0x20010010).to_bytes(4, "little"))
+        self.assertEqual(node.sdo.upload(0x1A00, 2), (0x20020004).to_bytes(4, "little"))
+
     def test_pdo_save_skip_readonly(self):
         """Expect no exception when a record entry is not writable."""
         # Saving only happens with a defined COB ID and for specified parameters

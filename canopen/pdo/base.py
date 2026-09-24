@@ -452,7 +452,13 @@ class PdoMap:
             # mappings for an invalid object 0x0000:00 to overwrite any
             # excess entries with all-zeros.
             self._fill_map(self.map_array[0].raw)
-        for var, entry in zip(self.map, self.map_array.values()):
+        # Address the entries by the sub-indices the object dictionary defines:
+        # iterating the SDO array would ask the device for its entry count,
+        # which was just set to 0 above, and so write no entry at all.
+        entries = (
+            self.map_array[subindex] for subindex in self.map_array.od if subindex != 0
+        )
+        for var, entry in zip(self.map, entries):
             if not entry.od.writable:
                 continue
             logger.info(

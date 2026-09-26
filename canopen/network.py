@@ -330,6 +330,7 @@ class PeriodicMessageTask:
         self.msg = can.Message(is_extended_id=can_id > 0x7FF,
                                arbitration_id=can_id,
                                data=data, is_remote_frame=remote)
+        self.msg.data = bytearray(self.msg.data)
         self._start()
 
     def _start(self):

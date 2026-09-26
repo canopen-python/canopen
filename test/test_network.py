@@ -1,6 +1,7 @@
 import logging
 import time
 import unittest
+from unittest.mock import Mock
 
 import can
 
@@ -285,6 +286,40 @@ class TestNetwork(unittest.TestCase):
         msg = bus.recv(PERIOD)
         if msg is not None:
             self.assertIsNone(bus.recv(PERIOD))
+
+    def test_network_send_periodic_mutable_data(self):
+        scheduled = []
+
+        def send_periodic(message, period):
+            task = Mock(spec=["stop"])
+            scheduled.append((bytes(message.data), task))
+            return task
+
+        self.network.bus = Mock(spec=["send_periodic"])
+        self.network.bus.send_periodic.side_effect = send_periodic
+        data = bytearray([1, 2])
+        task = self.network.send_periodic(0x123, data, 0.1)
+        data[0] = 3
+        task.update(data)
+        self.assertEqual([payload for payload, _ in scheduled], [b'\x01\x02', b'\x03\x02'])
+        scheduled[0][1].stop.assert_called_once_with()
+
+        task.update(data)
+        self.assertEqual(len(scheduled), 2)
+        scheduled[1][1].stop.assert_not_called()
+
+        data[0] = 4
+        task.update(data)
+        self.assertEqual(scheduled[2][0], b'\x04\x02')
+        scheduled[1][1].stop.assert_called_once_with()
+
+    def test_network_send_periodic_empty_data(self):
+        self.network.bus = Mock(spec=["send_periodic"])
+        for data, remote in ((None, False), (None, True), (b'\x01', True)):
+            with self.subTest(data=data, remote=remote):
+                task = self.network.send_periodic(0x123, data, 0.1, remote=remote)
+                self.assertEqual(task.msg.data, bytearray())
+                self.assertEqual(task.msg.is_remote_frame, remote)
 
     def test_network_connect_does_not_recreate_notifier(self):
         self.network.connect(interface="virtual")

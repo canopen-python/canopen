@@ -91,6 +91,23 @@ class TestNmtMaster(unittest.TestCase):
         self.node.nmt.wait_for_bootup(self.TIMEOUT)
         self.assertEqual(self.node.nmt.state, "PRE-OPERATIONAL")
 
+    def test_nmt_master_wait_for_bootup_then_heartbeat(self):
+        # A heartbeat handled right after the boot-up message, before the
+        # waiting thread gets to run, must not hide the boot-up.
+        nmt = self.node.nmt
+        cob_id = 0x700 + self.NODE_ID
+
+        def boot():
+            with nmt.state_update:
+                nmt.on_heartbeat(cob_id, b"\x00", 0.0)
+                nmt.on_heartbeat(cob_id, b"\x7f", 0.0)
+
+        t = threading.Timer(0.01, boot)
+        t.start()
+        self.addCleanup(t.join)
+        nmt.wait_for_bootup(self.TIMEOUT)
+        self.assertEqual(nmt.state, "PRE-OPERATIONAL")
+
     def test_nmt_master_on_heartbeat_initialising(self):
         t = threading.Timer(0.01, self.dispatch_heartbeat, args=(0x00,))
         t.start()

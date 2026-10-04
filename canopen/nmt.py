@@ -1,7 +1,6 @@
 import logging
 import struct
 import threading
-import time
 from typing import Callable, Final, Optional, TYPE_CHECKING
 
 import canopen.network
@@ -113,6 +112,7 @@ class NmtMaster(NmtBase):
     def __init__(self, node_id: int):
         super(NmtMaster, self).__init__(node_id)
         self._state_received = None
+        self._bootup_received = False
         self._node_guarding_producer: Optional[PeriodicMessageTask] = None
         #: Timestamp of last heartbeat message
         self.timestamp: Optional[float] = None
@@ -130,6 +130,7 @@ class NmtMaster(NmtBase):
             if new_state == 0:
                 # Boot-up, will go to PRE-OPERATIONAL automatically
                 self._state = 127
+                self._bootup_received = True
             else:
                 self._state = new_state
             self._state_received = new_state
@@ -160,16 +161,12 @@ class NmtMaster(NmtBase):
 
     def wait_for_bootup(self, timeout: float = 10) -> None:
         """Wait until a boot-up message is received."""
-        end_time = time.time() + timeout
-        while True:
-            now = time.time()
-            with self.state_update:
-                self._state_received = None
-                self.state_update.wait(end_time - now + 0.1)
-            if now > end_time:
+        with self.state_update:
+            # A heartbeat can overwrite _state_received before this thread
+            # wakes up, so the boot-up is remembered in a flag of its own.
+            self._bootup_received = False
+            if not self.state_update.wait_for(lambda: self._bootup_received, timeout):
                 raise NmtError("Timeout waiting for boot-up message")
-            if self._state_received == 0:
-                break
 
     def add_heartbeat_callback(self, callback: Callable[[int], None]):
         """Add function to be called on heartbeat reception.

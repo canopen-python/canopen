@@ -81,7 +81,17 @@ class LocalNode(BaseNode):
     def add_read_callback(self, callback: Callable):
         self._read_callbacks.append(callback)
 
-    def add_write_callback(self, callback: Callable):
+    def add_write_callback(self, callback: Callable) -> None:
+        """Register a callback invoked before writing to the local data store.
+
+        The callback receives ``index``, ``subindex``, ``od`` and ``data`` as
+        keyword arguments. Return ``None`` to allow default storage, or any
+        other value (including ``False`` or ``0``) to suppress it for this write.
+        Existing stored values are left unchanged when storage is suppressed.
+
+        Callbacks run in registration order unless a callback raises an
+        exception. A non-``None`` result does not skip later callbacks.
+        """
         self._write_callbacks.append(callback)
 
     def get_data(
@@ -132,8 +142,14 @@ class LocalNode(BaseNode):
             raise SdoAbortedError(0x06070010)
 
         # Try callbacks
+        skip_store = False
         for callback in self._write_callbacks:
-            callback(index=index, subindex=subindex, od=obj, data=data)
+            result = callback(index=index, subindex=subindex, od=obj, data=data)
+            if result is not None:
+                skip_store = True
+
+        if skip_store:
+            return
 
         # Store data
         self.data_store.setdefault(index, {})

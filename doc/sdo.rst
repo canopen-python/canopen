@@ -89,8 +89,9 @@ server supports it. This is done through the file object interface::
     FIRMWARE_PATH = '/path/to/firmware.bin'
     FILESIZE = os.path.getsize(FIRMWARE_PATH)
 
-    with open(FIRMWARE_PATH, 'rb') as infile,
-            node.sdo['Firmware'].open('wb', size=FILESIZE, block_transfer=True) as outfile:
+    with open(FIRMWARE_PATH, 'rb') as infile, \
+            node.sdo['Firmware'].open('wb', size=FILESIZE, block_transfer=True,
+                                      buffering=7 * 1024) as outfile:
 
         # Iteratively transfer data without having to read all into memory
         while True:
@@ -98,6 +99,10 @@ server supports it. This is done through the file object interface::
             if not data:
                 break
             outfile.write(data)
+
+For block downloads, use a write buffer size divisible by seven, since each
+block segment carries seven data bytes. The input chunk size can remain 1024
+bytes as shown above; it does not need to match the write buffer size.
 
 .. warning::
    Block transfer is still in experimental stage!

@@ -586,7 +586,7 @@ class BlockUploadStream(io.RawIOBase):
         try:
             response = self.sdo_client.read_response()
         except SdoCommunicationError:
-            self.abort(ABORT_TIMED_OUT)
+            self.sdo_client.abort(ABORT_TIMED_OUT)
             raise
         res_command, self._server_crc = struct.unpack_from("<BH", response)
         if res_command & 0xE0 != RESPONSE_BLOCK_UPLOAD:

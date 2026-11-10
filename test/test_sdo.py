@@ -215,6 +215,22 @@ class TestSDO(unittest.TestCase):
             data = fp.read()
         self.assertEqual(data, 'Tiny Node - Mega Domains !')
 
+    def test_block_upload_timeout_waiting_for_end_response(self):
+        self.data = [
+            (TX, b'\xa4\x08\x10\x00\x7f\x00\x00\x00'),
+            (RX, b'\xc4\x08\x10\x00\x00\x00\x00\x00'),
+            (TX, b'\xa3\x00\x00\x00\x00\x00\x00\x00'),
+            (RX, b'\x81Tiny No'),
+            (TX, b'\xa2\x01\x7f\x00\x00\x00\x00\x00'),
+            # The server never sends the end-of-block upload response.
+            (TX, b'\x80\x00\x00\x00\x00\x00\x04\x05'),
+        ]
+        sdo = self.network[2].sdo[0x1008]
+        error = self.assertRaisesRegex(canopen.SdoCommunicationError, 'No SDO response received')
+        with sdo.open('rb', block_transfer=True) as fp, error:
+            fp.read()
+        self.assertEqual(self.data, [])
+
     def test_sdo_block_upload_retransmit(self):
         """Trigger a retransmit by only validating a block partially."""
         self.data = [

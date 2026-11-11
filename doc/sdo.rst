@@ -103,6 +103,26 @@ server supports it. This is done through the file object interface::
    Block transfer is still in experimental stage!
 
 
+Client aborts
+-------------
+
+When a stream aborts a transfer, its abort frame includes the index and subindex
+used to open that stream. For a manually constructed transfer, these can also be
+passed explicitly::
+
+    node.sdo.abort(0x05040000, index=0x2345, subindex=0x67)
+
+Direct calls to ``abort()`` or ``abort(code)`` continue to send zero address
+fields. The same fallback applies to ``request_response(request)`` without
+explicit ``index`` and ``subindex`` keyword arguments; the client does not infer
+an address from arbitrary request payloads or remember the last stream's address.
+
+Custom ``SdoClient`` subclasses overriding ``abort`` or ``request_response`` must
+accept and forward the optional ``index`` and ``subindex`` keyword arguments used
+by the stream classes. Overrides accepting only the older positional arguments
+need to be updated before using those streams.
+
+
 API
 ---
 

@@ -223,7 +223,7 @@ class TestSDO(unittest.TestCase):
             (RX, b'\x81Tiny No'),
             (TX, b'\xa2\x01\x7f\x00\x00\x00\x00\x00'),
             # The server never sends the end-of-block upload response.
-            (TX, b'\x80\x00\x00\x00\x00\x00\x04\x05'),
+            (TX, b'\x80\x08\x10\x00\x00\x00\x04\x05'),
         ]
         sdo = self.network[2].sdo[0x1008]
         error = self.assertRaisesRegex(canopen.SdoCommunicationError, 'No SDO response received')

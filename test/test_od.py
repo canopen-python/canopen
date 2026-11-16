@@ -1,9 +1,56 @@
+import struct
 import unittest
 
 from canopen import objectdictionary as od
 
 
 class TestDataConversions(unittest.TestCase):
+
+    def test_nonstandard_unsigned_width_rejects_overflow(self):
+        from canopen.objectdictionary.datatypes import UnsignedN
+        for width in (24, 40, 48, 56):
+            with self.subTest(width=width):
+                datatype = UnsignedN(width)
+                max_value = (1 << width) - 1
+                self.assertEqual(datatype.unpack(datatype.pack(max_value))[0], max_value)
+                self.assertEqual(datatype.unpack(datatype.pack(0))[0], 0)
+                with self.assertRaises(struct.error):
+                    datatype.pack(1 << width)
+                with self.assertRaises(struct.error):
+                    datatype.pack(-1)
+
+    def test_nonstandard_signed_width_rejects_overflow(self):
+        from canopen.objectdictionary.datatypes import IntegerN
+        for width in (24, 40, 48, 56):
+            with self.subTest(width=width):
+                datatype = IntegerN(width)
+                min_value = -(1 << (width - 1))
+                max_value = (1 << (width - 1)) - 1
+                self.assertEqual(datatype.unpack(datatype.pack(min_value))[0], min_value)
+                self.assertEqual(datatype.unpack(datatype.pack(max_value))[0], max_value)
+                with self.assertRaises(struct.error):
+                    datatype.pack(max_value + 1)
+                with self.assertRaises(struct.error):
+                    datatype.pack(min_value - 1)
+
+
+    def test_variable_encoding_rejects_narrow_width_overflow(self):
+        unsigned = (od.UNSIGNED24, od.UNSIGNED40, od.UNSIGNED48, od.UNSIGNED56)
+        signed = (od.INTEGER24, od.INTEGER40, od.INTEGER48, od.INTEGER56)
+        for width, data_type in zip((24, 40, 48, 56), unsigned):
+            with self.subTest(kind="unsigned", width=width):
+                var = od.ODVariable("Narrow unsigned", 0x1000)
+                var.data_type = data_type
+                with self.assertRaisesRegex(ValueError, "Value does not fit"):
+                    var.encode_raw(1 << width)
+        for width, data_type in zip((24, 40, 48, 56), signed):
+            with self.subTest(kind="signed", width=width):
+                var = od.ODVariable("Narrow signed", 0x1000)
+                var.data_type = data_type
+                with self.assertRaisesRegex(ValueError, "Value does not fit"):
+                    var.encode_raw(1 << (width - 1))
+                with self.assertRaisesRegex(ValueError, "Value does not fit"):
+                    var.encode_raw(-(1 << (width - 1)) - 1)
 
     def test_boolean(self):
         var = od.ODVariable("Test BOOLEAN", 0x1000)

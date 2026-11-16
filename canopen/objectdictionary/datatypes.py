@@ -1,3 +1,4 @@
+import operator
 import struct
 
 
@@ -83,7 +84,11 @@ class UnsignedN(struct.Struct):
         return super().unpack(buffer + b'\x00' * (super().size - self.size))
 
     def pack(self, *v):
-        return super().pack(*v)[:self.size]
+        packed = super().pack(*v)
+        value = operator.index(v[0])
+        if not 0 <= value < (1 << self.width):
+            raise struct.error("unsigned value out of range for data type")
+        return packed[:self.size]
 
     @property
     def size(self) -> int:
@@ -120,7 +125,13 @@ class IntegerN(struct.Struct):
         )
 
     def pack(self, *v):
-        return super().pack(*v)[:self.size]
+        packed = super().pack(*v)
+        value = operator.index(v[0])
+        lower = -(1 << (self.width - 1))
+        upper = 1 << (self.width - 1)
+        if not lower <= value < upper:
+            raise struct.error("signed value out of range for data type")
+        return packed[:self.size]
 
     @property
     def size(self) -> int:

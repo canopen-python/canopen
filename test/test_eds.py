@@ -92,6 +92,40 @@ class TestEDS(unittest.TestCase):
         od = canopen.import_od(SAMPLE_EDS)
         self.assertEqual(od.bitrate, 500_000)
 
+    def test_load_granularity(self):
+        for raw_value, expected in [("0", 0), ("1", 1), ("8", 8), ("0x08", 8), (None, None)]:
+            with self.subTest(raw_value=raw_value):
+                data = "[DeviceInfo]\n"
+                if raw_value is not None:
+                    data += f"Granularity={raw_value}\n"
+                with io.StringIO(data) as source:
+                    source.name = "mock.eds"
+                    od = canopen.import_od(source)
+                self.assertEqual(od.device_information.granularity, expected)
+                if expected is not None:
+                    self.assertIs(type(od.device_information.granularity), int)
+
+    def test_export_granularity(self):
+        # The sample declares Granularity=8; exporting must not turn it into 1.
+        for doc_type in "eds", "dcf":
+            with self.subTest(doc_type=doc_type):
+                with io.StringIO() as dest:
+                    canopen.export_od(self.od, dest, doc_type)
+                    eds = RawConfigParser()
+                    eds.read_string(dest.getvalue())
+                self.assertEqual(eds.getint("DeviceInfo", "Granularity"), 8)
+
+    def test_load_device_information_boolean_flags(self):
+        for name, expected in [
+            ("simple_boot_up_master", False),
+            ("simple_boot_up_slave", True),
+            ("dynamic_channels_supported", False),
+            ("group_messaging", False),
+            ("LSS_supported", False),
+        ]:
+            with self.subTest(name=name):
+                self.assertIs(getattr(self.od.device_information, name), expected)
+
     def test_load_baudrate_fallback(self):
         # Remove the Baudrate option.
         with open(SAMPLE_EDS) as f:

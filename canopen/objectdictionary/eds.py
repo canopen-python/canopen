@@ -72,7 +72,7 @@ def import_eds(source, node_id):
             (str, "OrderCode", "order_code"),
             (bool, "SimpleBootUpMaster", "simple_boot_up_master"),
             (bool, "SimpleBootUpSlave", "simple_boot_up_slave"),
-            (bool, "Granularity", "granularity"),
+            (int, "Granularity", "granularity"),
             (bool, "DynamicChannelsSupported", "dynamic_channels_supported"),
             (bool, "GroupMessaging", "group_messaging"),
             (int, "NrOfRXPDO", "nr_of_RXPDO"),

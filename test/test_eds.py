@@ -4,7 +4,12 @@ import unittest
 from configparser import RawConfigParser
 
 import canopen
-from canopen.objectdictionary.eds import _signed_int_from_hex, build_variable
+from canopen.objectdictionary.eds import (
+    _signed_int_from_hex,
+    build_variable,
+    export_dcf,
+    export_eds,
+)
 from canopen.utils import pretty_index
 
 from .util import DATATYPES_EDS, SAMPLE_EDS, tmp_file
@@ -294,6 +299,29 @@ class TestEDS(unittest.TestCase):
                 pass
         with io.StringIO() as dest:
             canopen.export_od(od, dest, 'eds')
+
+    def test_file_info_is_local_to_each_export(self):
+        for doctype in ("eds", "dcf"):
+            for source, filename, author in (
+                (SAMPLE_EDS, "test.dcf", "Christian Sandberg"),
+                (DATATYPES_EDS, "datatypes.eds", "objdictgen"),
+            ):
+                with self.subTest(doctype=doctype, source=source), io.StringIO() as dest:
+                    canopen.export_od(canopen.import_od(source), dest, doctype)
+                    exported = RawConfigParser()
+                    exported.read_string(dest.getvalue())
+                    self.assertEqual(exported["FileInfo"]["FileName"], filename)
+                    self.assertEqual(exported["FileInfo"]["CreatedBy"], author)
+
+    def test_file_info_overrides_are_preserved(self):
+        for export in (export_eds, export_dcf):
+            overrides = {"FileName": "custom.dcf"}
+            with self.subTest(export=export.__name__), io.StringIO() as dest:
+                export(self.od, dest, overrides)
+                exported = RawConfigParser()
+                exported.read_string(dest.getvalue())
+                self.assertEqual(exported["FileInfo"]["FileName"], "custom.dcf")
+                self.assertEqual(overrides, {"FileName": "custom.dcf"})
 
     def test_reading_custom_options(self):
         """Custom options (unknown EDS keys) are collected in custom_options dict."""

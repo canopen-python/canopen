@@ -408,11 +408,11 @@ def copy_variable(eds, section, subindex, src_var):
     return var
 
 
-def export_dcf(od, dest=None, fileInfo={}):
+def export_dcf(od, dest=None, fileInfo=None):
     return export_eds(od, dest, fileInfo, True)
 
 
-def export_eds(od, dest=None, file_info={}, device_commisioning=False):
+def export_eds(od, dest=None, file_info=None, device_commisioning=False):
     def export_object(obj, eds):
         if isinstance(obj, ODVariable):
             return export_variable(obj, eds)
@@ -507,6 +507,7 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
             "EdsVersion": 4.2,
         }
 
+    file_info = {} if file_info is None else file_info.copy()
     file_info.setdefault("ModificationDate", defmtime.strftime("%m-%d-%Y"))
     file_info.setdefault("ModificationTime", defmtime.strftime("%I:%m%p"))
     for k, v in origFileInfo.items():

@@ -141,6 +141,23 @@ class TestDataConversions(unittest.TestCase):
         self.assertEqual(var.decode_raw(b"\x00\x00\x00\x00\x00\x4a\x93\x40"), 1234.5)
         self.assertEqual(var.decode_raw(b"\x06\x81\x95\x43\x0b\x42\x8f\xc0"), -1000.2555)
 
+    def test_encode_raw_limit_warning_values(self):
+        for data_type, minimum, maximum, value, expected in [
+            (od.REAL64, -1.5, 2.5, -1.75, "Value -1.75 is less than min value -1.5"),
+            (od.REAL64, -1.5, 2.5, 2.75, "Value 2.75 is greater than max value 2.5"),
+            (od.INTEGER16, -1, 2, -2, "Value -2 is less than min value -1"),
+            (od.INTEGER16, -1, 2, 3, "Value 3 is greater than max value 2"),
+        ]:
+            with self.subTest(data_type=data_type, value=value):
+                var = od.ODVariable("Limited value", 0x2000)
+                var.data_type = data_type
+                var.min = minimum
+                var.max = maximum
+                with self.assertLogs("canopen.objectdictionary", level="WARN") as cm:
+                    encoded = var.encode_raw(value)
+                self.assertEqual(cm.records[0].getMessage(), expected)
+                self.assertEqual(var.decode_raw(encoded), value)
+
     def test_visible_string(self):
         var = od.ODVariable("Test VISIBLE_STRING", 0x1000)
         var.data_type = od.VISIBLE_STRING

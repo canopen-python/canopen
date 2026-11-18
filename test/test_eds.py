@@ -135,6 +135,7 @@ class TestEDS(unittest.TestCase):
 
     def test_record_with_limits(self):
         cases = [
+            (0x3002, 4.5, None),  # _      REAL32    fractional limit
             (0x3020, 0, 127),  # _          INTEGER8   hex limits
             (0x3021, 2, 10),  # _           UNSIGNED8  hex limits
             (0x3022, 100, 1000),  # _       UNSIGNED16 decimal limits
@@ -151,6 +152,39 @@ class TestEDS(unittest.TestCase):
                 var = self.od[index]
                 self.assertEqual(var.min, expected_min)
                 self.assertEqual(var.max, expected_max)
+
+    def test_roundtrip_float_limits(self):
+        for data_type in (canopen.objectdictionary.REAL32, canopen.objectdictionary.REAL64):
+            for limits, expected_min, expected_max in [
+                ("LowLimit=-1.5\nHighLimit=2.5e1\n", -1.5, 25.0),
+                ("LowLimit=0x10\nHighLimit=0x20\n", 16, 32),
+                ("LowLimit=-2\nHighLimit=10\n", -2, 10),
+                ("LowLimit=-0o10\nHighLimit=0o20\n", -8, 16),
+                ("", None, None),
+            ]:
+                with self.subTest(data_type=data_type, limits=limits):
+                    data = (
+                        "[DeviceInfo]\n[2000]\nParameterName=Floating point value\n"
+                        f"DataType={data_type}\nAccessType=rw\nDefaultValue=0.5\n{limits}"
+                    )
+                    with io.StringIO(data) as source:
+                        source.name = "mock.eds"
+                        od = canopen.import_od(source)
+                    self.assertEqual(od[0x2000].min, expected_min)
+                    self.assertEqual(od[0x2000].max, expected_max)
+                    self.assertEqual(od[0x2000].default, 0.5)
+                    self.assertIs(type(od[0x2000].min), type(expected_min))
+                    self.assertIs(type(od[0x2000].max), type(expected_max))
+                    for doc_type in "eds", "dcf":
+                        with io.StringIO() as dest:
+                            canopen.export_od(od, dest, doc_type)
+                            dest.name = f"mock.{doc_type}"
+                            dest.seek(0)
+                            restored = canopen.import_od(dest)
+                        self.assertEqual(restored[0x2000].min, expected_min)
+                        self.assertEqual(restored[0x2000].max, expected_max)
+                        self.assertIs(type(restored[0x2000].min), type(expected_min))
+                        self.assertIs(type(restored[0x2000].max), type(expected_max))
 
     def test_signed_int_from_hex(self):
         for data_type, test_cases in self.test_data.items():
@@ -179,6 +213,8 @@ class TestEDS(unittest.TestCase):
             ("2001", "DefaultValue", "SOMETHING"),  # BOOLEAN non-numeric
             ("2003", "DefaultValue", "SOMETHING"),  # INTEGER16 non-numeric
             ("2006", "ParameterValue", ""),  # UNSIGNED16 empty
+            ("2008", "LowLimit", "SOMETHING"),  # REAL32 non-numeric
+            ("2011", "HighLimit", ""),  # REAL64 empty
         ]
         for index, option, value in cases:
             with self.subTest(index=index, option=option, value=value):

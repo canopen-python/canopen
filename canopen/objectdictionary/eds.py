@@ -341,6 +341,11 @@ def build_variable(
             min_string = eds.get(section, "LowLimit")
             if var.data_type in datatypes.SIGNED_TYPES:
                 var.min = _signed_int_from_hex(min_string, _calc_bit_length(var.data_type))
+            elif var.data_type in datatypes.FLOAT_TYPES:
+                try:
+                    var.min = int(min_string, 0)
+                except ValueError:
+                    var.min = float(min_string)
             else:
                 var.min = int(min_string, 0)
         except ValueError:
@@ -353,6 +358,11 @@ def build_variable(
             max_string = eds.get(section, "HighLimit")
             if var.data_type in datatypes.SIGNED_TYPES:
                 var.max = _signed_int_from_hex(max_string, _calc_bit_length(var.data_type))
+            elif var.data_type in datatypes.FLOAT_TYPES:
+                try:
+                    var.max = int(max_string, 0)
+                except ValueError:
+                    var.max = float(max_string)
             else:
                 var.max = int(max_string, 0)
         except ValueError:

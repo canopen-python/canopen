@@ -363,9 +363,9 @@ class ODVariable:
         #: Factor between physical unit and integer value
         self.factor: float = 1
         #: Minimum allowed value
-        self.min: Optional[int] = None
+        self.min: Optional[Union[int, float]] = None
         #: Maximum allowed value
-        self.max: Optional[int] = None
+        self.max: Optional[Union[int, float]] = None
         #: Default value at start-up
         self.default: Optional[int] = None
         #: Is the default value relative to the node-ID (only applies to COB-IDs)
@@ -480,10 +480,10 @@ class ODVariable:
             if self.data_type in NUMBER_TYPES:
                 if self.min is not None and value < self.min:
                     logger.warning(
-                        "Value %d is less than min value %d", value, self.min)
+                        "Value %s is less than min value %s", value, self.min)
                 if self.max is not None and value > self.max:
                     logger.warning(
-                        "Value %d is greater than max value %d",
+                        "Value %s is greater than max value %s",
                         value, self.max)
             try:
                 return self.STRUCT_TYPES[self.data_type].pack(value)

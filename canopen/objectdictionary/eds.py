@@ -503,12 +503,12 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
         origFileInfo = {
             # just set some defaults
             "CreationDate": defmtime.strftime("%m-%d-%Y"),
-            "CreationTime": defmtime.strftime("%I:%m%p"),
+            "CreationTime": defmtime.strftime("%I:%M%p"),
             "EdsVersion": 4.2,
         }
 
     file_info.setdefault("ModificationDate", defmtime.strftime("%m-%d-%Y"))
-    file_info.setdefault("ModificationTime", defmtime.strftime("%I:%m%p"))
+    file_info.setdefault("ModificationTime", defmtime.strftime("%I:%M%p"))
     for k, v in origFileInfo.items():
         file_info.setdefault(k, v)
 

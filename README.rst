@@ -118,6 +118,7 @@ The :code:`n` is the PDO index (normally 1 to 4). The second form of access is f
     # network.connect(interface='ixxat', channel=0, bitrate=250000)
     # network.connect(interface='vector', app_name='CANalyzer', channel=0, bitrate=250000)
     # network.connect(interface='nican', channel='CAN0', bitrate=250000)
+    # network.connect(interface='cansub', channel='aabbccdd-usb.local@1', bitrate=250000)
 
     # Read a variable using SDO
     device_name = node.sdo['Manufacturer device name'].raw

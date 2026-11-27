@@ -30,6 +30,7 @@ arguments passed to a the :class:`can.BusABC` constructor::
     # network.connect(interface='pcan', channel='PCAN_USBBUS1', bitrate=250000)
     # network.connect(interface='ixxat', channel=0, bitrate=250000)
     # network.connect(interface='nican', channel='CAN0', bitrate=250000)
+    # network.connect(interface='cansub', channel='aabbccdd-usb.local@1', bitrate=250000)
 
 Add nodes to the network using the :meth:`~canopen.Network.add_node` method::
 
